@@ -4,6 +4,8 @@ import Konva from 'konva';
 import { WallsLayer } from './Layers/WallsLayer';
 import { FloorplanImageLayer } from './Layers/FloorplanImageLayer';
 import { DXFLayer } from './Layers/DXFLayer';
+import { RoomsLayer } from './Layers/RoomsLayer';
+import { ValidationLayer } from './Layers/ValidationLayer';
 import InteractionLayer from './InteractionLayer';
 import { DimensionsLayer } from './Layers/DimensionsLayer';
 import { AnchorsLayer } from './Layers/AnchorsLayer';
@@ -106,7 +108,7 @@ export const MainStage: React.FC = () => {
     };
 
     return (
-        <div ref={containerRef} className="w-full h-full bg-[#1a1a1a] overflow-hidden relative">
+        <div ref={containerRef} className="w-full h-full bg-[#1a1a1a] overflow-hidden relative" onContextMenu={(e) => e.preventDefault()}>
             {menu && (
                 <ContextMenu
                     x={menu.x}
@@ -167,7 +169,9 @@ export const MainStage: React.FC = () => {
 
                         <FloorplanImageLayer />
                         <DXFLayer />
+                        <RoomsLayer />
                         <WallsLayer />
+                        <ValidationLayer stage={stage} />
                         <DimensionsLayer />
                         <AnchorsLayer />
                         <InteractionLayer

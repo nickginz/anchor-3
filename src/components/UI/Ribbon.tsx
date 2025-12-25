@@ -15,7 +15,9 @@ import {
     Activity,
     Undo2,
     Redo2,
-    Wand2 // Icon for Detection
+    Wand2, // Icon for Detection
+    Grid, // Icon for Rooms
+    Type // Icon for Labels
 } from 'lucide-react';
 import { WallDetectionModal } from './WallDetectionModal';
 
@@ -253,11 +255,13 @@ export const Ribbon: React.FC = () => {
             {/* Layers Group */}
             <div className="flex flex-col items-center px-2">
                 <span className="text-[10px] text-gray-500 mb-1 uppercase">Layers</span>
-                <div className="grid grid-cols-2 gap-0.5">
+                <div className="grid grid-rows-2 grid-flow-col gap-0.5">
                     <button onClick={() => toggleLayer('floorplan')} title="Toggle Imported Drawing" className={`p-1 rounded hover:bg-[#444] ${layers.floorplan ? 'text-blue-400' : 'text-gray-600'}`}> <Upload size={14} /> </button>
                     <button onClick={() => toggleLayer('walls')} title="Toggle Walls" className={`p-1 rounded hover:bg-[#444] ${layers.walls ? 'text-blue-400' : 'text-gray-600'}`}> <Square size={14} /> </button>
                     <button onClick={() => toggleLayer('anchors')} title="Toggle Anchors" className={`p-1 rounded hover:bg-[#444] ${layers.anchors ? 'text-blue-400' : 'text-gray-600'}`}> <Wifi size={14} /> </button>
                     <button onClick={() => toggleLayer('dimensions')} title="Toggle Dimensions" className={`p-1 rounded hover:bg-[#444] ${layers.dimensions ? 'text-blue-400' : 'text-gray-600'}`}> <Ruler size={14} /> </button>
+                    <button onClick={() => toggleLayer('rooms')} title="Toggle Room Filling" className={`p-1 rounded hover:bg-[#444] ${layers.rooms ? 'text-blue-400' : 'text-gray-600'}`}> <Grid size={14} /> </button>
+                    <button onClick={() => toggleLayer('roomLabels')} title="Toggle Room Area Text" className={`p-1 rounded hover:bg-[#444] ${layers.roomLabels ? 'text-blue-400' : 'text-gray-600'}`}> <Type size={14} /> </button>
                 </div>
             </div>
 

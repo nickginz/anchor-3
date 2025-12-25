@@ -86,6 +86,8 @@ export const useProjectStore = create<ProjectState>()(
                 floorplan: true,
                 dimensions: true,
                 anchors: true,
+                rooms: true,
+                roomLabels: true,
             },
             activeTool: 'select',
             selectedIds: [],
@@ -246,9 +248,18 @@ export const useProjectStore = create<ProjectState>()(
                 anchors: state.anchors.filter((a) => a.id !== id),
             })),
 
-            toggleLayer: (layer) => set((state) => ({
-                layers: { ...state.layers, [layer]: !state.layers[layer] }
-            })),
+            toggleLayer: (layer) => set((state) => {
+                const newValue = !state.layers[layer];
+                const newLayers = { ...state.layers, [layer]: newValue };
+
+                // Unified Toggle: Walls controls Rooms & Labels
+                if (layer === 'walls') {
+                    newLayers.rooms = newValue;
+                    newLayers.roomLabels = newValue;
+                }
+
+                return { layers: newLayers };
+            }),
 
             importedObjects: [],
             activeImportId: null,

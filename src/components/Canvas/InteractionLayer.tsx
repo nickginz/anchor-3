@@ -85,7 +85,7 @@ const isPointNearLine = (p: Point, x1: number, y1: number, x2: number, y2: numbe
 };
 
 export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpenMenu, onOpenScaleModal }) => {
-    const { activeTool, addWall, addWalls, addAnchor, setTool, walls, anchors, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, selectedIds, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, updateDimension, dimensions, anchorRadius } = useProjectStore();
+    const { activeTool, addWall, addWalls, addAnchor, setTool, walls, anchors, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, selectedIds, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius } = useProjectStore();
     const [points, setPoints] = useState<Point[]>([]);
     const [chainStart, setChainStart] = useState<Point | null>(null);
     const [currentMousePos, setCurrentMousePos] = useState<Point | null>(null);
@@ -1269,7 +1269,18 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                             }}
                             onDragMove={(e) => {
                                 e.cancelBubble = true;
-                                const newPos = { x: e.target.x(), y: e.target.y() };
+                                let newPos = { x: e.target.x(), y: e.target.y() };
+                                const state = useProjectStore.getState();
+                                // Snap
+                                if (state.layers.walls) {
+                                    const otherWalls = state.walls.filter(w => w.id !== id);
+                                    const snap = getSnapPoint(newPos, otherWalls, 20 / (stage?.scaleX() || 1));
+                                    if (snap) {
+                                        newPos = snap.point;
+                                        e.target.position(newPos);
+                                    }
+                                }
+
                                 const currentWall = useProjectStore.getState().walls.find(w => w.id === id);
                                 if (currentWall) {
                                     // This handle is START [0,1]
@@ -1293,7 +1304,18 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                             onDragStart={(e) => e.cancelBubble = true}
                             onDragMove={(e) => {
                                 e.cancelBubble = true;
-                                const newPos = { x: e.target.x(), y: e.target.y() };
+                                let newPos = { x: e.target.x(), y: e.target.y() };
+                                const state = useProjectStore.getState();
+                                // Snap
+                                if (state.layers.walls) {
+                                    const otherWalls = state.walls.filter(w => w.id !== id);
+                                    const snap = getSnapPoint(newPos, otherWalls, 20 / (stage?.scaleX() || 1));
+                                    if (snap) {
+                                        newPos = snap.point;
+                                        e.target.position(newPos);
+                                    }
+                                }
+
                                 const currentWall = useProjectStore.getState().walls.find(w => w.id === id);
                                 if (currentWall) {
                                     // This handle is END [2,3]

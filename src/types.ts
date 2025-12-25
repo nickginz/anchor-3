@@ -35,6 +35,8 @@ export interface ProjectLayers {
     floorplan: boolean;
     dimensions: boolean;
     anchors: boolean;
+    rooms: boolean;
+    roomLabels: boolean;
 }
 
 export interface BaseImportedObject {
