@@ -43,6 +43,7 @@ interface ProjectState {
     updateWall: (id: string, updates: Partial<Wall>) => void;
     updateWallPoint: (oldX: number, oldY: number, newX: number, newY: number) => void;
     removeWall: (id: string) => void;
+    splitWall: (id: string, point: { x: number, y: number }) => void;
     addAnchor: (anchor: Omit<Anchor, 'id'>) => void;
     updateAnchor: (id: string, updates: Partial<Anchor>) => void;
     updateAnchors: (updates: { id: string; updates: Partial<Anchor> }[]) => void;
@@ -184,6 +185,28 @@ export const useProjectStore = create<ProjectState>()(
                 walls: state.walls.filter((w) => w.id !== id),
             })),
 
+            splitWall: (id, point) => set((state) => {
+                const wall = state.walls.find(w => w.id === id);
+                if (!wall) return state;
+
+                // Create two new walls
+                const w1: Wall = {
+                    ...wall,
+                    id: uuidv4(),
+                    points: [wall.points[0], wall.points[1], point.x, point.y]
+                };
+
+                const w2: Wall = {
+                    ...wall,
+                    id: uuidv4(),
+                    points: [point.x, point.y, wall.points[2], wall.points[3]]
+                };
+
+                return {
+                    walls: [...state.walls.filter(w => w.id !== id), w1, w2]
+                };
+            }),
+
             addAnchor: (anchor) => set((state) => {
                 // Determine prefix based on anchorMode or passed type (logic currently relies on global anchorMode or just checking context)
                 // Let's assume we use state.anchorMode as default, or we can check the ID if provided (but here we generate it).
@@ -250,7 +273,7 @@ export const useProjectStore = create<ProjectState>()(
                         opacity: 0.5,
                         visible: true,
                         locked: false,
-                    } as ImportedObject],
+                    } as unknown as ImportedObject],
                     // Auto-select the new object so Layer Manager works immediately
                     activeImportId: newId
                 };

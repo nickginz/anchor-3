@@ -4,14 +4,35 @@ import { Line, Group } from 'react-konva';
 import { useProjectStore } from '../../../store/useProjectStore';
 
 export const DXFLayer: React.FC = () => {
-    const { importedObjects } = useProjectStore();
+    const { importedObjects, activeTool, setActiveImportId } = useProjectStore();
 
     return (
         <React.Fragment>
             {importedObjects.map(obj => {
                 if (obj.type !== 'dxf' || !obj.visible) return null;
+                const isSelectMode = activeTool === 'select';
                 return (
-                    <Group key={obj.id} x={obj.x} y={obj.y} rotation={obj.rotation} scaleX={obj.scale} scaleY={obj.scale}>
+                    <Group
+                        key={obj.id}
+                        x={obj.x}
+                        y={obj.y}
+                        rotation={obj.rotation}
+                        scaleX={obj.scale}
+                        scaleY={obj.scale}
+                        listening={isSelectMode}
+                        onClick={(e) => {
+                            if (isSelectMode && e.evt.altKey) {
+                                setActiveImportId(obj.id);
+                                e.cancelBubble = true;
+                            }
+                        }}
+                        onTap={(e) => {
+                            if (isSelectMode && e.evt.altKey) {
+                                setActiveImportId(obj.id);
+                                e.cancelBubble = true;
+                            }
+                        }}
+                    >
                         {obj.data.entities.map((entity: any, i: number) => {
                             // Check Layer Visibility (Specific to this object)
                             if (obj.layers && obj.layers[entity.layer] === false) return null;

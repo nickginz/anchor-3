@@ -15,7 +15,8 @@ git reset --hard <COMMIT_HASH>
 
 | Date | Commit Hash | Description |
 | :--- | :--- | :--- |
-| **Current** | `9346412` | **Imports & Editing Overhaul**<br>Fixed PDF (Worker) & DXF imports, added Alt+Click/Drag & Box Selection for imports, Single DXF mode, Delete key, and Wall Endpoint Handles (Node Editing). |
+| **Current** | `c3de4c5` | **Layer Visibility Protection**<br>Secured hidden layers (Walls, Anchors, Dimensions) from selection, snapping, and dragging. Updated Wiki. |
+| Previous | `9346412` | **Imports & Editing Overhaul**<br>Fixed PDF (Worker) & DXF imports, added Alt+Click/Drag & Box Selection for imports, Single DXF mode, Delete key, and Wall Endpoint Handles (Node Editing). |
 | Previous | `38beefc` | **Refined Undo/Redo & Dragging**<br>Optimized drag history (Start/End only), Smart Wall Undo (keeps cursor), and Drag Commit. |
 | Previous | `ce8572c` | **Anchor Grouping & Refinements**<br>Added grouping (Ctrl+G), context menu separators, smart RMB click vs pan, and Undo/Redo. |
 | Previous | `5bd7ed4` | **Implemented Individual Anchor Settings**<br>Added right-click context menu, custom radius, and shape overrides. |

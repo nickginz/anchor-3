@@ -84,24 +84,52 @@ export const distToSegmentSquared = (p: Point, v: Point, w: Point): { dist2: num
     return { dist2: dist(p, proj) ** 2, proj };
 };
 
+// Enhanced Snap Point Return Type
+export interface SnapResult {
+    point: Point;
+    type: 'vertex' | 'edge';
+    wallId?: string; // ID of the wall snapped to (if edge or vertex belong to one) - for vertex it might be hard to verify uniqueness if multiple walls share it, so we might just use it for Edge mainly.
+}
+
 export const getSnapPoint = (
     cursor: Point,
-    walls: import('../types').Wall[], // Avoid circular dependency if possible, or use type import
+    walls: import('../types').Wall[],
     threshold: number
-): Point | null => {
+): SnapResult | null => {
     let nearest: Point | null = null;
+    let nearestType: 'vertex' | 'edge' | null = null;
+    let nearestWallId: string | undefined = undefined;
+
     let minDist = threshold;
 
     // 1. Check Vertices
-    const vertices: Point[] = [];
-    walls.forEach(w => {
-        vertices.push({ x: w.points[0], y: w.points[1] });
-        vertices.push({ x: w.points[2], y: w.points[3] });
-    });
+    // Note: A vertex can belong to multiple walls. We just need the point.
+    // If we want to be strict, we can iterate walls and check endpoints.
 
-    const nearestVertex = getNearestPoint(cursor, vertices, threshold);
-    if (nearestVertex) {
-        return nearestVertex; // Vertices take priority
+    for (const w of walls) {
+        // Start Point
+        const p1 = { x: w.points[0], y: w.points[1] };
+        const d1 = dist(cursor, p1);
+        if (d1 < minDist) {
+            minDist = d1;
+            nearest = p1;
+            nearestType = 'vertex';
+            nearestWallId = w.id; // Just take one
+        }
+
+        // End Point
+        const p2 = { x: w.points[2], y: w.points[3] };
+        const d2 = dist(cursor, p2);
+        if (d2 < minDist) {
+            minDist = d2;
+            nearest = p2;
+            nearestType = 'vertex';
+            nearestWallId = w.id;
+        }
+    }
+
+    if (nearest && nearestType === 'vertex') {
+        return { point: nearest, type: 'vertex', wallId: nearestWallId };
     }
 
     // 2. Check Edges (Centerlines)
@@ -114,8 +142,14 @@ export const getSnapPoint = (
         if (d < minDist) {
             minDist = d;
             nearest = proj;
+            nearestType = 'edge';
+            nearestWallId = w.id;
         }
     }
 
-    return nearest;
+    if (nearest && nearestType) {
+        return { point: nearest, type: nearestType, wallId: nearestWallId };
+    }
+
+    return null;
 };

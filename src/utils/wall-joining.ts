@@ -143,54 +143,7 @@ export const generateJoinedWalls = (walls: Wall[], scaleRatio: number, allWalls:
             }
         }
 
-        // --- Manual Extension Logic (Miter Simulation) ---
-        // 1. Check Start
-        const startKey = getKey(points[0].X / SCALE, points[0].Y / SCALE);
-        const startNeighbors = adj.get(startKey) || [];
-        // Filter out self (path[0] is self)
-        const otherStartNeighbors = startNeighbors.filter(w => w.id !== path[0].id);
-
-        if (otherStartNeighbors.length > 0) {
-            // Find max thickness of connected neighbor
-            const maxNeighborThickness = Math.max(...otherStartNeighbors.map(n => n.thickness));
-
-            // Extend Start Point BACKWARDS
-            const pStart = points[0];
-            const pNext = points[1];
-            const dx = pStart.X - pNext.X;
-            const dy = pStart.Y - pNext.Y;
-            const len = Math.hypot(dx, dy);
-            if (len > 0.001) {
-                // Use Neighbor Half Width for extension distance
-                const halfWidth = (maxNeighborThickness * scaleRatio * SCALE) / 2;
-                const extX = (dx / len) * halfWidth;
-                const extY = (dy / len) * halfWidth;
-                points[0] = { X: pStart.X + extX, Y: pStart.Y + extY };
-            }
-        }
-
-        // 2. Check End
-        const endKey = getKey(points[points.length - 1].X / SCALE, points[points.length - 1].Y / SCALE);
-        const endNeighbors = adj.get(endKey) || [];
-        const otherEndNeighbors = endNeighbors.filter(w => w.id !== path[path.length - 1].id);
-
-        if (otherEndNeighbors.length > 0) {
-            const maxNeighborThickness = Math.max(...otherEndNeighbors.map(n => n.thickness));
-
-            // Extend End Point FORWARDS
-            const pEnd = points[points.length - 1];
-            const pPrev = points[points.length - 2];
-            const dx = pEnd.X - pPrev.X;
-            const dy = pEnd.Y - pPrev.Y;
-            const len = Math.hypot(dx, dy);
-            if (len > 0.001) {
-                const halfWidth = (maxNeighborThickness * scaleRatio * SCALE) / 2;
-                const extX = (dx / len) * halfWidth;
-                const extY = (dy / len) * halfWidth;
-                points[points.length - 1] = { X: pEnd.X + extX, Y: pEnd.Y + extY };
-            }
-        }
-        // -----------------------------------------------------------------
+        // (Manual Extension Removed)
 
         const co = new ClipperLib.ClipperOffset();
         const startP = { x: points[0].X / SCALE, y: points[0].Y / SCALE };
@@ -213,15 +166,301 @@ export const generateJoinedWalls = (walls: Wall[], scaleRatio: number, allWalls:
         }
     }
 
+    // Capture the orientation of the first non-empty wall polygon to use as reference
+    let referenceOrientation = true;
+    if (allOffsetPaths.length > 0) {
+        referenceOrientation = ClipperLib.Clipper.Orientation(allOffsetPaths[0]); // Usually true (CCW?)
+    }
+
+    // --- Joint Filler Logic ---
+    const subsetSet = new Set(walls.map(w => w.id));
+
+    // Iterate all vertices in the graph and "fill" the corners between adjacent walls
+    adj.forEach((connectedWalls, key) => {
+        if (connectedWalls.length < 2) return;
+
+        // Optimization: Only fill corners involving the current wall group
+        if (!connectedWalls.some(w => subsetSet.has(w.id))) return;
+
+
+        // Parse Center
+        const [cx, cy] = key.split(',').map(Number).map(n => n / 100);
+        const center = { x: cx, y: cy };
+
+        // Sort walls by angle relative to center
+        const stats = connectedWalls.map(w => {
+            // Determine w's vector OUT from center
+            const pStart = { x: w.points[0], y: w.points[1] };
+            const pEnd = { x: w.points[2], y: w.points[3] };
+
+            let vx = 0, vy = 0;
+            if (distSq(pStart, center) < EPS) {
+                vx = pEnd.x - pStart.x;
+                vy = pEnd.y - pStart.y;
+            } else {
+                vx = pStart.x - pEnd.x;
+                vy = pStart.y - pEnd.y;
+            }
+            const angle = Math.atan2(vy, vx);
+            const halfThick = (w.thickness * scaleRatio); // Scaled units (Pixels), effectively Width.
+            return { w, angle, vx, vy, halfThick };
+        });
+
+        stats.sort((a, b) => a.angle - b.angle);
+
+        // Process adjacent pairs
+        for (let i = 0; i < stats.length; i++) {
+            const current = stats[i];
+            const next = stats[(i + 1) % stats.length];
+
+            // 1. Calculate Angle Difference
+            // We need angle from Current -> Next in CCW direction
+            let diff = next.angle - current.angle;
+            if (diff < 0) diff += 2 * Math.PI;
+
+            // If angle is Reflex (> 180), we are on the "Inner" side of a corner (concave).
+            // Actually, we want to fill the "Valley" between LEFT of Current and RIGHT of Next.
+            // If diff > 180, that valley is HUGE (it's the reflex part).
+            // Usually we only fill sharp/convex corners (diff < 180).
+            // If diff ~ 180, straight line, no fill needed.
+
+            if (diff > Math.PI - 0.01) continue;
+
+            // Normalize Directions
+            // Normalize Directions
+            const lenC = Math.hypot(current.vx, current.vy);
+            const lenN = Math.hypot(next.vx, next.vy);
+
+            if (lenC < 0.001 || lenN < 0.001) continue;
+
+            const dirCx = current.vx / lenC;
+            const dirCy = current.vy / lenC;
+
+            const dirNx = next.vx / lenN;
+            const dirNy = next.vy / lenN;
+
+            const hwC = current.halfThick / 2;
+            const hwN = next.halfThick / 2;
+
+            // Determine Turn Direction and Outer Side
+            // Cross product z-component: det = dirCx * dirNy - dirCy * dirNx ??
+            // Using standard det for intersection: det = Ax*By - Ay*Bx.
+            // dirCx/Cy is Current vector. dirNx/Ny is Next vector.
+            // But line equations form matters.
+
+            // Let's use simple 2D Cross Product of (Current -> Next)
+            // Current vector is (dirCx, dirCy). Next vector is (dirNx, dirNy).
+            // Cross = dirCx * dirNy - dirCy * dirNx.
+            // If Cross > 0, it's a Left Turn (CCW). Outer side is Right (-1).
+            // If Cross < 0, it's a Right Turn (CW). Outer side is Left (1).
+
+            const cross = dirCx * dirNy - dirCy * dirNx;
+
+            // If cross is near zero, parallel.
+            if (Math.abs(cross) < 0.001) continue;
+
+            const outerSide = cross > 0 ? -1 : 1;
+
+            // Generate Wedge ONLY for the Outer Side
+            // Inner side is naturally handled by the wall overlap (or doesn't need filling)
+            const sides = [outerSide];
+
+            sides.forEach(side => {
+                const normCx = side * current.vy / lenC;
+                const normCy = side * -current.vx / lenC;
+
+                const normNx = side * next.vy / lenN;
+                const normNy = side * -next.vx / lenN;
+
+                const P_c = { x: cx + normCx * hwC, y: cy + normCy * hwC };
+                const P_n = { x: cx + normNx * hwN, y: cy + normNy * hwN };
+
+                // Intersect Lines
+                const det = dirCx * (-dirNy) - dirCy * (-dirNx);
+                if (Math.abs(det) < 0.0001) return;
+
+                const dx = P_n.x - P_c.x;
+                const dy = P_n.y - P_c.y;
+                const t = (dx * (-dirNy) - dy * (-dirNx)) / det;
+
+                const Ix = P_c.x + t * dirCx;
+                const Iy = P_c.y + t * dirCy;
+
+                // Clamp
+                const distToCenter = Math.hypot(Ix - cx, Iy - cy);
+                const limit = Math.max(hwC, hwN) * 6;
+                let finalIx = Ix;
+                let finalIy = Iy;
+                if (distToCenter > limit) {
+                    const scale = limit / distToCenter;
+                    finalIx = cx + (Ix - cx) * scale;
+                    finalIy = cy + (Iy - cy) * scale;
+                }
+
+                // Overlap Fix
+                const ov = 2.0;
+                // Using same overlap offset
+
+                // Construct points. Inner "C_in" needs to be derived.
+                // We actually don't need complex bisector for single sided anymore?
+                // But let's keep the logic stable as it works for the outer side.
+                // However, without B_in, we need a base.
+                // Re-calculating Bisector just for this wedge.
+
+                const bisectX = dirCx + dirNx;
+                const bisectY = dirCy + dirNy;
+                const bLen = Math.hypot(bisectX, bisectY);
+                let bX = 0, bY = 0;
+                if (bLen > 0.001) { bX = bisectX / bLen; bY = bisectY / bLen; }
+
+                // Determine "Backwards" direction.
+                // If this is outer side, center should be pushed INWARDS to the wall junction core.
+                // The bisector points OUTWARDS for outer side?
+                // Vector sum (dirC + dirN) points "Middle".
+                // If Left Turn (Outer Right), `dirC + dirN` points roughly forward-right. 
+                // We want to go BACK into the junction.
+
+                const C_in = { x: cx - bX * ov, y: cy - bY * ov };
+                const P_c_in = { x: P_c.x + dirCx * ov, y: P_c.y + dirCy * ov };
+                const P_n_in = { x: P_n.x + dirNx * ov, y: P_n.y + dirNy * ov };
+
+                const poly = [
+                    { X: C_in.x * SCALE, Y: C_in.y * SCALE },
+                    { X: P_n_in.x * SCALE, Y: P_n_in.y * SCALE },
+                    { X: finalIx * SCALE, Y: finalIy * SCALE },
+                    { X: P_c_in.x * SCALE, Y: P_c_in.y * SCALE }
+                ];
+
+                // VALIDATION: Check for NaNs
+                const hasNaN = poly.some(p => isNaN(p.X) || isNaN(p.Y));
+                if (hasNaN) return;
+
+                const polyOrientation = ClipperLib.Clipper.Orientation(poly);
+                if (polyOrientation !== referenceOrientation) {
+                    poly.reverse();
+                }
+
+                allOffsetPaths.push(poly);
+            });
+
+
+
+
+
+
+
+
+
+
+
+            // To ensure Clipper merges the polygons, we expand the wedge slightly into adjacent walls
+            const ov = 2.0; // 2 pixels overlap (roughly)
+
+            // Calculate Bisector Vector for Center Nudge
+            // We want to pull Center inwards (away from miter tip) to cover the "butt" gap area fully
+            const bisectX = dirCx + dirNx;
+            const bisectY = dirCy + dirNy;
+            const bLen = Math.hypot(bisectX, bisectY);
+            let bX = 0, bY = 0;
+            if (bLen > 0.001) {
+                bX = bisectX / bLen;
+                bY = bisectY / bLen;
+            }
+
+            // Center pushed IN (away from miter tip, into the junction heart)
+            const C_in = { x: cx - bX * ov, y: cy - bY * ov };
+
+            // Edge points pushed BACK (along the wall direction into the wall body)
+            // P_c is on the edge of Current wall. 
+            // OLD incorrect calc: const P_c_in = { x: P_c.x - dirCx * ov, y: P_c.y - dirCy * ov };
+
+            // P_n is on the edge of Next wall. We move it -dirNx (forwards relative to wall, but backwards relative to junction start)
+            // Wait, dirNx is Vector Next. Next starts at Center. So dirNx points INTO the wall.
+            // P_n is at Center + Width offset.
+            // Moving along +dirNx moves INTO the wall.
+            // So we want +dirNx * ov?
+            // "Next" wall starts at Center? Yes.
+            // "Current" wall ends at Center? No, we normalized all vectors to point OUT from Center in 'stats' map.
+            // `vx = pEnd - pStart` (if pStart near center). So `vx` points AWAY from center.
+            // So `dirCx` and `dirNx` BOTH point OUTWARD from Center into the wall bodies.
+            // Correct.
+            // So to overlap, we move P_c and P_n along +dir (further into the wall).
+            // No, wait. P_c is the corner. The wall polygon ends at Center (perpendicular).
+            // The Wedge is [Center, P_c, Miter, P_n].
+            // If we move P_c along +dir, we are moving away from Center.
+            // We want to create overlap with the wall which exists from Center -> Outwards.
+            // The Wall's 'butt' cap is the line through Center perpendicular to Dir.
+            // P_c lies ON that line.
+            // If we move P_c OUT (+dir), we are just tracing the edge of the wall?
+            // No, the Wall Polygon covers `(Center + WidthNormal) -> (End + WidthNormal)`.
+            // Our Wedge covers `(Center) -> (P_c)`.
+            // They join at the line `Center -> P_c`.
+            // To overlap, we want the Wedge to cross that line.
+            // Moving P_c along -dir (INTO the "void" behind center?) No.
+            // Moving P_c along +dir (parallel to wall edge) doesn't help cross the butt line.
+            // Moving P_c along -Normal? (Towards Center axis).
+
+            // Actually, simply pulling the CENTER point "backwards" (negative bisector) makes the wedge start "before" the center.
+            // Since the Walls start AT the center, this new Wedge area overlaps both wall ends.
+            // That is sufficient.
+            // But to be super safe against floating point EPS, let's also push P_c/P_n INWARDS (negative Normal) slightly? 
+            // No, that narrows the wedge.
+            // Let's just push Center back.
+            // And maybe push P_c/P_n BACK along vector?
+            // If I push "back" (-dir), I go into the empty space of the junction "before" the walls start?
+            // Since walls radiate from center, "back" is inside the junction core.
+            // Yes.
+
+            // Just using C_in (pushed back) is good.
+            // And use P_c, P_n as is?
+            // Construct polygon: C_in -> P_c -> Ix -> P_n.
+            // Is convex? Yes.
+            // Does it cover `Center -> P_c` line?
+            // C_in is "behind" Center.
+            // So `C_in -> P_c` crosses `Center -> P_c`? No, they share P_c.
+            // But `C_in` is separate from `Center`.
+            // The segment `C_in -> P_c` is not collinear with `Center -> P_c` (which is perpendicular).
+            // So it creates a triangle `C_in, Center, P_c` which is added area.
+            // Since `Center` is on the wall butt line, and `C_in` is "behind", this triangle overlaps the OTHER wall?
+            // Or the void?
+            // It effectively fills the center hole.
+
+            // Let's do it.
+
+            // Correcting Overlap Direction:
+            // Walls go OUT from center. `dirCx` points INTO the wall body.
+            // To overlap, we must move P_c and P_n ALONG the direction vector (Positive).
+            // Previous attempt used Negative (moving away from wall), creating a gap.
+
+
+
+
+        }
+    });
+
     // Union all paths to merge overlaps (fixing T-junctions)
     const clip = new ClipperLib.Clipper();
     clip.AddPaths(allOffsetPaths, ClipperLib.PolyType.ptSubject, true);
     const unioned = new ClipperLib.Paths();
-    clip.Execute(ClipperLib.ClipType.ctUnion, unioned, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero);
+
+    try {
+        const success = clip.Execute(ClipperLib.ClipType.ctUnion, unioned, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero);
+        if (!success) {
+            console.warn("Clipper Union failed, returning raw paths");
+            // Fallback: copy allOffsetPaths to unioned if execution returns false?
+            // Usually returns true. If false, something bad happened.
+            // But if 'unioned' is empty, we definitely want fallback.
+        }
+    } catch (e) {
+        console.error("Clipper Execute Exception:", e);
+    }
+
+    // If Union produced nothing (and we had inputs), fallback to raw paths
+    const finalPaths = (unioned.length > 0) ? unioned : allOffsetPaths;
 
     // Convert back to our point format and scale down
-    for (let i = 0; i < unioned.length; i++) {
-        const poly = unioned[i].map((p: { X: number, Y: number }) => ({ x: p.X / SCALE, y: p.Y / SCALE }));
+    for (let i = 0; i < finalPaths.length; i++) {
+        const poly = finalPaths[i].map((p: { X: number, Y: number }) => ({ x: p.X / SCALE, y: p.Y / SCALE }));
         resultPolys.push(poly);
     }
 
@@ -249,7 +488,7 @@ export const generateUnionBoundary = (walls: Wall[], scaleRatio: number): { x: n
     clip.Execute(ClipperLib.ClipType.ctUnion, solution, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero);
 
     // 4. Convert back
-    return solution.map(path => path.map((pt: { X: number, Y: number }) => ({ x: pt.X / SCALE, y: pt.Y / SCALE })));
+    return solution.map((path: any) => path.map((pt: { X: number, Y: number }) => ({ x: pt.X / SCALE, y: pt.Y / SCALE })));
 };
 
 const distSq = (p1: { x: number, y: number }, p2: { x: number, y: number }) => (p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2;

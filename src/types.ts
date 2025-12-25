@@ -61,6 +61,7 @@ export interface DXFObject extends BaseImportedObject {
     layers: Record<string, boolean>; // Layer visibility
     width?: number; // Calculated BBox width
     height?: number; // Calculated BBox height
+    opacity?: number; // Opacity of the DXF
 }
 
 export type ImportedObject = ImageObject | DXFObject;
