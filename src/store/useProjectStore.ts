@@ -16,11 +16,27 @@ interface ProjectState {
     thickWallThickness: number;
     wideWallThickness: number;
     anchorMode: 'manual' | 'auto';
+    isScaleSet: boolean;
 
     // Anchor Settings
     anchorRadius: number;
     anchorShape: 'circle' | 'square';
     showAnchorRadius: boolean;
+
+    // Heatmap Settings
+    showHeatmap: boolean;
+    heatmapResolution: number;
+    heatmapColorMode: 'test' | 'standard' | 'manual';
+    heatmapThresholds: {
+        red: number;
+        orange: number;
+        yellow: number;
+        green: number;
+        blue: number;
+    };
+
+    // Global UI
+    isSettingsOpen: boolean;
 
     // Actions
     setScaleRatio: (ratio: number) => void;
@@ -32,11 +48,18 @@ interface ProjectState {
     setWideWallThickness: (thickness: number) => void;
     setAnchorMode: (mode: 'manual' | 'auto') => void;
 
-    // Anchor Actions
     setAnchorRadius: (r: number) => void;
     setAnchorShape: (s: 'circle' | 'square') => void;
     setShowAnchorRadius: (v: boolean) => void;
     alignAnchors: (type: 'horizontal' | 'vertical') => void;
+
+    // Heatmap Actions
+    setShowHeatmap: (v: boolean) => void;
+    setHeatmapResolution: (res: number) => void;
+    setHeatmapColorMode: (mode: 'test' | 'standard' | 'manual') => void;
+    setHeatmapThresholds: (t: { red: number, orange: number, yellow: number, green: number, blue: number }) => void;
+
+    setIsSettingsOpen: (v: boolean) => void;
 
     addWall: (wall: Omit<Wall, 'id'>) => void;
     addWalls: (walls: Omit<Wall, 'id'>[]) => void;
@@ -47,6 +70,7 @@ interface ProjectState {
     addAnchor: (anchor: Omit<Anchor, 'id'>) => void;
     updateAnchor: (id: string, updates: Partial<Anchor>) => void;
     updateAnchors: (updates: { id: string; updates: Partial<Anchor> }[]) => void;
+    addAnchors: (anchors: Omit<Anchor, 'id'>[]) => void;
     removeAnchor: (id: string) => void;
 
     // Import State (Multi-Object)
@@ -94,7 +118,7 @@ export const useProjectStore = create<ProjectState>()(
             wallPreset: 'thick',
             standardWallThickness: 0.1, // Default 10cm
             thickWallThickness: 0.1,
-            wideWallThickness: 0.3,
+            wideWallThickness: 0.2,
             anchorMode: 'manual',
 
             // Anchor Settings Defaults
@@ -102,7 +126,25 @@ export const useProjectStore = create<ProjectState>()(
             anchorShape: 'circle',
             showAnchorRadius: true,
 
-            setScaleRatio: (ratio) => set({ scaleRatio: ratio }),
+
+            // Heatmap Defaults
+            showHeatmap: false,
+            heatmapResolution: 50, // 50cm grid by default
+            heatmapColorMode: 'standard',
+            heatmapThresholds: {
+                red: 3,    // < 3m
+                orange: 6, // < 6m
+                yellow: 9, // < 9m
+                green: 12, // < 12m
+                blue: 15,  // < 15m
+            },
+
+            // Global UI
+            isSettingsOpen: false,
+            isScaleSet: false,
+
+            // Actions
+            setScaleRatio: (ratio) => set({ scaleRatio: ratio, isScaleSet: true }),
             setTool: (tool) => set({ activeTool: tool }),
             setSelection: (ids) => set({ selectedIds: ids }),
             setWallPreset: (preset) => set({ wallPreset: preset }),
@@ -116,11 +158,19 @@ export const useProjectStore = create<ProjectState>()(
             setAnchorShape: (s) => set({ anchorShape: s }),
             setShowAnchorRadius: (v) => set({ showAnchorRadius: v }),
 
+
+            setShowHeatmap: (v) => set({ showHeatmap: v }),
+            setHeatmapResolution: (res) => set({ heatmapResolution: res }),
+            setHeatmapColorMode: (mode) => set({ heatmapColorMode: mode }),
+            setHeatmapThresholds: (t) => set({ heatmapThresholds: t }),
+
+            setIsSettingsOpen: (v) => set({ isSettingsOpen: v }),
+
+
             alignAnchors: (type) => set((state) => {
                 const selectedAnchors = state.anchors.filter(a => state.selectedIds.includes(a.id));
                 if (selectedAnchors.length < 2) return state;
 
-                let updates: Partial<Anchor>[] = [];
                 // We need to map updates to specific IDs. 
                 // Easier to map over all anchors and update matches.
 
@@ -148,13 +198,57 @@ export const useProjectStore = create<ProjectState>()(
                 };
             }),
 
-            addWall: (wall) => set((state) => ({
-                walls: [...state.walls, { ...wall, id: uuidv4() }]
-            })),
+            addWall: (wall) => set((state) => {
+                // Check for duplicates
+                const isDuplicate = state.walls.some(existing => {
+                    const p1 = [existing.points[0], existing.points[1]];
+                    const p2 = [existing.points[2], existing.points[3]];
+                    const newP1 = [wall.points[0], wall.points[1]];
+                    const newP2 = [wall.points[2], wall.points[3]];
 
-            addWalls: (newWalls) => set((state) => ({
-                walls: [...state.walls, ...newWalls.map(w => ({ ...w, id: uuidv4() }))]
-            })),
+                    const tol = 0.01; // 1cm tolerance
+                    const matchDirect = (Math.abs(p1[0] - newP1[0]) < tol && Math.abs(p1[1] - newP1[1]) < tol &&
+                        Math.abs(p2[0] - newP2[0]) < tol && Math.abs(p2[1] - newP2[1]) < tol);
+                    const matchReverse = (Math.abs(p1[0] - newP2[0]) < tol && Math.abs(p1[1] - newP2[1]) < tol &&
+                        Math.abs(p2[0] - newP1[0]) < tol && Math.abs(p2[1] - newP1[1]) < tol);
+                    return matchDirect || matchReverse;
+                });
+
+                if (isDuplicate) return state;
+
+                return {
+                    walls: [...state.walls, { ...wall, id: uuidv4() }]
+                };
+            }),
+
+            addWalls: (newWalls) => set((state) => {
+                const uniqueNewWalls = newWalls.filter(newWall => {
+                    const isDuplicate = state.walls.some(existing => {
+                        const p1 = [existing.points[0], existing.points[1]];
+                        const p2 = [existing.points[2], existing.points[3]];
+                        const newP1 = [newWall.points[0], newWall.points[1]];
+                        const newP2 = [newWall.points[2], newWall.points[3]];
+
+                        const tol = 0.01;
+                        const matchDirect = (Math.abs(p1[0] - newP1[0]) < tol && Math.abs(p1[1] - newP1[1]) < tol &&
+                            Math.abs(p2[0] - newP2[0]) < tol && Math.abs(p2[1] - newP2[1]) < tol);
+                        const matchReverse = (Math.abs(p1[0] - newP2[0]) < tol && Math.abs(p1[1] - newP2[1]) < tol &&
+                            Math.abs(p2[0] - newP1[0]) < tol && Math.abs(p2[1] - newP1[1]) < tol);
+                        return matchDirect || matchReverse;
+                    });
+
+                    // Also check against other new walls in this batch (simple O(N^2) for batch is fine usually)
+                    // But usually newWalls come from detection which shouldn't have self-duplicates. 
+                    // Let's just solve the "add to existing" case mostly.
+                    return !isDuplicate;
+                });
+
+                if (uniqueNewWalls.length === 0) return state;
+
+                return {
+                    walls: [...state.walls, ...uniqueNewWalls.map(w => ({ ...w, id: uuidv4() }))]
+                };
+            }),
 
             updateWall: (id, updates) => set((state) => ({
                 walls: state.walls.map((w) => (w.id === id ? { ...w, ...updates } : w)),
@@ -183,9 +277,77 @@ export const useProjectStore = create<ProjectState>()(
                 })
             })),
 
-            removeWall: (id) => set((state) => ({
-                walls: state.walls.filter((w) => w.id !== id),
-            })),
+            removeWall: (id) => set((state) => {
+                const wallToRemove = state.walls.find(w => w.id === id);
+                if (!wallToRemove) return state;
+
+                let currentWalls = state.walls.filter((w) => w.id !== id);
+
+                // Helper to get connected walls at a point
+                const getConnectedWalls = (walls: Wall[], p: { x: number, y: number }) => {
+                    return walls.filter(w => {
+                        const dist1 = Math.hypot(w.points[0] - p.x, w.points[1] - p.y);
+                        const dist2 = Math.hypot(w.points[2] - p.x, w.points[3] - p.y);
+                        return dist1 < 0.001 || dist2 < 0.001;
+                    });
+                };
+
+                // Helper to check collinearity (slope check)
+                const areCollinear = (w1: Wall, w2: Wall) => {
+                    const angle1 = Math.atan2(w1.points[3] - w1.points[1], w1.points[2] - w1.points[0]);
+                    const angle2 = Math.atan2(w2.points[3] - w2.points[1], w2.points[2] - w2.points[0]);
+
+                    // Normalize angles 0-PI (since wall direction doesn't matter for collinearity)
+                    let a1 = angle1 < 0 ? angle1 + Math.PI : angle1;
+                    let a2 = angle2 < 0 ? angle2 + Math.PI : angle2;
+
+                    // Check if close (or close to PI diff which is same line) - handled by normalization? 
+                    // Actually atan2 returns -PI to PI. wall direction (p1->p2) vs (p2->p1) flips angle by PI.
+                    // We just care if they lie on same line. 
+                    const diff = Math.abs(a1 - a2);
+                    return diff < 0.01 || Math.abs(diff - Math.PI) < 0.01;
+                };
+
+                // Check endpoints of removed wall for healing opportunities
+                const checkPoints = [
+                    { x: wallToRemove.points[0], y: wallToRemove.points[1] },
+                    { x: wallToRemove.points[2], y: wallToRemove.points[3] }
+                ];
+
+                checkPoints.forEach(p => {
+                    const connected = getConnectedWalls(currentWalls, p);
+
+                    if (connected.length === 2) {
+                        const w1 = connected[0];
+                        const w2 = connected[1];
+
+                        if (areCollinear(w1, w2) && w1.thickness === w2.thickness && w1.material === w2.material) {
+                            // Merge w1 and w2
+                            // Find the extreme points (far ends)
+                            // The shared point is 'p'.
+                            // Get far point of w1
+                            let start = { x: w1.points[0], y: w1.points[1] };
+                            if (Math.hypot(start.x - p.x, start.y - p.y) < 0.001) start = { x: w1.points[2], y: w1.points[3] };
+
+                            // Get far point of w2
+                            let end = { x: w2.points[0], y: w2.points[1] };
+                            if (Math.hypot(end.x - p.x, end.y - p.y) < 0.001) end = { x: w2.points[2], y: w2.points[3] };
+
+                            const newWall: Wall = {
+                                ...w1,
+                                id: uuidv4(),
+                                points: [start.x, start.y, end.x, end.y]
+                            };
+
+                            // Remove w1, w2 and add newWall
+                            currentWalls = currentWalls.filter(w => w.id !== w1.id && w.id !== w2.id);
+                            currentWalls.push(newWall);
+                        }
+                    }
+                });
+
+                return { walls: currentWalls };
+            }),
 
             splitWall: (id, point) => set((state) => {
                 const wall = state.walls.find(w => w.id === id);
@@ -230,6 +392,26 @@ export const useProjectStore = create<ProjectState>()(
                 };
             }),
 
+            addAnchors: (newAnchors: Omit<Anchor, 'id'>[]) => set((state) => {
+                const prefix = state.anchorMode === 'manual' ? 'M' : 'A';
+                // Find highest current ID to continue sequence
+                const existingIds = state.anchors
+                    .filter(a => a.id.startsWith(prefix))
+                    .map(a => parseInt(a.id.substring(1)))
+                    .filter(n => !isNaN(n));
+
+                let nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+
+                const anchorsToAdd = newAnchors.map(a => ({
+                    ...a,
+                    id: `${prefix}${nextNum++}`
+                }));
+
+                return {
+                    anchors: [...state.anchors, ...anchorsToAdd]
+                };
+            }),
+
             updateAnchor: (id, updates) => set((state) => ({
                 anchors: state.anchors.map((a) => (a.id === id ? { ...a, ...updates } : a)),
             })),
@@ -256,6 +438,11 @@ export const useProjectStore = create<ProjectState>()(
                 if (layer === 'walls') {
                     newLayers.rooms = newValue;
                     newLayers.roomLabels = newValue;
+                }
+
+                // Unified Toggle: Anchors controls Heatmap
+                if (layer === 'anchors') {
+                    newLayers.heatmap = newValue;
                 }
 
                 return { layers: newLayers };

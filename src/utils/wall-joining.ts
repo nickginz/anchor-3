@@ -154,7 +154,7 @@ export const generateJoinedWalls = (walls: Wall[], scaleRatio: number, allWalls:
         const endType = isLoop ? ClipperLib.EndType.etClosedLine : ClipperLib.EndType.etOpenButt;
 
         co.AddPath(points, joinType, endType);
-        co.MiterLimit = 5.0;
+        co.MiterLimit = 2.5; // Reduced from 5.0 to flatten sharp spikes
 
         const halfWidth = (path[0].thickness * scaleRatio * SCALE) / 2;
         const solution = new ClipperLib.Paths();
@@ -178,6 +178,17 @@ export const generateJoinedWalls = (walls: Wall[], scaleRatio: number, allWalls:
     // Iterate all vertices in the graph and "fill" the corners between adjacent walls
     adj.forEach((connectedWalls, key) => {
         if (connectedWalls.length < 2) return;
+
+        // SKIP simple corners (2 walls, same thickness) because they are handled by Clipper Offset paths naturally
+        if (connectedWalls.length === 2) {
+            const w1 = connectedWalls[0];
+            const w2 = connectedWalls[1];
+            if (Math.abs(w1.thickness - w2.thickness) < 0.001) return;
+        }
+
+        // SKIP complex junctions (>2 walls) to avoid spiky artifacts. 
+        // Clipper Union usually handles the T-junction overlap well enough without manual wedges.
+        if (connectedWalls.length > 2) return;
 
         // Optimization: Only fill corners involving the current wall group
         if (!connectedWalls.some(w => subsetSet.has(w.id))) return;

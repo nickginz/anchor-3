@@ -4,6 +4,7 @@ import Konva from 'konva';
 import { WallsLayer } from './Layers/WallsLayer';
 import { FloorplanImageLayer } from './Layers/FloorplanImageLayer';
 import { DXFLayer } from './Layers/DXFLayer';
+import { HeatmapLayer } from './Layers/HeatmapLayer';
 import { RoomsLayer } from './Layers/RoomsLayer';
 import { ValidationLayer } from './Layers/ValidationLayer';
 import InteractionLayer from './InteractionLayer';
@@ -161,19 +162,27 @@ export const MainStage: React.FC = () => {
                     onContextMenu={(e) => e.evt.preventDefault()}
                     className="cursor-crosshair"
                 >
-                    <Layer>
+                    {/* Layer 1: Background & Heavy Renders */}
+                    <Layer key="layer-bg">
                         {gridLines}
-                        {/* Origin Marker */}
                         <Line points={[-20, 0, 20, 0]} stroke="#666" strokeWidth={2} />
                         <Line points={[0, -20, 0, 20]} stroke="#666" strokeWidth={2} />
-
                         <FloorplanImageLayer />
                         <DXFLayer />
+                        <HeatmapLayer key="heatmap" stage={stage} />
                         <RoomsLayer />
+                    </Layer>
+
+                    {/* Layer 2: Geometry & Validation */}
+                    <Layer key="layer-geo">
                         <WallsLayer />
                         <ValidationLayer stage={stage} />
+                    </Layer>
+
+                    {/* Layer 3: Overlay, Interaction, Anchors (Must be Top) */}
+                    <Layer key="layer-top">
                         <DimensionsLayer />
-                        <AnchorsLayer />
+                        <AnchorsLayer key="anchors" />
                         <InteractionLayer
                             stage={stage}
                             onOpenMenu={(x, y, options) => setMenu({ x, y, options })}

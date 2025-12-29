@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import Konva from 'konva';
 import { Line, Circle, Rect } from 'react-konva';
 import { useProjectStore } from '../../store/useProjectStore';
-import { applyOrthogonal, getSnapPoint } from '../../utils/geometry';
+import { applyOrthogonal, getSnapPoint, dist } from '../../utils/geometry';
 import type { Point } from '../../utils/geometry';
 
 interface InteractionLayerProps {
@@ -13,9 +13,9 @@ interface InteractionLayerProps {
 
 const getWallParams = (preset: string, standard: number, thick: number, wide: number) => {
     switch (preset) {
-        case 'thick': return { thickness: thick, attenuation: 20 };
-        case 'wide': return { thickness: wide, attenuation: 25 };
-        default: return { thickness: standard, attenuation: 15 };
+        case 'thick': return { thickness: thick, attenuation: 5, material: 'drywall' as const };
+        case 'wide': return { thickness: wide, attenuation: 12.5, material: 'concrete' as const };
+        default: return { thickness: standard, attenuation: 4, material: 'drywall' as const };
     }
 };
 
@@ -92,8 +92,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     const [isShiftDown, setIsShiftDown] = useState(false);
 
     // Rectangle Wall State
-    // const [rectStart, setRectStart] = useState<Point | null>(null); // keeping previous state var
     const [rectStart, setRectStart] = useState<Point | null>(null);
+    const [rectEdgeStart, setRectEdgeStart] = useState<Point | null>(null);
+    const [rectEdgeBaseEnd, setRectEdgeBaseEnd] = useState<Point | null>(null);
 
     // Selection State
     const [selectionStart, setSelectionStart] = useState<Point | null>(null);
@@ -105,7 +106,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     const panStartTime = useRef<number>(0);
     const lastDragPos = useRef<Point | null>(null);
     const isMouseDown = useRef(false);
-    const isHistoryPaused = useRef(false);
+    // const isHistoryPaused = useRef(false); // Removed unused
 
 
     // Text Drag State (Ref)
@@ -129,6 +130,8 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 setPoints([]);
                 setChainStart(null);
                 setRectStart(null);
+                setRectEdgeStart(null);
+                setRectEdgeBaseEnd(null);
                 setTool('select'); // Escape goes to select
                 setSelectionStart(null);
                 setSelectionRect(null);
@@ -253,6 +256,19 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             window.removeEventListener('keyup', handleKeyUp);
         };
     }, [setTool, setSelection, setAnchorMode, activeTool, points]); // Added points to deps
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (activeTool === 'select' || activeTool.startsWith('wall') || activeTool.startsWith('anchor')) {
+                if (e.key.toLowerCase() === 'r' && e.shiftKey) {
+                    setTool('wall_rect_edge');
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [activeTool, setTool]);
 
     useEffect(() => {
         if (!stage) return;
@@ -450,9 +466,57 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
 
 
-            // RMB Pan Start
+            // Helper for RMB detection
+            const getHitWall = (pos: Point, walls: any[], tolerance: number) => {
+                for (const w of walls) {
+                    if (isPointNearWall(pos, w, tolerance)) return w;
+                }
+                return null;
+            }
+
+            // ... (Inside Component) ...
+
+            // RMB Handling (Context Menu & Pan)
             if (e.evt.button === 2) {
-                // If hitting anchor, don't pan, let context menu handle it
+                // Check for Wall Context Menu
+                const state = useProjectStore.getState();
+                const hitWall = getHitWall(pos, state.walls, 10 / stage.scaleX());
+
+                // If we clicked a wall
+                if (hitWall) {
+                    const isSelected = state.selectedIds.includes(hitWall.id);
+                    let targetIds = isSelected ? state.selectedIds : [hitWall.id];
+
+                    if (!isSelected) {
+                        setSelection([hitWall.id]); // Auto-select on RMB
+                    }
+
+                    // Define Menu Options
+                    const typeOptions = [
+                        'Drywall', 'Concrete', 'Brick', 'Metal', 'Wood', 'Glass'
+                    ].map(type => ({
+                        label: `Set Type: ${type}`,
+                        action: () => {
+                            targetIds.forEach(id => {
+                                const w = state.walls.find(x => x.id === id);
+                                if (w) state.updateWall(id, { material: type.toLowerCase() as any });
+                            });
+                        }
+                    }));
+
+                    if (onOpenMenu) {
+                        onOpenMenu(e.evt.clientX, e.evt.clientY, [
+                            { label: 'Start Wall Here', action: () => { setTool('wall'); setPoints([pos]); setCurrentMousePos(pos); setChainStart(pos); } },
+                            { type: 'separator' },
+                            ...typeOptions,
+                            { type: 'separator' },
+                            { label: 'Delete', action: () => targetIds.forEach(id => state.removeWall(id)) }
+                        ]);
+                        return; // Stop Panning
+                    }
+                }
+
+                // If hitting anchor (Existing logic)
                 if (e.target.name() === 'anchor') {
                     return;
                 }
@@ -588,8 +652,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                         if (start.x !== end.x || start.y !== end.y) {
                             addWall({
                                 points: [start.x, start.y, end.x, end.y],
-                                material: 'concrete',
-                                ...getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness)
+                                ...getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness) as any
                             });
                         }
                         // Continue chain
@@ -600,29 +663,136 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 // Rect Tool
             } else if (activeTool === 'wall_rect') {
                 if (e.evt.button === 0) {
+                    let finalPos = pos;
+                    const state = useProjectStore.getState();
+                    const snap = state.layers.walls ? getSnapPoint(pos, walls, 20 / (stage.scaleX())) : null;
+                    if (snap) {
+                        finalPos = snap.point;
+                        // Auto-Split Logic for Start Point
+                        if (!rectStart && snap.type === 'edge' && snap.wallId) {
+                            state.splitWall(snap.wallId, snap.point);
+                        }
+                    }
+
                     if (!rectStart) {
-                        setRectStart(pos);
-                        setCurrentMousePos(pos);
+                        setRectStart(finalPos);
+                        setCurrentMousePos(finalPos);
+                        lastDragPos.current = finalPos; // Track for Drag
                     } else {
                         const x1 = rectStart.x;
                         const y1 = rectStart.y;
-                        const x2 = pos.x;
-                        const y2 = pos.y;
+                        const x2 = finalPos.x;
+                        const y2 = finalPos.y;
 
-                        if (Math.abs(x1 - x2) > 0.1 && Math.abs(y1 - y2) > 0.1) {
+                        if (Math.abs(x1 - x2) > 0.1 || Math.abs(y1 - y2) > 0.1) { // Changed AND to OR for validity check
+                            // Auto-Split for End Point
+                            if (snap && snap.type === 'edge' && snap.wallId) {
+                                state.splitWall(snap.wallId, snap.point);
+                            }
+
+                            // Check Implicit Points (p3, p4) for Splitting
+                            const p3 = { x: x2, y: y1 };
+                            const p4 = { x: x1, y: y2 };
+
+                            const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, 20 / (stage.scaleX())) : null;
+                            if (snapP3 && snapP3.type === 'edge' && snapP3.wallId) state.splitWall(snapP3.wallId, snapP3.point);
+
+                            const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, 20 / (stage.scaleX())) : null;
+                            if (snapP4 && snapP4.type === 'edge' && snapP4.wallId) state.splitWall(snapP4.wallId, snapP4.point);
+
                             const params = getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness);
-                            const material = 'concrete';
 
                             addWalls([
-                                { points: [x1, y1, x2, y1], material, ...params },
-                                { points: [x2, y1, x2, y2], material, ...params },
-                                { points: [x2, y2, x1, y2], material, ...params },
-                                { points: [x1, y2, x1, y1], material, ...params }
+                                { points: [x1, y1, x2, y1], ...params as any },
+                                { points: [x2, y1, x2, y2], ...params as any },
+                                { points: [x2, y2, x1, y2], ...params as any },
+                                { points: [x1, y2, x1, y1], ...params as any }
                             ]);
                         }
                         setRectStart(null);
                         setCurrentMousePos(null);
-                        // Continuous Drawing
+                    }
+                }
+
+                // Wall Rect Edge Tool
+            } else if (activeTool === 'wall_rect_edge') {
+                if (e.evt.button === 0) {
+                    let finalPos = pos;
+                    const state = useProjectStore.getState();
+                    const snap = state.layers.walls ? getSnapPoint(pos, walls, 20 / (stage.scaleX())) : null;
+                    if (snap) {
+                        finalPos = snap.point;
+                        // Auto-Split Logic for Start Point
+                        if (!rectEdgeStart && snap.type === 'edge' && snap.wallId) {
+                            state.splitWall(snap.wallId, snap.point);
+                        }
+                    }
+
+                    if (!rectEdgeStart) {
+                        // Phase 1: Start Point
+                        setRectEdgeStart(finalPos);
+                        setCurrentMousePos(finalPos);
+                        lastDragPos.current = finalPos; // Track for Drag check
+                    } else if (!rectEdgeBaseEnd) {
+                        // Phase 2: Base End Point
+                        if (dist(rectEdgeStart, finalPos) > 0.001) {
+                            if (snap && snap.type === 'edge' && snap.wallId) {
+                                state.splitWall(snap.wallId, snap.point);
+                            }
+                            setRectEdgeBaseEnd(finalPos);
+                        }
+                    } else {
+                        // Phase 3: Finish (Height)
+                        // Geometric calculation handled logic is conceptually:
+                        // P1 (Start), P2 (BaseEnd), M (Mouse)
+                        // Project M onto Normal of P1-P2
+                        const p1 = rectEdgeStart;
+                        if (!p1) return;
+                        const p2 = rectEdgeBaseEnd;
+
+                        const dx = p2.x - p1.x;
+                        const dy = p2.y - p1.y;
+                        const len = Math.hypot(dx, dy);
+
+                        // Normal Vector (Normalized)
+                        const nx = -dy / len;
+                        const ny = dx / len;
+
+                        // Vector from P1 to Mouse
+                        const vmx = finalPos.x - p1.x;
+                        const vmy = finalPos.y - p1.y;
+
+                        // Dot product with Normal gives height distance (signed)
+                        const h = vmx * nx + vmy * ny;
+
+                        // Calculate P4 and P3
+                        const p4x = p1.x + nx * h;
+                        const p4y = p1.y + ny * h;
+                        const p3x = p2.x + nx * h;
+                        const p3y = p2.y + ny * h;
+
+                        // Check P3 and P4 for Splitting
+                        const p3 = { x: p3x, y: p3y };
+                        const p4 = { x: p4x, y: p4y };
+
+                        const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, 20 / (stage.scaleX())) : null;
+                        if (snapP3 && snapP3.type === 'edge' && snapP3.wallId) state.splitWall(snapP3.wallId, snapP3.point);
+
+                        const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, 20 / (stage.scaleX())) : null;
+                        if (snapP4 && snapP4.type === 'edge' && snapP4.wallId) state.splitWall(snapP4.wallId, snapP4.point);
+
+                        const params = getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness);
+
+                        addWalls([
+                            { points: [p1.x, p1.y, p2.x, p2.y], ...params as any }, // Base
+                            { points: [p2.x, p2.y, p3x, p3y], ...params as any },   // Side A
+                            { points: [p3x, p3y, p4x, p4y], ...params as any },     // Top
+                            { points: [p4x, p4y, p1.x, p1.y], ...params as any }    // Side B
+                        ]);
+
+                        setRectEdgeStart(null);
+                        setRectEdgeBaseEnd(null);
+                        setCurrentMousePos(null);
                     }
                 }
 
@@ -754,7 +924,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             }
 
             // Tool Mouse Move checks...
-            if (activeTool === 'wall') {
+            if (activeTool === 'wall' || activeTool === 'wall_rect' || activeTool === 'wall_rect_edge') {
                 const state = useProjectStore.getState();
                 const snap = state.layers.walls ? getSnapPoint(pos, walls, 20 / (stage.scaleX())) : null;
                 setCurrentMousePos(snap ? snap.point : pos);
@@ -762,8 +932,6 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 setCurrentMousePos(pos);
             } else if (activeTool === 'dimension' && points.length > 0) {
                 setCurrentMousePos(pos);
-            } else if (activeTool === 'wall_rect') {
-                if (rectStart) setCurrentMousePos(pos);
             } else if (activeTool === 'select') {
                 if (selectionStart && isMouseDown.current) {
                     setSelectionRect({
@@ -802,7 +970,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
                 if (dragTextId.current) {
                     const d = useProjectStore.getState().dimensions.find(x => x.id === dragTextId.current);
-                    if (d) useProjectStore.getState().updateDimension(d.id, { textOffset: { ...d.textOffset } });
+                    if (d) useProjectStore.getState().updateDimension(d.id, { textOffset: { x: d.textOffset?.x || 0, y: d.textOffset?.y || 0 } });
                 }
             }
 
@@ -810,6 +978,116 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             dragAnchorId.current = null;
             dragDimLineId.current = null;
             lastDragPos.current = null;
+
+            // Handle Drag-to-Release for Rect Tools
+            if (e.evt.button === 0) {
+                const pos = getStagePoint(); // Raw pos
+                if (!pos) return;
+
+                // Snap for MouseUp
+                let finalPos = pos;
+                let snap: import('../../utils/geometry').SnapResult | null = null;
+                const state = useProjectStore.getState();
+                if ((activeTool === 'wall_rect' || activeTool === 'wall_rect_edge') && state.layers.walls) {
+                    snap = getSnapPoint(pos, walls, 20 / (stage.scaleX()));
+                    if (snap) finalPos = snap.point;
+                }
+
+                if (activeTool === 'wall_rect') {
+                    if (rectStart) {
+                        // If we dragged far enough, treat MouseUp as the end click
+                        if (dist(rectStart, finalPos) > 0.2) { // 20cm threshold to distinguish click vs drag
+                            const x1 = rectStart.x;
+                            const y1 = rectStart.y;
+                            const x2 = finalPos.x;
+                            const y2 = finalPos.y;
+
+                            if (Math.abs(x1 - x2) > 0.1 || Math.abs(y1 - y2) > 0.1) {
+                                // Auto-Split for End Point
+                                if (snap && snap.type === 'edge' && snap.wallId) {
+                                    state.splitWall(snap.wallId, snap.point);
+                                }
+
+                                // Check Implicit Points (p3, p4) for Splitting
+                                const p3 = { x: x2, y: y1 };
+                                const p4 = { x: x1, y: y2 };
+
+                                const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, 20 / (stage.scaleX())) : null;
+                                if (snapP3 && snapP3.type === 'edge' && snapP3.wallId) state.splitWall(snapP3.wallId, snapP3.point);
+
+                                const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, 20 / (stage.scaleX())) : null;
+                                if (snapP4 && snapP4.type === 'edge' && snapP4.wallId) state.splitWall(snapP4.wallId, snapP4.point);
+
+                                const params = getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness);
+                                addWalls([
+                                    { points: [x1, y1, x2, y1], ...params as any },
+                                    { points: [x2, y1, x2, y2], ...params as any },
+                                    { points: [x2, y2, x1, y2], ...params as any },
+                                    { points: [x1, y2, x1, y1], ...params as any }
+                                ]);
+                            }
+                            setRectStart(null);
+                            setCurrentMousePos(null);
+                        }
+                    }
+                } else if (activeTool === 'wall_rect_edge') {
+                    if (rectEdgeBaseEnd) {
+                        // Phase 3: Height (Drag Release)
+                        if (dist(rectEdgeBaseEnd, finalPos) > 0.2) {
+                            const p1 = rectEdgeStart;
+                            if (!p1) return;
+                            const p2 = rectEdgeBaseEnd;
+
+                            const dx = p2.x - p1.x;
+                            const dy = p2.y - p1.y;
+                            const len = Math.hypot(dx, dy);
+
+                            const nx = -dy / len;
+                            const ny = dx / len;
+
+                            const vmx = finalPos.x - p1.x;
+                            const vmy = finalPos.y - p1.y;
+                            const h = vmx * nx + vmy * ny;
+
+                            const p4x = p1.x + nx * h;
+                            const p4y = p1.y + ny * h;
+                            const p3x = p2.x + nx * h;
+                            const p3y = p2.y + ny * h;
+
+                            // Check Splitting for all 4 corners
+                            if (snap && snap.type === 'edge' && snap.wallId) state.splitWall(snap.wallId, snap.point);
+
+                            const p3 = { x: p3x, y: p3y };
+                            const p4 = { x: p4x, y: p4y };
+                            const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, 20 / (stage.scaleX())) : null;
+                            if (snapP3 && snapP3.type === 'edge' && snapP3.wallId) state.splitWall(snapP3.wallId, snapP3.point);
+                            const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, 20 / (stage.scaleX())) : null;
+                            if (snapP4 && snapP4.type === 'edge' && snapP4.wallId) state.splitWall(snapP4.wallId, snapP4.point);
+
+                            // Note: P1 and P2 splits were handled in previous steps/clicks, but could re-check if dragged? 
+                            // P1 was set at start. P2 set at Phase 2. Height drag only changes P3/P4.
+                            // But wait, the MouseUp here is defining the final pos. 
+                            // If snap is valid, it's splitting at the *mouse* position, which is on the P3-P4 line.
+                            // Actually, finalPos is strictly the mouse. The P3/P4 are projected.
+                            // So snap.point might not be exactly P3 or P4 if we project.
+                            // Nevermind, for now let's apply standard logic.
+
+                            const params = getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness);
+
+                            addWalls([
+                                { points: [p1.x, p1.y, p2.x, p2.y], ...params as any },
+                                { points: [p2.x, p2.y, p3x, p3y], ...params as any },
+                                { points: [p3x, p3y, p4x, p4y], ...params as any },
+                                { points: [p4x, p4y, p1.x, p1.y], ...params as any }
+                            ]);
+
+                            setRectEdgeStart(null);
+                            setRectEdgeBaseEnd(null);
+                            setCurrentMousePos(null);
+                        }
+                    }
+                }
+            }
 
             if (e.evt.button === 2) {
                 if (isPanning) {
@@ -1150,8 +1428,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                                                 if (start.x !== end.x || start.y !== end.y) {
                                                     addWall({
                                                         points: [start.x, start.y, end.x, end.y],
-                                                        material: 'concrete',
-                                                        ...getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness)
+                                                        ...getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness) as any
                                                     });
                                                 }
                                             }
@@ -1191,7 +1468,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             stage.off('dblclick', handleDblClick);
             stage.off('contextmenu', handleContextMenu);
         };
-    }, [stage, activeTool, points, addWall, addAnchor, isShiftDown, setTool, walls, onOpenMenu, chainStart, selectionStart, selectionRect, isPanning, setSelection, rectStart, wallPreset, selectedIds, setAnchorMode, onOpenScaleModal, anchorRadius]);
+    }, [stage, activeTool, points, addWall, addAnchor, isShiftDown, setTool, walls, onOpenMenu, chainStart, selectionStart, selectionRect, isPanning, setSelection, rectStart, wallPreset, selectedIds, setAnchorMode, onOpenScaleModal, anchorRadius, rectEdgeStart, rectEdgeBaseEnd]);
 
     return (
         <React.Fragment>
@@ -1212,6 +1489,19 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 </React.Fragment>
             )}
 
+            {/* Snap Cursor Indicator for Wall Tools (Hover) */}
+            {currentMousePos && (activeTool === 'wall' || activeTool === 'wall_rect' || activeTool === 'wall_rect_edge') && (
+                <Circle
+                    x={currentMousePos.x}
+                    y={currentMousePos.y}
+                    radius={5 / (stage?.scaleX() || 1)}
+                    fill="transparent"
+                    stroke="#ff0000"
+                    strokeWidth={2 / (stage?.scaleX() || 1)}
+                    listening={false}
+                />
+            )}
+
             {activeTool === 'wall_rect' && rectStart && currentMousePos && (
                 <Rect
                     x={Math.min(rectStart.x, currentMousePos.x)}
@@ -1222,6 +1512,78 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     strokeWidth={2 / (stage?.scaleX() || 1)}
                     dash={[10, 5]}
                 />
+            )}
+
+            {/* Wall Rect Edge Preview */}
+            {activeTool === 'wall_rect_edge' && rectEdgeStart && currentMousePos && (
+                <React.Fragment>
+                    {/* Phase 2: Drawing Base */}
+                    {!rectEdgeBaseEnd && (
+                        <Line
+                            points={[rectEdgeStart.x, rectEdgeStart.y, currentMousePos.x, currentMousePos.y]}
+                            stroke="#00aaff"
+                            strokeWidth={2 / (stage?.scaleX() || 1)}
+                            dash={[10, 5]}
+                        />
+                    )}
+                    {/* Phase 3: Drawing Height (Rect) */}
+                    {rectEdgeBaseEnd && (
+                        (() => {
+                            // Re-calculate rect points
+                            const p1 = rectEdgeStart;
+                            const p2 = rectEdgeBaseEnd;
+                            const finalPos = currentMousePos;
+
+                            const dx = p2.x - p1.x;
+                            const dy = p2.y - p1.y;
+                            const len = Math.hypot(dx, dy);
+
+                            const nx = -dy / len;
+                            const ny = dx / len;
+
+                            const vmx = finalPos.x - p1.x;
+                            const vmy = finalPos.y - p1.y;
+                            const h = vmx * nx + vmy * ny;
+
+                            const p4x = p1.x + nx * h;
+                            const p4y = p1.y + ny * h;
+                            const p3x = p2.x + nx * h;
+                            const p3y = p2.y + ny * h;
+
+                            return (
+                                <Line
+                                    points={[
+                                        p1.x, p1.y,
+                                        p2.x, p2.y,
+                                        p3x, p3y,
+                                        p4x, p4y,
+                                        p1.x, p1.y
+                                    ]}
+                                    stroke="#00aaff"
+                                    strokeWidth={2 / (stage?.scaleX() || 1)}
+                                    dash={[10, 5]}
+                                    closed
+                                />
+                            );
+                        })()
+                    )}
+                    {/* Start Point Marker */}
+                    <Circle
+                        x={rectEdgeStart.x}
+                        y={rectEdgeStart.y}
+                        radius={3 / (stage?.scaleX() || 1)}
+                        fill="red"
+                    />
+                    {/* End Point Marker */}
+                    {rectEdgeBaseEnd && (
+                        <Circle
+                            x={rectEdgeBaseEnd.x}
+                            y={rectEdgeBaseEnd.y}
+                            radius={3 / (stage?.scaleX() || 1)}
+                            fill="red"
+                        />
+                    )}
+                </React.Fragment>
             )}
 
             {activeTool === 'select' && selectionRect && selectionStart && currentMousePos && (

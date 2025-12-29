@@ -8,6 +8,7 @@ interface ToolbarButtonProps {
     onClick: () => void;
     tooltip?: string;
     className?: string;
+    iconSize?: number;
 }
 
 export const ToolbarButton: React.FC<ToolbarButtonProps> = ({
@@ -16,7 +17,8 @@ export const ToolbarButton: React.FC<ToolbarButtonProps> = ({
     active,
     onClick,
     tooltip,
-    className
+    className,
+    iconSize = 18
 }) => {
     const [showTooltip, setShowTooltip] = useState(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -49,7 +51,7 @@ export const ToolbarButton: React.FC<ToolbarButtonProps> = ({
                     ${className}
                 `}
             >
-                <Icon size={20} strokeWidth={1.5} />
+                <Icon size={iconSize} strokeWidth={1.5} />
             </button>
 
             {showTooltip && (

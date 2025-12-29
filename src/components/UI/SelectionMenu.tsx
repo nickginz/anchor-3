@@ -78,25 +78,44 @@ export const SelectionMenu: React.FC = () => {
                                 <button
                                     onClick={() => {
                                         const t = useProjectStore.getState().standardWallThickness;
-                                        selectedWalls.forEach(w => updateWall(w.id, { thickness: t }));
+                                        selectedWalls.forEach(w => updateWall(w.id, { thickness: t, material: 'drywall' }));
                                     }}
                                     className="flex-1 bg-[#444] hover:bg-[#555] text-[10px] py-1 rounded text-center transition-colors"
                                 >Std</button>
                                 <button
                                     onClick={() => {
                                         const t = useProjectStore.getState().thickWallThickness;
-                                        selectedWalls.forEach(w => updateWall(w.id, { thickness: t }));
+                                        selectedWalls.forEach(w => updateWall(w.id, { thickness: t, material: 'drywall' }));
                                     }}
                                     className="flex-1 bg-[#444] hover:bg-[#555] text-[10px] py-1 rounded text-center transition-colors"
                                 >Thick</button>
                                 <button
                                     onClick={() => {
                                         const t = useProjectStore.getState().wideWallThickness;
-                                        selectedWalls.forEach(w => updateWall(w.id, { thickness: t }));
+                                        selectedWalls.forEach(w => updateWall(w.id, { thickness: t, material: 'concrete' }));
                                     }}
                                     className="flex-1 bg-[#444] hover:bg-[#555] text-[10px] py-1 rounded text-center transition-colors"
                                 >Wide</button>
                             </div>
+                        </div>
+
+                        <div className="flex flex-col space-y-1">
+                            <label className="text-[10px] text-gray-400 uppercase">Material</label>
+                            <select
+                                value={selectedWalls.length > 1 ? '' : (selectedWalls[0].material || 'concrete')}
+                                onChange={(e) => {
+                                    const mat = e.target.value as any;
+                                    selectedWalls.forEach(w => updateWall(w.id, { material: mat }));
+                                }}
+                                className="bg-[#222] border border-[#444] rounded px-2 py-1 text-xs w-full focus:outline-none focus:border-blue-500 transition-colors text-white"
+                            >
+                                <option value="drywall">Drywall</option>
+                                <option value="concrete">Concrete</option>
+                                <option value="brick">Brick</option>
+                                <option value="metal">Metal</option>
+                                <option value="wood">Solid Wood</option>
+                                <option value="glass">Glass</option>
+                            </select>
                         </div>
                     </div>
                 </div>

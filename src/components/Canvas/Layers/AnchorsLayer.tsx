@@ -5,6 +5,7 @@ import { useProjectStore } from '../../../store/useProjectStore';
 export const AnchorsLayer: React.FC = () => {
     const { anchors, scaleRatio, selectedIds, anchorRadius, anchorShape, showAnchorRadius, layers } = useProjectStore();
 
+    // console.log('Rendering AnchorsLayer. Count:', anchors.length, 'Visible:', layers.anchors);
     if (!layers.anchors || anchors.length === 0) return null;
 
     return (
