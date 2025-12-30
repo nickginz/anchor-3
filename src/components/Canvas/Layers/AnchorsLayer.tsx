@@ -3,7 +3,7 @@ import { Group, Circle, Rect, Text } from 'react-konva';
 import { useProjectStore } from '../../../store/useProjectStore';
 
 export const AnchorsLayer: React.FC = () => {
-    const { anchors, scaleRatio, selectedIds, anchorRadius, anchorShape, showAnchorRadius, layers } = useProjectStore();
+    const { anchors, scaleRatio, selectedIds, anchorRadius, anchorShape, showAnchorRadius, layers, theme } = useProjectStore();
 
     // console.log('Rendering AnchorsLayer. Count:', anchors.length, 'Visible:', layers.anchors);
     if (!layers.anchors || anchors.length === 0) return null;
@@ -52,7 +52,7 @@ export const AnchorsLayer: React.FC = () => {
                         <Circle
                             radius={8}
                             fill="#ffaa00" // Orange center
-                            stroke={isSelected ? "#ffffff" : "#000000"}
+                            stroke={isSelected ? (theme === 'light' ? '#2563eb' : '#00aaff') : (theme === 'light' ? '#000000' : '#ffffff')}
                             strokeWidth={2}
                             // Name for hit detection in InteractionLayer
                             name="anchor"
@@ -64,7 +64,7 @@ export const AnchorsLayer: React.FC = () => {
                             y={12}
                             text={`${anchor.id.slice(0, 4)}`}
                             fontSize={10}
-                            fill="#0078d4"
+                            fill={theme === 'light' ? '#111827' : '#00aaff'} // Dark text in light mode, Blue/Cyan in dark
                             align="center"
                             offsetX={15}
                             listening={false}

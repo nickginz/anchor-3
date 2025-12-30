@@ -5,6 +5,12 @@ export interface WallPhysics {
     reflectionLoss?: number;
 }
 
+export interface Point {
+    x: number;
+    y: number;
+}
+
+
 
 export interface Wall {
     id: string;
@@ -21,7 +27,8 @@ export interface Anchor {
     power: number; // dBm. Tx Power.
     range: number; // meters
     radius?: number; // Override radius in meters
-    shape?: 'circle' | 'square'; // Override shape
+    shape?: 'circle' | 'square' | 'triangle' | 'star' | 'hex'; // Override shape
+    showRadius?: boolean; // Show coverage radius
     groupId?: string; // For grouping anchors
     txPower?: number; // Transmit Power in dBm (Default 0)
 }

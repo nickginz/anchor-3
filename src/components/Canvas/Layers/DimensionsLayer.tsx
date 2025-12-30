@@ -3,7 +3,7 @@ import { Group, Line, Text, Circle } from 'react-konva';
 import { useProjectStore } from '../../../store/useProjectStore';
 
 export const DimensionsLayer: React.FC = () => {
-    const { dimensions, scaleRatio, layers } = useProjectStore();
+    const { dimensions, scaleRatio, layers, theme } = useProjectStore();
 
     if (!layers.dimensions) return null;
 
@@ -12,7 +12,9 @@ export const DimensionsLayer: React.FC = () => {
             {dimensions.map((dim) => {
                 const [x1, y1, x2, y2] = dim.points;
                 const isSelected = useProjectStore.getState().selectedIds.includes(dim.id);
-                const color = isSelected ? '#ffaa00' : '#4ade80';
+                // Theme-aware colors: Green-400 (Dark) vs Green-700 (Light)
+                const defaultColor = theme === 'light' ? '#15803d' : '#4ade80';
+                const color = isSelected ? '#ffaa00' : defaultColor;
 
                 // Calculate midpoint
                 const midX = (x1 + x2) / 2;

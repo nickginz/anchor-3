@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Stage, Layer, Line } from 'react-konva';
 import Konva from 'konva';
 import { WallsLayer } from './Layers/WallsLayer';
@@ -11,6 +11,9 @@ import InteractionLayer from './InteractionLayer';
 import { DimensionsLayer } from './Layers/DimensionsLayer';
 import { AnchorsLayer } from './Layers/AnchorsLayer';
 import { ContextMenu } from '../UI/ContextMenu';
+import { detectRooms } from '../../utils/room-detection';
+import { generateOffsets, generateSkeletonLines, generateMedialAxis } from '../../utils/geometry-tools';
+import type { Point } from '../../types';
 import { SelectionMenu } from '../UI/SelectionMenu';
 import { useProjectStore } from '../../store/useProjectStore';
 
@@ -35,8 +38,58 @@ export const MainStage: React.FC = () => {
         return () => window.removeEventListener('resize', updateSize);
     }, []);
 
+    const {
+        scaleRatio,
+        setScaleRatio,
+        theme,
+        walls, // Need walls from store
+        showOffsets,
+        offsetStep,
+        showSkeleton,
+        showMedialAxis,
+        medialAxisStep
+    } = useProjectStore();
+
+    // --- Geometry Tools Calculation ---
+    // Combined memo for all geometry lines to avoid redundant 'detectRooms' calls
+    const { geometryLines, medialAxisLines } = useMemo(() => {
+        const lines: Point[][] = [];
+        const maLines: Point[][] = [];
+
+        try {
+            if (!showOffsets && !showSkeleton && !showMedialAxis) return { geometryLines: [], medialAxisLines: [] };
+
+            // Use detectRooms from auto-placement which should return Point[][]
+            const roomsList = detectRooms(walls);
+
+            roomsList.forEach(roomPoly => {
+                if (showOffsets) {
+                    const offsets = generateOffsets(roomPoly, offsetStep * scaleRatio);
+                    offsets.forEach(poly => lines.push(poly));
+                }
+
+                if (showSkeleton) {
+                    const skel = generateSkeletonLines(roomPoly, offsetStep * scaleRatio);
+                    skel.forEach(poly => lines.push(poly));
+                }
+
+                if (showMedialAxis) {
+                    // Use new Voronoi-based Medial Axis
+                    // medialAxisStep is in pixels (default 5)
+                    const axis = generateMedialAxis(roomPoly, medialAxisStep);
+                    axis.forEach(poly => maLines.push(poly));
+                }
+            });
+            return { geometryLines: lines, medialAxisLines: maLines };
+        } catch (error) {
+            console.error("Geometry Generation Error:", error);
+            return { geometryLines: [], medialAxisLines: [] };
+        }
+    }, [walls, showOffsets, showSkeleton, showMedialAxis, offsetStep, medialAxisStep, scaleRatio]);
+
     const handleWheel = (e: any) => {
         e.evt.preventDefault();
+
         const scaleBy = 1.1;
         if (!stage) return;
 
@@ -64,17 +117,20 @@ export const MainStage: React.FC = () => {
     };
 
     // Grid rendering (simple visual aid)
-    const { scaleRatio, setScaleRatio } = useProjectStore();
     const gridSize = scaleRatio; // 1 meter = scaleRatio pixels
     const gridLines = [];
+
+    // Theme Colors
+    const gridColor = theme === 'light' ? '#9ca3af' : '#333';
+    const axisColor = theme === 'light' ? '#6b7280' : '#666';
 
     // Render grid for +/- 50 meters
     for (let i = -50; i <= 50; i++) {
         const pos = i * gridSize;
         // Vertical
-        gridLines.push(<Line key={`v${i}`} points={[pos, -2500, pos, 2500]} stroke="#333" strokeWidth={1} opacity={0.2} />);
+        gridLines.push(<Line key={`v${i}`} points={[pos, -2500, pos, 2500]} stroke={gridColor} strokeWidth={1} opacity={0.2} />);
         // Horizontal
-        gridLines.push(<Line key={`h${i}`} points={[-2500, pos, 2500, pos]} stroke="#333" strokeWidth={1} opacity={0.2} />);
+        gridLines.push(<Line key={`h${i}`} points={[-2500, pos, 2500, pos]} stroke={gridColor} strokeWidth={1} opacity={0.2} />);
     }
 
     // Grid rendering (simple visual aid)
@@ -109,7 +165,7 @@ export const MainStage: React.FC = () => {
     };
 
     return (
-        <div ref={containerRef} className="w-full h-full bg-[#1a1a1a] overflow-hidden relative" onContextMenu={(e) => e.preventDefault()}>
+        <div ref={containerRef} className="w-full h-full bg-[var(--bg-canvas)] overflow-hidden relative" onContextMenu={(e) => e.preventDefault()}>
             {menu && (
                 <ContextMenu
                     x={menu.x}
@@ -118,33 +174,25 @@ export const MainStage: React.FC = () => {
                     onClose={() => setMenu(null)}
                 />
             )}
-
-            {/* Scale Modal Overlay */}
+            {/* Scale Modal */}
             {isScaleModalOpen && (
-                <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-[#2b2b2b] border border-[#444] p-6 rounded-lg shadow-2xl text-white w-80">
-                        <h3 className="text-sm font-bold mb-4 uppercase text-gray-400">Calibrate Scale</h3>
-                        <div className="mb-4">
-                            <p className="text-xs text-gray-500 mb-2">Measured Distance: {scalePixelDistance.toFixed(1)} px</p>
-                            <label className="text-xs block mb-1">Real World Distance (meters):</label>
-                            <input
-                                type="number"
-                                value={scaleRealDistance}
-                                onChange={(e) => setScaleRealDistance(e.target.value)}
-                                className="w-full bg-[#222] border border-[#444] rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                                autoFocus
-                            />
-                        </div>
-                        <div className="flex justify-end space-x-2">
-                            <button
-                                onClick={() => setIsScaleModalOpen(false)}
-                                className="px-3 py-1.5 rounded bg-[#444] hover:bg-[#555] text-xs"
-                            >Cancel</button>
-                            <button
-                                onClick={handleApplyScale}
-                                className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-xs"
-                            >Calibrate</button>
-                        </div>
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-800 p-4 rounded shadow-lg border border-gray-700 flex flex-col gap-3">
+                    <h3 className="text-white text-sm font-medium">Calibrate Scale</h3>
+                    <div className="flex flex-col gap-1">
+                        <label className="text-xs text-gray-400">Real World Distance (m)</label>
+                        <input
+                            type="number"
+                            value={scaleRealDistance}
+                            onChange={(e) => setScaleRealDistance(e.target.value)}
+                            className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-sm"
+                            min="0.1"
+                            step="0.1"
+                            autoFocus
+                        />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <button onClick={() => setIsScaleModalOpen(false)} className="px-3 py-1 text-xs text-gray-400 hover:text-white">Cancel</button>
+                        <button onClick={handleApplyScale} className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-500">Apply</button>
                     </div>
                 </div>
             )}
@@ -154,28 +202,52 @@ export const MainStage: React.FC = () => {
 
             {size.width > 0 && (
                 <Stage
-                    ref={setStage}
+                    ref={node => setStage(node)}
                     width={size.width}
                     height={size.height}
                     onWheel={handleWheel}
-                    // Prevent context menu on stage (handled in interaction layer)
                     onContextMenu={(e) => e.evt.preventDefault()}
                     className="cursor-crosshair"
                 >
                     {/* Layer 1: Background & Heavy Renders */}
                     <Layer key="layer-bg">
                         {gridLines}
-                        <Line points={[-20, 0, 20, 0]} stroke="#666" strokeWidth={2} />
-                        <Line points={[0, -20, 0, 20]} stroke="#666" strokeWidth={2} />
+                        <Line points={[-20, 0, 20, 0]} stroke={axisColor} strokeWidth={2} />
+                        <Line points={[0, -20, 0, 20]} stroke={axisColor} strokeWidth={2} />
                         <FloorplanImageLayer />
                         <DXFLayer />
-                        <HeatmapLayer key="heatmap" stage={stage} />
+                        <HeatmapLayer stage={stage} />
                         <RoomsLayer />
                     </Layer>
 
                     {/* Layer 2: Geometry & Validation */}
                     <Layer key="layer-geo">
                         <WallsLayer />
+                        {/* Geometry Debug Lines (Red Offsets) */}
+                        {geometryLines.length > 0 && geometryLines.map((poly, i) => (
+                            <Line
+                                key={`geo-${i}`}
+                                points={poly.flatMap(p => [p.x, p.y])}
+                                stroke="red"
+                                strokeWidth={2} // thicker
+                                closed={true}
+                                opacity={0.8}
+                                listening={false}
+                            />
+                        ))}
+                        {/* Medial Axis (Magenta) */}
+                        {medialAxisLines.length > 0 && medialAxisLines.map((poly, i) => (
+                            <Line
+                                key={`ma-${i}`}
+                                points={poly.flatMap(p => [p.x, p.y])}
+                                stroke="#ff00ff"
+                                strokeWidth={2}
+                                closed={true}
+                                opacity={0.8}
+                                listening={false}
+                                dash={[10, 5]} // Dashed for distinction
+                            />
+                        ))}
                         <ValidationLayer stage={stage} />
                     </Layer>
 
@@ -190,7 +262,8 @@ export const MainStage: React.FC = () => {
                         />
                     </Layer>
                 </Stage>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 };

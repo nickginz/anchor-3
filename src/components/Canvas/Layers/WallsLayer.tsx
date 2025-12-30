@@ -5,7 +5,7 @@ import { generateJoinedWalls, generateUnionBoundary } from '../../../utils/wall-
 import type { Wall } from '../../../types';
 
 export const WallsLayer: React.FC = () => {
-    const { walls, scaleRatio, layers, selectedIds } = useProjectStore();
+    const { walls, scaleRatio, layers, selectedIds, theme } = useProjectStore();
 
     // Group walls by thickness to render them with different styles
     const groupedWalls = useMemo(() => {
@@ -37,9 +37,10 @@ export const WallsLayer: React.FC = () => {
 
                 // Color Logic
                 const numThickness = parseFloat(thickness);
-                let fillColor = '#71717a'; // Default Gray
+                // Theme-based colors
+                let fillColor = theme === 'light' ? '#9ca3af' : '#71717a'; // Gray-400 (Light) vs Gray-600 (Dark)
                 if (numThickness >= 0.2) {
-                    fillColor = '#5b7c99'; // Blueish Gray for Wide
+                    fillColor = theme === 'light' ? '#60a5fa' : '#5b7c99'; // Blue-400 (Light) vs Blueish (Dark)
                 }
 
                 return (
@@ -72,7 +73,7 @@ export const WallsLayer: React.FC = () => {
             <Path
                 key="wall-boundary"
                 data={pathData}
-                stroke="#ffffff"
+                stroke={theme === 'light' ? '#000000' : '#ffffff'}
                 strokeWidth={2}
                 hitStrokeWidth={10} // Hit detection on the stroke
                 fillEnabled={false}

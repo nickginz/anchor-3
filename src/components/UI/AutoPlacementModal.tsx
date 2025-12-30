@@ -8,10 +8,11 @@ interface AutoPlacementModalProps {
 }
 
 export const AutoPlacementModal: React.FC<AutoPlacementModalProps> = ({ onClose }) => {
-    const { walls, anchors, addAnchors, setAnchorMode, anchorRadius, setAnchorRadius, scaleRatio } = useProjectStore();
+    const { walls, anchors, addAnchors, setAnchorMode, anchorRadius, setAnchorRadius, anchorShape, showAnchorRadius, scaleRatio } = useProjectStore();
 
     // Local state for preview or settings
     const [radius, setRadius] = useState(anchorRadius || 15);
+    const [spacingFactor, setSpacingFactor] = useState(1.9);
     const [status, setStatus] = useState<string>('');
 
     const handleRun = () => {
@@ -23,9 +24,12 @@ export const AutoPlacementModal: React.FC<AutoPlacementModalProps> = ({ onClose 
         try {
             const newAnchors = generateAutoAnchors(walls, {
                 radius: radius,
+                shape: anchorShape,
+                showRadius: showAnchorRadius,
                 minOverlap: 3,
                 wallThickness: 0.1,
-                scaleRatio: scaleRatio
+                scaleRatio: scaleRatio,
+                spacingFactor: spacingFactor
             }, anchors);
 
             if (newAnchors.length === 0) {
@@ -49,20 +53,20 @@ export const AutoPlacementModal: React.FC<AutoPlacementModalProps> = ({ onClose 
     };
 
     return (
-        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-[#333] border border-[#555] p-4 shadow-2xl rounded-lg z-50 text-white w-80 animate-in slide-in-from-top-4 fade-in">
-            <div className="flex justify-between items-center mb-4 border-b border-[#444] pb-2">
+        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 panel-bg border panel-border p-4 shadow-2xl rounded-lg z-50 w-80 animate-in slide-in-from-top-4 fade-in">
+            <div className="flex justify-between items-center mb-4 border-b panel-border pb-2">
                 <div className="flex items-center space-x-2">
                     <Wand2 size={18} className="text-blue-400" />
-                    <h3 className="font-bold text-sm uppercase tracking-wide">Auto Placement</h3>
+                    <h3 className="font-bold text-sm uppercase tracking-wide text-primary">Auto Placement</h3>
                 </div>
-                <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+                <button onClick={onClose} className="text-secondary hover:text-primary transition-colors">
                     <X size={18} />
                 </button>
             </div>
 
             <div className="space-y-4">
                 <div className="space-y-1">
-                    <div className="flex justify-between text-xs text-gray-300">
+                    <div className="flex justify-between text-xs text-secondary">
                         <span>Detection Radius (m)</span>
                         <span className="font-mono text-blue-400">{radius}m</span>
                     </div>
@@ -76,10 +80,29 @@ export const AutoPlacementModal: React.FC<AutoPlacementModalProps> = ({ onClose 
                             setRadius(parseFloat(e.target.value));
                             setAnchorRadius(parseFloat(e.target.value)); // Sync with global
                         }}
-                        className="w-full h-1.5 bg-[#222] rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        className="w-full h-1.5 input-bg rounded-lg appearance-none cursor-pointer accent-blue-500"
                     />
-                    <p className="text-[10px] text-gray-500 leading-tight">
-                        Smaller radius = more anchors (denser grid). Larger radius = fewer anchors.
+                    <p className="text-[10px] text-secondary leading-tight">
+                        Smaller radius = more anchors. Larger radius = fewer anchors.
+                    </p>
+                </div>
+
+                <div className="space-y-1">
+                    <div className="flex justify-between text-xs text-secondary">
+                        <span>Spacing Factor</span>
+                        <span className="font-mono text-blue-400">{spacingFactor}x</span>
+                    </div>
+                    <input
+                        type="range"
+                        min="1.0"
+                        max="2.5"
+                        step="0.1"
+                        value={spacingFactor}
+                        onChange={(e) => setSpacingFactor(parseFloat(e.target.value))}
+                        className="w-full h-1.5 input-bg rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                    <p className="text-[10px] text-secondary leading-tight">
+                        1.0 = Tight (High Overlap). 2.0 = Sparse (Less Overlap).
                     </p>
                 </div>
 
@@ -92,7 +115,7 @@ export const AutoPlacementModal: React.FC<AutoPlacementModalProps> = ({ onClose 
                 <div className="flex space-x-2 pt-2">
                     <button
                         onClick={onClose}
-                        className="flex-1 px-3 py-2 bg-[#444] hover:bg-[#555] rounded text-xs font-medium transition-colors"
+                        className="flex-1 px-3 py-2 hover-bg rounded text-xs font-medium transition-colors text-primary"
                     >
                         Cancel
                     </button>

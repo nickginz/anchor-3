@@ -4,9 +4,83 @@
 
 @layer base {
   body {
-    @apply bg-gray-900 text-white overflow-hidden;
+    @apply bg-[var(--bg-canvas)] text-[var(--text-primary)] overflow-hidden;
     margin: 0;
     padding: 0;
     font-family: 'Inter', sans-serif;
+  }
+
+  :root {
+    /* Dark Mode (Default) */
+    --bg-canvas: #1a1a1a;
+    --bg-panel: #2b2b2b;
+    --bg-input: #222;
+    --bg-hover: #333;
+    --border-color: #444;
+    --text-primary: #ffffff;
+    --text-secondary: #9ca3af;
+    /* gray-400 */
+    --accent: #3b82f6;
+    /* blue-500 */
+  }
+
+  .theme-light {
+    /* Light Mode Overrides */
+    --bg-canvas: #e0e0e0;
+    /* Darker grey for canvas distinction */
+    --bg-panel: #ffffff;
+    --bg-input: #f3f4f6;
+    /* gray-100 */
+    --bg-hover: #e5e7eb;
+    /* gray-200 */
+    --border-color: #d1d5db;
+    /* gray-300 */
+    --text-primary: #111827;
+    /* gray-900 (Darker) */
+    --text-secondary: #4b5563;
+    /* gray-600 (Darker) */
+    --accent: #2563eb;
+    /* blue-600 */
+  }
+}
+
+@layer components {
+
+  /* Semantic Classes using vars */
+  .panel-bg {
+    background-color: var(--bg-panel);
+  }
+
+  .panel-border {
+    border-color: var(--border-color);
+  }
+
+  .text-primary {
+    color: var(--text-primary);
+  }
+
+  .text-secondary {
+    color: var(--text-secondary);
+  }
+
+  .input-bg {
+    background-color: var(--bg-input);
+  }
+
+  .hover-bg {
+    background-color: transparent;
+    transition: background-color 0.2s;
+  }
+
+  .hover-bg:hover {
+    background-color: var(--bg-hover);
+  }
+
+  .bg-accent {
+    background-color: var(--accent);
+  }
+
+  .text-accent {
+    color: var(--accent);
   }
 }

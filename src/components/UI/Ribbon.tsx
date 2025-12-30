@@ -12,13 +12,14 @@ import {
     Upload,
     Info,
     PenTool,
-    Activity,
     Undo2,
     Redo2,
     Wand2, // Icon for Detection
     Grid, // Icon for Rooms
     Type, // Icon for Labels
-    Signal // Icon for Heatmap
+    Signal, // Icon for Heatmap
+    Map, // Icon for Offsets
+    Network // Icon for Skeleton
 } from 'lucide-react';
 import { WallDetectionModal } from './WallDetectionModal';
 import { SettingsPanel } from './SettingsPanel';
@@ -56,12 +57,19 @@ export const Ribbon: React.FC = () => {
         setAnchorMode,
         layers,
         toggleLayer,
-        isScaleSet
+        isScaleSet,
+        // Geometry
+        showOffsets, setShowOffsets,
+        offsetStep, setOffsetStep,
+        showSkeleton, setShowSkeleton,
+        showMedialAxis, setShowMedialAxis,
+        medialAxisStep, setMedialAxisStep
     } = useProjectStore();
 
     const [isConfigOpen, setIsConfigOpen] = React.useState<boolean | string>(false);
     const [isLayerManagerOpen, setIsLayerManagerOpen] = React.useState(false);
     const [isAutoPlacementOpen, setIsAutoPlacementOpen] = React.useState(false);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     // Normalize check
     const shouldShowConfig = isConfigOpen;
@@ -71,33 +79,33 @@ export const Ribbon: React.FC = () => {
     const activeImport = activeImportId ? importedObjects.find(o => o.id === activeImportId) : null;
 
     return (
-        <div className="h-16 bg-[#2b2b2b] border-b border-[#1f1f1f] flex items-center px-4 shadow-xl z-20 relative select-none">
+        <div className="h-16 panel-bg border-b panel-border flex items-center px-4 shadow-xl z-20 relative select-none">
             {/* Auto Placement Modal */}
             {isAutoPlacementOpen && <AutoPlacementModal onClose={() => setIsAutoPlacementOpen(false)} />}
 
             {/* Config Modal Overlay */}
             {isConfigOpen === true && (
-                <div className="absolute top-16 left-0 w-64 bg-[#333] border border-[#555] p-3 shadow-2xl rounded-b-lg z-50 text-white animate-in slide-in-from-top-2">
-                    <h3 className="text-xs font-bold mb-2 uppercase text-gray-400">Wall Settings</h3>
+                <div className="absolute top-16 left-0 w-64 panel-bg border panel-border p-3 shadow-2xl rounded-b-lg z-50 text-white animate-in slide-in-from-top-2">
+                    <h3 className="text-xs font-bold mb-2 uppercase text-secondary">Wall Settings</h3>
                     <div className="flex flex-col space-y-2 mb-3">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-300">Standard (m):</span>
+                            <span className="text-xs text-secondary">Standard (m):</span>
                             <input
                                 type="number"
                                 step="0.05"
                                 value={useProjectStore.getState().standardWallThickness}
                                 onChange={(e) => setStandardWallThickness(parseFloat(e.target.value) || 0.1)}
-                                className="bg-[#222] border border-[#444] rounded px-2 py-1 text-xs w-16 focus:outline-none focus:border-blue-500"
+                                className="input-bg border panel-border rounded px-2 py-1 text-xs w-16 focus:outline-none focus:border-blue-500 text-primary"
                             />
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-300">Thick (m):</span>
+                            <span className="text-xs text-secondary">Thick (m):</span>
                             <input
                                 type="number"
                                 step="0.05"
                                 value={useProjectStore.getState().thickWallThickness}
                                 onChange={(e) => useProjectStore.getState().setThickWallThickness(parseFloat(e.target.value) || 0.2)}
-                                className="bg-[#222] border border-[#444] rounded px-2 py-1 text-xs w-16 focus:outline-none focus:border-blue-500"
+                                className="input-bg border panel-border rounded px-2 py-1 text-xs w-16 focus:outline-none focus:border-blue-500 text-primary"
                             />
                         </div>
                         <div className="flex items-center justify-between">
@@ -150,29 +158,29 @@ export const Ribbon: React.FC = () => {
             )}
 
             {/* Title / Logo */}
-            <div className="mr-6 flex flex-col justify-center">
-                <h1 className="text-white font-bold text-lg leading-none tracking-tight">ANCHOR<span className="text-[#0078d4]">CAD</span></h1>
-                <span className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">Planner 3.0</span>
+            <div className="mr-1 flex flex-col justify-center">
+                <h1 className="text-primary font-bold text-xs leading-none tracking-widest">ANCHOR<span className="text-accent">CAD</span></h1>
+                <span className="text-[10px] text-secondary uppercase tracking-widest">Planner 3.0</span>
             </div>
 
-            <div className="h-10 w-px bg-[#444] mx-2"></div>
+            <div className="h-10 w-px bg-[var(--border-color)] mx-1"></div>
 
             {/* Edit Group */}
             <div className="flex flex-col items-center px-1">
-                <span className="text-[10px] text-gray-500 mb-1 uppercase scale-90">Edit</span>
+                <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Edit</span>
                 <div className="flex space-x-0.5">
                     <ToolbarButton icon={MousePointer2} label="Select" active={activeTool === 'select'} onClick={() => setTool('select')} tooltip="Select (V / Esc)" iconSize={16} className="p-1.5" />
-                    <div className="w-px h-6 bg-[#444] mx-1"></div>
+                    <div className="w-px h-6 bg-[var(--border-color)] mx-1"></div>
                     <ToolbarButton icon={Undo2} label="Undo" onClick={() => useProjectStore.temporal.getState().undo()} tooltip="Undo (Ctrl+Z)" iconSize={16} className="p-1.5" />
                     <ToolbarButton icon={Redo2} label="Redo" onClick={() => useProjectStore.temporal.getState().redo()} tooltip="Redo (Ctrl+Shift+Z)" iconSize={16} className="p-1.5" />
                 </div>
             </div>
 
-            <div className="h-10 w-px bg-[#444] mx-2"></div>
+            <div className="h-10 w-px bg-[var(--border-color)] mx-2"></div>
 
             {/* Draw Group */}
             <div className="flex flex-col items-center px-1">
-                <span className="text-[10px] text-gray-500 mb-1 uppercase scale-90">Draw</span>
+                <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Draw</span>
                 <div className="flex items-center space-x-2">
                     <div className="flex space-x-0.5">
                         <ToolbarButton icon={PenTool} label="Wall" active={activeTool === 'wall'} onClick={() => setTool('wall')} tooltip="Draw Linear Wall (W)" iconSize={16} className="p-1.5" />
@@ -180,33 +188,37 @@ export const Ribbon: React.FC = () => {
                         <ToolbarButton icon={RectFromWallIcon as any} label="3-Pt Rect" active={activeTool === 'wall_rect_edge'} onClick={() => setTool('wall_rect_edge')} tooltip="3-Point Rectangle (Start, Base End, Height)" iconSize={16} className="p-1.5" />
                     </div>
 
-                    {/* Presets - Vertical Stack */}
-                    <div className="flex flex-col space-y-0.5 justify-center border-l border-[#444] pl-2 h-full">
-                        <button onClick={() => setWallPreset('thick')} className={`text-[9px] px-1 py-0.5 rounded w-10 text-center leading-none ${wallPreset === 'thick' ? 'bg-[#0078d4] text-white' : 'bg-[#333] text-gray-400'}`}>Thick</button>
-                        <button onClick={() => setWallPreset('wide')} className={`text-[9px] px-1 py-0.5 rounded w-10 text-center leading-none ${wallPreset === 'wide' ? 'bg-[#0078d4] text-white' : 'bg-[#333] text-gray-400'}`}>Wide</button>
+                    {/* Presets - Vertical Stack - IMPROVED LAYOUT */}
+                    <div className="flex flex-col space-y-1 justify-center border-l panel-border pl-2 h-full py-1">
+                        <button onClick={() => setWallPreset('thick')} className={`text-[10px] px-2 py-0.5 rounded leading-none transition-colors ${wallPreset === 'thick' ? 'bg-[#0078d4] text-white' : 'hover:bg-[#333] text-secondary'}`}>Thick</button>
+                        <button onClick={() => setWallPreset('wide')} className={`text-[10px] px-2 py-0.5 rounded leading-none transition-colors ${wallPreset === 'wide' ? 'bg-[#0078d4] text-white' : 'hover:bg-[#333] text-secondary'}`}>Wide</button>
                     </div>
                 </div>
             </div>
 
-            <div className="h-10 w-px bg-[#444] mx-2"></div>
+            <div className="h-10 w-px bg-[var(--border-color)] mx-2"></div>
 
             {/* Measure Group */}
             <div className="flex flex-col items-center px-1">
-                <span className="text-[10px] text-gray-500 mb-1 uppercase scale-90">Measure</span>
+                <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Measure</span>
                 <div className="flex space-x-0.5">
                     <ToolbarButton icon={Ruler} label="Dim" active={activeTool === 'dimension'} onClick={() => setTool('dimension')} tooltip="Dimension (D)" iconSize={16} className="p-1.5" />
-                    <ToolbarButton icon={Scaling} label="Scale" active={activeTool === 'scale'} onClick={() => setTool('scale')} tooltip="Set Scale (S)" iconSize={16} className={`p-1.5 ${isScaleSet && activeTool !== 'scale' ? 'text-[#ffaa00]' : ''}`} />
+                    <ToolbarButton icon={Scaling} label="Scale" active={activeTool === 'scale'} onClick={() => setTool('scale')} tooltip="Set Scale (S)" iconSize={16} className={`p-1.5 ${!isScaleSet ? 'text-orange-500 dark:text-[#ffaa00]' : ''}`} />
                 </div>
             </div>
 
-            <div className="h-10 w-px bg-[#444] mx-2"></div>
+            <div className="h-10 w-px bg-[var(--border-color)] mx-2"></div>
+
+
+
+
 
             {/* Import Group */}
             <div className="flex flex-col items-center px-1">
-                <span className="text-[10px] text-gray-500 mb-1 uppercase scale-90">Import</span>
+                <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Import</span>
                 <div className="flex space-x-0.5">
-                    <label className="cursor-pointer flex flex-col items-center justify-center p-1.5 rounded hover:bg-[#333] transition-colors" title="Import File">
-                        <span className="text-gray-300"><Upload size={16} /></span>
+                    <label className="cursor-pointer flex items-center justify-center p-1.5 rounded hover:bg-[#333] transition-colors text-secondary hover:text-white" title="Import File (DXF, PDF, IMG)">
+                        <Upload size={16} />
                         <input type="file" accept=".png, .jpg, .jpeg, .pdf, .dxf" className="hidden" onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (!file) return;
@@ -240,39 +252,43 @@ export const Ribbon: React.FC = () => {
 
                     <button
                         onClick={() => setIsLayerManagerOpen(!isLayerManagerOpen)}
-                        className={`p-1.5 rounded hover:bg-[#333] transition-colors flex items-center justify-center ${isLayerManagerOpen ? 'bg-[#333] text-blue-400' : 'text-gray-400'}`}
-                        title="DXF Layers"
+                        className={`p-1.5 rounded hover:bg-[#333] transition-colors flex items-center justify-center ${isLayerManagerOpen ? 'bg-[#333] text-blue-400' : 'text-secondary'}`}
+                        title="DXF Layers Manager"
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                     </button>
                 </div>
             </div>
 
-            <div className="h-10 w-px bg-[#444] mx-2"></div>
+            <div className="h-10 w-px bg-[var(--border-color)] mx-2"></div>
+
+
 
             {/* Add Devices Group */}
             <div className="flex flex-col items-center px-1">
-                <span className="text-[10px] text-gray-500 mb-1 uppercase scale-90">Add Devices</span>
+                <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Add Devices</span>
                 <div className="flex space-x-0.5 relative">
                     <ToolbarButton icon={Wifi} label="Manual" active={activeTool === 'anchor' && anchorMode === 'manual'} onClick={() => { setTool('anchor'); setAnchorMode('manual'); }} tooltip="Manual Anchor (A)" iconSize={16} className="p-1.5" />
-                    <ToolbarButton icon={Activity} label="Auto" active={activeTool === 'anchor_auto' || (activeTool === 'anchor' && anchorMode === 'auto')} onClick={() => { setTool('anchor_auto'); setAnchorMode('auto'); }} tooltip="Click-to-Place (Shift+A)" iconSize={16} className="p-1.5" />
 
-                    {/* NEW Auto Place Button */}
+
+                    {/* Auto Place Button */}
                     <button
                         onClick={() => setIsAutoPlacementOpen(true)}
-                        className="p-1.5 rounded hover:bg-[#444] text-blue-400 flex flex-col items-center"
-                        title="Auto-Place All (Magic Wand)"
+                        className="p-1.5 rounded hover:bg-[#333] text-blue-400 flex flex-col items-center"
+                        title="Auto-Place Anchors"
                     >
                         <Wand2 size={16} />
                     </button>
 
-                    <div className="w-px h-6 bg-[#444] mx-1"></div>
+                    <div className="w-px h-6 bg-[var(--border-color)] mx-1"></div>
 
-                    <button onClick={() => setIsConfigOpen(isConfigOpen === 'anchors' ? false : 'anchors' as any)} className={`p-1.5 rounded hover:bg-[#444] text-gray-400 ${useProjectStore.getState().showAnchorRadius ? 'text-blue-400' : ''}`} title="Anchor Settings">
+                    <button onClick={() => setIsConfigOpen(isConfigOpen === 'anchors' ? false : 'anchors' as any)} className={`p-1.5 rounded hover:bg-[#333] ${useProjectStore.getState().showAnchorRadius ? 'text-blue-400' : 'text-gray-400'}`} title="Anchor Settings">
                         <Settings size={16} />
                     </button>
                     {shouldShowConfig === 'anchors' && (
                         <div className="absolute top-12 left-0 w-56 bg-[#333] border border-[#555] p-3 shadow-2xl rounded z-50 text-white animate-in slide-in-from-top-2">
+                            {/* ... Anchor Settings Content (Unchanged) ... */}
+                            {/* Re-implementing compact settings if needed or keep existing popup */}
                             <h3 className="text-xs font-bold mb-2 uppercase text-gray-400">Anchor Settings</h3>
                             <div className="flex flex-col space-y-3">
                                 <div className="flex flex-col space-y-1">
@@ -298,77 +314,253 @@ export const Ribbon: React.FC = () => {
                 </div>
             </div>
 
-            <div className="h-10 w-px bg-[#444] mx-2"></div>
+            <div className="h-10 w-px bg-[var(--border-color)] mx-2"></div>
 
-            {/* Layers Group - Unified & Reorganized */}
+            {/* Layers Group */}
             <div className="flex flex-col items-center px-1">
-                <span className="text-[10px] text-gray-500 mb-1 uppercase scale-90">Layers</span>
+                <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Layers</span>
                 <div className="grid grid-rows-2 grid-flow-col gap-0.5">
-                    {/* Col 1 */}
-                    <button onClick={() => toggleLayer('floorplan')} title="Toggle Imported Drawing" className={`p-0.5 rounded hover:bg-[#444] ${layers.floorplan ? 'text-blue-400' : 'text-gray-600'}`}> <Upload size={14} /> </button>
-                    <button onClick={() => toggleLayer('dimensions')} title="Toggle Dimensions" className={`p-0.5 rounded hover:bg-[#444] ${layers.dimensions ? 'text-blue-400' : 'text-gray-600'}`}> <Ruler size={14} /> </button>
-
-                    {/* Col 2 */}
-                    <button onClick={() => toggleLayer('walls')} title="Toggle Walls" className={`p-0.5 rounded hover:bg-[#444] ${layers.walls ? 'text-blue-400' : 'text-gray-600'}`}> <Square size={14} /> </button>
-                    <div className="w-4 h-4"></div> {/* Empty Spacer for bottom slot */}
-
-                    {/* Col 3 */}
-                    <button onClick={() => toggleLayer('roomLabels')} title="Toggle Room Area Text" className={`p-0.5 rounded hover:bg-[#444] ${layers.roomLabels ? 'text-blue-400' : 'text-gray-600'}`}> <Type size={14} /> </button>
-                    <button onClick={() => toggleLayer('rooms')} title="Toggle Room Filling" className={`p-0.5 rounded hover:bg-[#444] ${layers.rooms ? 'text-blue-400' : 'text-gray-600'}`}> <Grid size={14} /> </button>
+                    <button onClick={() => toggleLayer('floorplan')} title="Show/Hide Floorplan" className={`p-0.5 rounded hover:bg-[#333] ${layers.floorplan ? 'text-blue-400' : 'text-secondary'}`}> <Upload size={14} /> </button>
+                    <button onClick={() => toggleLayer('dimensions')} title="Show/Hide Dimensions" className={`p-0.5 rounded hover:bg-[#333] ${layers.dimensions ? 'text-blue-400' : 'text-secondary'}`}> <Ruler size={14} /> </button>
+                    <button onClick={() => toggleLayer('walls')} title="Show/Hide Walls" className={`p-0.5 rounded hover:bg-[#333] ${layers.walls ? 'text-blue-400' : 'text-secondary'}`}> <Square size={14} /> </button>
+                    <div className="w-4 h-4"></div>
+                    <button onClick={() => toggleLayer('roomLabels')} title="Show/Hide Room Labels" className={`p-0.5 rounded hover:bg-[#333] ${layers.roomLabels ? 'text-blue-400' : 'text-secondary'}`}> <Type size={14} /> </button>
+                    <button onClick={() => toggleLayer('rooms')} title="Show/Hide Rooms" className={`p-0.5 rounded hover:bg-[#333] ${layers.rooms ? 'text-blue-400' : 'text-secondary'}`}> <Grid size={14} /> </button>
                 </div>
             </div>
 
-            <div className="h-10 w-px bg-[#444] mx-2"></div>
+            <div className="h-10 w-px bg-[var(--border-color)] mx-2"></div>
 
-            {/* Anchors View Group - Modified */}
-            <div className="flex flex-col items-center px-2">
-                <span className="text-[10px] text-gray-500 mb-1 uppercase">Anchors</span>
+            {/* Anchors View Group - FIXED */}
+            <div className="flex flex-col items-center px-1">
+                <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Anchors</span>
                 <div className="flex space-x-1 items-center h-full pb-1">
-                    {/* 1. Stacked Toggle: Anchor (Top) / Radius (Bottom) */}
-                    <div className="flex flex-col space-y-0.5">
+                    {/* Stacked Toggles */}
+                    <div className="flex flex-col space-y-1 justify-center border-r panel-border pr-2 mr-1 h-full py-1">
                         <button
                             onClick={() => toggleLayer('anchors')}
                             title="Toggle Anchors Visibility"
-                            className={`flex justify-center items-center h-4 w-8 rounded hover:bg-[#333] ${layers.anchors ? 'text-blue-400' : 'text-gray-600'}`}
+                            className={`flex items-center justify-center w-6 h-3.5 rounded transition-colors ${layers.anchors ? 'bg-[#0078d4] text-white' : 'hover:bg-[#333] text-secondary'}`}
                         >
-                            <Wifi size={14} />
+                            <Wifi size={12} />
                         </button>
                         <button
                             onClick={() => useProjectStore.getState().setShowAnchorRadius(!useProjectStore.getState().showAnchorRadius)}
-                            title="Toggle Radius/Coverage Area"
-                            className={`flex justify-center items-center h-4 w-8 rounded hover:bg-[#333] ${useProjectStore.getState().showAnchorRadius ? 'text-blue-400' : 'text-gray-600'}`}
+                            title="Toggle Radius Circles"
+                            className={`flex items-center justify-center w-6 h-3.5 rounded transition-colors ${useProjectStore.getState().showAnchorRadius ? 'bg-[#0078d4] text-white' : 'hover:bg-[#333] text-secondary'}`}
                         >
-                            <div className={`w-3 h-3 border rounded-full ${useProjectStore.getState().showAnchorRadius ? 'border-blue-400' : 'border-gray-600'}`}></div>
+                            <div className="w-2.5 h-2.5 border rounded-full border-current"></div>
                         </button>
                     </div>
 
-                    <div className="w-px h-6 bg-[#444] mx-1"></div>
-
-                    {/* 3. Toggle Heatmap */}
+                    {/* Heatmap Toggle */}
                     <button
                         onClick={() => useProjectStore.getState().setShowHeatmap(!useProjectStore.getState().showHeatmap)}
-                        className={`flex flex-col items-center justify-center w-8 h-8 rounded hover:bg-[#333] transition-colors ${useProjectStore.getState().showHeatmap ? 'bg-[#333] text-green-400' : 'text-gray-400'}`}
+                        className={`flex items-center justify-center p-1.5 rounded hover:bg-[#333] transition-colors ${useProjectStore.getState().showHeatmap ? 'bg-[#222] text-green-500' : 'text-secondary'}`}
                         title="Toggle Signal Heatmap"
                     >
                         <Signal size={18} />
                     </button>
 
-                    {/* Resolution Toggle (Small) - Increased Size x1.3 */}
-                    <div className="flex flex-col justify-center space-y-0.5">
-                        <button onClick={() => useProjectStore.getState().setHeatmapResolution(50)} className={`text-[10px] px-1 rounded ${useProjectStore.getState().heatmapResolution === 50 ? 'bg-blue-600 text-white' : 'bg-[#333] text-gray-500'}`}>Low</button>
-                        <button onClick={() => useProjectStore.getState().setHeatmapResolution(20)} className={`text-[10px] px-1 rounded ${useProjectStore.getState().heatmapResolution === 20 ? 'bg-blue-600 text-white' : 'bg-[#333] text-gray-500'}`}>High</button>
+                    {/* Heatmap Resolution Stack */}
+                    <div className="flex flex-col space-y-1 justify-center border-l panel-border pl-2 h-full py-1">
+                        <button onClick={() => useProjectStore.getState().setHeatmapResolution(50)} className={`text-[10px] px-2 py-0.5 rounded leading-none transition-colors ${useProjectStore.getState().heatmapResolution === 50 ? 'bg-[#0078d4] text-white' : 'hover:bg-[#333] text-secondary'}`}>Low</button>
+                        <button onClick={() => useProjectStore.getState().setHeatmapResolution(20)} className={`text-[10px] px-2 py-0.5 rounded leading-none transition-colors ${useProjectStore.getState().heatmapResolution === 20 ? 'bg-[#0078d4] text-white' : 'hover:bg-[#333] text-secondary'}`}>High</button>
                     </div>
+                </div>
+            </div>
 
+            <div className="h-10 w-px bg-[var(--border-color)] mx-2"></div>
+
+            {/* Geometry Group */}
+            <div className="flex flex-col items-center px-1">
+                <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Geometry</span>
+                <div className="flex items-center space-x-1">
+                    <button
+                        onClick={() => setShowOffsets(!showOffsets)}
+                        className={`p-1.5 rounded hover:bg-[#333] transition-colors ${showOffsets ? 'bg-[#0078d4] text-white' : 'text-secondary'}`}
+                        title="Show Wall Offsets"
+                    >
+                        <Map size={16} />
+                    </button>
+                    <button
+                        onClick={() => setShowSkeleton(!showSkeleton)}
+                        className={`p-1.5 rounded hover:bg-[#333] transition-colors ${showSkeleton ? 'bg-[#0078d4] text-white' : 'text-secondary'}`}
+                        title="Show Straight Skeleton"
+                    >
+                        <Network size={16} />
+                    </button>
+                    {(showOffsets || showSkeleton) && (
+                        <div className="flex flex-col items-center ml-1 animate-in fade-in zoom-in duration-200">
+                            <input
+                                type="number"
+                                min="0.01"
+                                step="0.05"
+                                value={offsetStep}
+                                onChange={(e) => setOffsetStep(parseFloat(e.target.value) || 0.05)}
+                                className="w-12 bg-[#222] border border-[#444] rounded px-1 py-0.5 text-[10px] text-center focus:outline-none focus:border-blue-500 text-white"
+                                title="Offset Step (meters)"
+                            />
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div className="h-10 w-px bg-[var(--border-color)] mx-2"></div>
+
+            {/* Topology Group - NEW */}
+            <div className="flex flex-col items-center px-1">
+                <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Topology</span>
+                <div className="flex items-center space-x-1">
+                    <button
+                        onClick={() => setShowMedialAxis(!showMedialAxis)}
+                        className={`p-1.5 rounded hover:bg-[#333] transition-colors ${showMedialAxis ? 'bg-magenta text-white' : 'text-secondary'}`}
+                        style={{ backgroundColor: showMedialAxis ? '#ff00ff' : '' }}
+                        title="Show Medial Axis (Magenta)"
+                    >
+                        {/* Using Activity icon as proxy for a 'graph' look */}
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                    </button>
+                    {showMedialAxis && (
+                        <div className="flex flex-col items-center ml-1 animate-in fade-in zoom-in duration-200">
+                            <input
+                                type="number"
+                                min="0.1"
+                                step="0.1"
+                                value={medialAxisStep}
+                                onChange={(e) => setMedialAxisStep(parseFloat(e.target.value) || 0.1)}
+                                className="w-12 bg-[#222] border border-[#444] rounded px-1 py-0.5 text-[10px] text-center focus:outline-none focus:border-blue-500 text-white"
+                                title="Topology Precision (px)"
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
 
             <div className="flex-grow"></div>
 
-            {/* File & Info */}
-            <div className="flex items-center space-x-1 px-4 border-l border-[#444]">
-                <ToolbarButton icon={Upload} label="Import" onClick={() => console.log('Import')} tooltip="Import Project" className="opacity-80 hover:opacity-100" iconSize={16} className="p-1.5" />
-                <ToolbarButton icon={Download} label="Export" onClick={() => console.log('Export')} tooltip="Export Project" className="opacity-80 hover:opacity-100" iconSize={16} className="p-1.5" />
-                <div className="w-px h-6 bg-[#444] mx-2"></div>
+            {/* ... File & Info Groups (Unchanged) ... */}
+            <div className="flex items-center space-x-1 px-4 border-l panel-border">
+                {/* LOAD Button (Triggered via Ref) */}
+                <div>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".json"
+                        className="hidden"
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+
+                            console.log("Loading file:", file.name);
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                                try {
+                                    const content = ev.target?.result as string;
+                                    console.log("File content length:", content.length);
+                                    const json = JSON.parse(content);
+
+                                    // Basic validation
+                                    if (!json || (!json.walls && !json.anchors)) {
+                                        throw new Error("Invalid project file format");
+                                    }
+
+                                    useProjectStore.getState().loadProject(json);
+                                    console.log("Project loaded successfully");
+
+                                    // Reset file input so same file can be selected again
+                                    if (fileInputRef.current) fileInputRef.current.value = '';
+                                } catch (err) {
+                                    alert("Failed to load project: " + (err instanceof Error ? err.message : String(err)));
+                                    console.error("Load Error:", err);
+                                }
+                            };
+                            reader.readAsText(file);
+                        }}
+                    />
+                    <ToolbarButton
+                        icon={Upload}
+                        label="Load"
+                        onClick={() => fileInputRef.current?.click()}
+                        tooltip="Load Project (JSON)..."
+                        className="opacity-80 hover:opacity-100 p-1.5"
+                        iconSize={16}
+                    />
+                </div>
+
+                {/* SAVE AS Button */}
+                <ToolbarButton
+                    icon={Download}
+                    label="Save As"
+                    onClick={async () => {
+                        const state = useProjectStore.getState();
+                        const data = {
+                            version: 1,
+                            timestamp: Date.now(),
+                            scaleRatio: state.scaleRatio,
+                            walls: state.walls,
+                            anchors: state.anchors,
+                            dimensions: state.dimensions,
+                            layers: state.layers,
+                            wallPreset: state.wallPreset,
+                            anchorMode: state.anchorMode,
+                            theme: state.theme,
+                            anchorsSettings: {
+                                radius: state.anchorRadius,
+                                shape: state.anchorShape,
+                                showRadius: state.showAnchorRadius
+                            },
+                            heatmapSettings: {
+                                show: state.showHeatmap,
+                                resolution: state.heatmapResolution,
+                                thresholds: state.heatmapThresholds
+                            },
+                            importedObjects: state.importedObjects
+                        };
+
+                        try {
+                            // 1. Try Native File System API (Chrome/Edge)
+                            if ('showSaveFilePicker' in window) {
+                                const handle = await (window as any).showSaveFilePicker({
+                                    suggestedName: `project-${new Date().toISOString().slice(0, 10)}.json`,
+                                    types: [{
+                                        description: 'Anchor Project',
+                                        accept: { 'application/json': ['.json'] },
+                                    }],
+                                });
+                                const writable = await handle.createWritable();
+                                await writable.write(JSON.stringify(data, null, 2));
+                                await writable.close();
+                            } else {
+                                // 2. Fallback: Prompt for name and Auto-Download
+                                const name = prompt("Enter file name:", `project-${new Date().toISOString().slice(0, 10)}`);
+                                if (!name) return; // Cancelled
+
+                                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `${name}.json`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                            }
+                        } catch (err: any) {
+                            if (err.name !== 'AbortError') {
+                                console.error('Save failed:', err);
+                                alert('Failed to save project.');
+                            }
+                        }
+                    }}
+                    tooltip="Save Project As..."
+                    className="opacity-80 hover:opacity-100 p-1.5"
+                    iconSize={16}
+                />
+
+                <div className="w-px h-6 bg-[var(--border-color)] mx-2"></div>
                 <ToolbarButton icon={Settings} label="Global" active={useProjectStore.getState().isSettingsOpen} onClick={() => useProjectStore.getState().setIsSettingsOpen(!useProjectStore.getState().isSettingsOpen)} tooltip="Global Settings" iconSize={16} className="p-1.5" />
                 <ToolbarButton icon={Info} label="Info" onClick={() => console.log('Info')} tooltip="About Anchor Planner" className="text-blue-400 hover:text-blue-300" iconSize={16} />
             </div>

@@ -17,11 +17,19 @@ interface ProjectState {
     wideWallThickness: number;
     anchorMode: 'manual' | 'auto';
     isScaleSet: boolean;
+    lastLoaded: number; // Timestamp of last project load
 
     // Anchor Settings
     anchorRadius: number;
-    anchorShape: 'circle' | 'square';
+    anchorShape: 'circle' | 'square' | 'triangle' | 'star' | 'hex';
     showAnchorRadius: boolean;
+
+    // Geometry Tools
+    showOffsets: boolean;
+    offsetStep: number; // Disatnce in meters
+    showSkeleton: boolean;
+    showMedialAxis: boolean;
+    medialAxisStep: number;
 
     // Heatmap Settings
     showHeatmap: boolean;
@@ -36,6 +44,7 @@ interface ProjectState {
     };
 
     // Global UI
+    theme: 'dark' | 'light';
     isSettingsOpen: boolean;
 
     // Actions
@@ -51,6 +60,15 @@ interface ProjectState {
     setAnchorRadius: (r: number) => void;
     setAnchorShape: (s: 'circle' | 'square') => void;
     setShowAnchorRadius: (v: boolean) => void;
+
+
+    // Geometry Actions
+    setShowOffsets: (v: boolean) => void;
+    setOffsetStep: (v: number) => void;
+    setShowSkeleton: (v: boolean) => void;
+    setShowMedialAxis: (v: boolean) => void;
+    setMedialAxisStep: (v: number) => void;
+
     alignAnchors: (type: 'horizontal' | 'vertical') => void;
 
     // Heatmap Actions
@@ -59,6 +77,7 @@ interface ProjectState {
     setHeatmapColorMode: (mode: 'test' | 'standard' | 'manual') => void;
     setHeatmapThresholds: (t: { red: number, orange: number, yellow: number, green: number, blue: number }) => void;
 
+    setTheme: (theme: 'dark' | 'light') => void;
     setIsSettingsOpen: (v: boolean) => void;
 
     addWall: (wall: Omit<Wall, 'id'>) => void;
@@ -95,6 +114,37 @@ interface ProjectState {
     toggleLayer: (layer: keyof ProjectLayers) => void;
     groupAnchors: (ids: string[]) => void;
     ungroupAnchors: (ids: string[]) => void;
+    // Save/Load
+    loadProject: (data: ProjectData) => void;
+
+    // Clipboard
+    clipboard: { walls: Wall[], anchors: Anchor[] } | null;
+    copySelection: () => void;
+    pasteClipboard: () => void;
+}
+
+export interface ProjectData {
+    version: number;
+    timestamp: number;
+    scaleRatio: number;
+    walls: Wall[];
+    anchors: Anchor[];
+    dimensions: Dimension[];
+    layers: ProjectLayers;
+    wallPreset: 'default' | 'thick' | 'wide';
+    anchorMode: 'manual' | 'auto';
+    theme: 'dark' | 'light';
+    anchorsSettings: {
+        radius: number;
+        shape: 'circle' | 'square';
+        showRadius: boolean;
+    };
+    heatmapSettings: {
+        show: boolean;
+        resolution: number;
+        thresholds: any;
+    };
+    importedObjects: ImportedObject[];
 }
 
 export const useProjectStore = create<ProjectState>()(
@@ -120,12 +170,20 @@ export const useProjectStore = create<ProjectState>()(
             thickWallThickness: 0.1,
             wideWallThickness: 0.2,
             anchorMode: 'manual',
+            isScaleSet: false,
+            lastLoaded: 0, // Timestamp of last project load
 
             // Anchor Settings Defaults
             anchorRadius: 5,
             anchorShape: 'circle',
             showAnchorRadius: true,
 
+            // Geometry Tools
+            showOffsets: false,
+            offsetStep: 5, // Default 5 (meters?) as requested
+            showSkeleton: false,
+            showMedialAxis: false,
+            medialAxisStep: 5,
 
             // Heatmap Defaults
             showHeatmap: false,
@@ -141,10 +199,11 @@ export const useProjectStore = create<ProjectState>()(
 
             // Global UI
             isSettingsOpen: false,
-            isScaleSet: false,
+            theme: 'dark', // Default
 
             // Actions
             setScaleRatio: (ratio) => set({ scaleRatio: ratio, isScaleSet: true }),
+            setTheme: (t) => set({ theme: t }),
             setTool: (tool) => set({ activeTool: tool }),
             setSelection: (ids) => set({ selectedIds: ids }),
             setWallPreset: (preset) => set({ wallPreset: preset }),
@@ -153,11 +212,26 @@ export const useProjectStore = create<ProjectState>()(
             setWideWallThickness: (t) => set({ wideWallThickness: t }),
             setAnchorMode: (mode) => set({ anchorMode: mode }),
 
-            // Anchor Actions
-            setAnchorRadius: (r) => set({ anchorRadius: r }),
-            setAnchorShape: (s) => set({ anchorShape: s }),
-            setShowAnchorRadius: (v) => set({ showAnchorRadius: v }),
+            // Anchor Actions - UPDATED: Apply to ALL existing anchors
+            setAnchorRadius: (r) => set((state) => ({
+                anchorRadius: r,
+                anchors: state.anchors.map(a => ({ ...a, radius: r, range: r }))
+            })),
+            setAnchorShape: (s) => set((state) => ({
+                anchorShape: s,
+                anchors: state.anchors.map(a => ({ ...a, shape: s }))
+            })),
+            setShowAnchorRadius: (v) => set((state) => ({
+                showAnchorRadius: v,
+                anchors: state.anchors.map(a => ({ ...a, showRadius: v }))
+            })),
 
+            // Geometry Tools Actions
+            setShowOffsets: (v) => set({ showOffsets: v }),
+            setOffsetStep: (v) => set({ offsetStep: v }),
+            setShowSkeleton: (v) => set({ showSkeleton: v }),
+            setShowMedialAxis: (v) => set({ showMedialAxis: v }),
+            setMedialAxisStep: (v) => set({ medialAxisStep: v }),
 
             setShowHeatmap: (v) => set({ showHeatmap: v }),
             setHeatmapResolution: (res) => set({ heatmapResolution: res }),
@@ -472,8 +546,8 @@ export const useProjectStore = create<ProjectState>()(
                         visible: true,
                         locked: false,
                     } as unknown as ImportedObject],
-                    // Auto-select the new object so Layer Manager works immediately
-                    activeImportId: newId
+                    // Auto-select removed per user request (Step 756)
+                    // activeImportId: newId 
                 };
             }),
 
@@ -559,6 +633,102 @@ export const useProjectStore = create<ProjectState>()(
                             ? { ...a, groupId: undefined }
                             : a
                     )
+                };
+            }),
+
+            loadProject: (data) => set((state) => {
+                // Basic validation could happen here
+                if (!data || !data.walls) {
+                    console.error("Invalid project data");
+                    return state;
+                }
+
+                return {
+                    ...state,
+                    scaleRatio: data.scaleRatio || 50,
+                    walls: data.walls || [],
+                    anchors: data.anchors || [],
+                    dimensions: data.dimensions || [],
+                    layers: data.layers || state.layers,
+                    wallPreset: data.wallPreset || state.wallPreset,
+                    anchorMode: data.anchorMode || state.anchorMode,
+                    theme: data.theme || state.theme,
+
+                    // Restore Settings
+                    anchorRadius: data.anchorsSettings?.radius ?? state.anchorRadius,
+                    anchorShape: data.anchorsSettings?.shape ?? state.anchorShape,
+                    showAnchorRadius: data.anchorsSettings?.showRadius ?? state.showAnchorRadius,
+
+                    showHeatmap: data.heatmapSettings?.show ?? state.showHeatmap,
+                    heatmapResolution: data.heatmapSettings?.resolution ?? state.heatmapResolution,
+                    heatmapThresholds: data.heatmapSettings?.thresholds || { red: -65, orange: -70, yellow: -75, green: -80, blue: -85 },
+                    importedObjects: data.importedObjects || [],
+                    activeImportId: null,
+                    selectedIds: [], // Clear selection
+                    isScaleSet: true, // Assume loaded project has scale set
+                    lastLoaded: Date.now()
+                };
+            }),
+
+            // Clipboard Implementation
+            clipboard: null,
+
+            copySelection: () => set((state) => {
+                const walls = state.walls.filter(w => state.selectedIds.includes(w.id));
+                const anchors = state.anchors.filter(a => state.selectedIds.includes(a.id));
+
+                if (walls.length === 0 && anchors.length === 0) return state;
+
+                return {
+                    clipboard: { walls, anchors }
+                };
+            }),
+
+            pasteClipboard: () => set((state) => {
+                if (!state.clipboard) return state;
+
+                const { walls, anchors } = state.clipboard;
+                const offsetPx = 50; // 1 meter offset (assuming 50px/m default, but visual offset is key)
+
+                // Regenerate Wall IDs
+                const newWalls = walls.map(w => ({
+                    ...w,
+                    id: uuidv4(),
+                    points: [
+                        w.points[0] + offsetPx,
+                        w.points[1] + offsetPx,
+                        w.points[2] + offsetPx,
+                        w.points[3] + offsetPx
+                    ] as [number, number, number, number]
+                }));
+
+                // Regenerate Anchor IDs
+                const newAnchors = anchors.map(a => {
+                    // Try to preserve prefix "A" or "M" but with new number
+                    const prefix = a.id.startsWith('M') ? 'M' : 'A';
+                    // We need unique IDs. Let's just use UUID for uniqueness or simple random suffix if we want to keep short names?
+                    // User prefers sortable names usually. 
+                    // Let's use simple logic: Just append "-copy" or generate new sequence?
+                    // Safe bet: Generate proper new sequence ID logic or UUID.
+                    // Given our `addAnchor` logic does auto-increment, let's try to reuse that logic or just use UUID if ID is string.
+                    // Actually `addAnchor` handles ID gen. But we are doing bulk add.
+                    // Let's just append random suffix for now to avoid collision, or re-calc entire sequence?
+                    // Re-calcing sequence for 10 pasted anchors is tricky in reducer.
+                    // Let's use uuidv4() for pasted anchors to ensure robustness, or just random suffix.
+                    return {
+                        ...a,
+                        id: `${prefix}${uuidv4().slice(0, 4)}`, // Short unique suffix
+                        x: a.x + offsetPx,
+                        y: a.y + offsetPx
+                    };
+                });
+
+                const newSelectedIds = [...newWalls.map(w => w.id), ...newAnchors.map(a => a.id)];
+
+                return {
+                    walls: [...state.walls, ...newWalls],
+                    anchors: [...state.anchors, ...newAnchors],
+                    selectedIds: newSelectedIds // Select the pasted items
                 };
             }),
         }),

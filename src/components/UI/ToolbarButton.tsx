@@ -45,8 +45,8 @@ export const ToolbarButton: React.FC<ToolbarButtonProps> = ({
                     p-2 rounded-md transition-all duration-100 flex items-center justify-center
                     border border-transparent
                     ${active
-                        ? 'bg-[#0078d4] text-white border-[#005a9e] shadow-sm'
-                        : 'text-gray-300 hover:bg-[#3d3d3d] hover:border-[#555]'
+                        ? 'bg-accent text-white border-blue-700 shadow-sm'
+                        : 'text-secondary hover-bg border-transparent'
                     }
                     ${className}
                 `}
