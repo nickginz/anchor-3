@@ -15,9 +15,9 @@ git reset --hard <COMMIT_HASH>
 
 | Date | Commit Hash | Description |
 | :--- | :--- | :--- |
-| **Current** | `5ca92ad` | **Save/Load Fixes & Auto-Placement Tuning**<br>Fixed Load button interaction (Ref vs Label), refined Corridor detection (Aspect Ratio > 2.0, MaxDim check), and added valid JSON checks. |
-| Previous | `-----` | **Light Mode Polish**<br>Refined Light Mode colors for Toolbar (darker icons), Canvas (light grey background, dark grid), and Objects (darker strokes for Walls/anchors) to ensure high visibility. |
-| Previous | `f65b037` | **Room & Validation Refinements**<br>Added Red Ring indicators for open wall ends (fixed pixel size). Implemented independent room label logic & scaling. Unified toggle for walls/rooms. Added snapping for existing wall endpoint dragging. |
+| **Current** | `cc68747` | **Auto-Placement V2 (Medial Axis & Topology)**<br>Implemented Voronoi-based medial axis skeletonization, multi-layer Euclidean offsets (ClipperLib), and gap-filling logic. Resolved critical \"Invalid Hook\" and \"Black Screen\" (Geodesic/Turf) issues. Unified dimension tool (Click/Drag) and selection safety. |
+| Previous | `e51da2a` | **Auto-Placement Refinement & Wall Tools**<br>Fixed Load button interaction, refined Corridor detection, and added valid JSON checks. Added Snapping/Edge support for all wall tools. |
+| Previous | `f65b037` | **Room & Validation Refinements**<br>Added Red Ring indicators for open wall ends. Implemented independent room label logic & scaling. Unified toggle for walls/rooms. |
 | Previous | `62f0440` | **Wall Joining & Selection Guard**<br>Fixed wall spikes (wedge logic), resolved disappearance bug, refined Alt+Click/Drag selection for imports. |
 | Previous | `c3de4c5` | **Layer Visibility Protection**<br>Secured hidden layers (Walls, Anchors, Dimensions) from selection, snapping, and dragging. Updated Wiki. |
 | Previous | `9346412` | **Imports & Editing Overhaul**<br>Fixed PDF (Worker) & DXF imports, added Alt+Click/Drag & Box Selection for imports, Single DXF mode, Delete key, and Wall Endpoint Handles (Node Editing). |
