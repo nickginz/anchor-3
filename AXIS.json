@@ -1,0 +1,566 @@
+{
+  "version": 1,
+  "timestamp": 1767613467494,
+  "scaleRatio": 19.8,
+  "walls": [
+    {
+      "points": [
+        253,
+        108,
+        788,
+        108
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "ee63b87e-aef0-4e5c-a66a-69d17f51ab0e"
+    },
+    {
+      "points": [
+        253,
+        503,
+        253,
+        108
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "17eec441-bc2f-4594-a42c-ea11a38b85da"
+    },
+    {
+      "points": [
+        788,
+        108,
+        788,
+        297
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "7a7dc885-fdf0-48b1-a5a0-305fb8b889cf"
+    },
+    {
+      "points": [
+        788,
+        297,
+        788,
+        334
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "1822393e-63c7-4ae7-87ff-f145100c4db9"
+    },
+    {
+      "points": [
+        1031,
+        334,
+        788,
+        334
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "9a770c5b-2d06-4d7d-bc5c-2ebf4913b019"
+    },
+    {
+      "points": [
+        917,
+        503,
+        917,
+        688
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "02392fd5-69ad-429b-8068-cd2f5f9c8127"
+    },
+    {
+      "points": [
+        917,
+        688,
+        1031,
+        688
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "c4442543-8f4f-4a11-b579-8bd53dfb1325"
+    },
+    {
+      "points": [
+        1031,
+        334,
+        1031,
+        688
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "82613516-b9ac-4e67-b535-b610cf771932"
+    },
+    {
+      "points": [
+        253,
+        503,
+        917,
+        503
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "40b14a54-b088-4c2d-85a7-f90734ddb362"
+    },
+    {
+      "points": [
+        1355.0558517000002,
+        -271.26541970000034,
+        2450.234861900001,
+        -271.26541970000034
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "e12aecef-c6df-4014-9bef-66ed5c93091f"
+    },
+    {
+      "points": [
+        2450.234861900001,
+        -271.26541970000034,
+        2450.234861900001,
+        613.4521437000002
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "da022dc2-c41f-4a47-b53b-2b2952e9ed21"
+    },
+    {
+      "points": [
+        2450.234861900001,
+        613.4521437000002,
+        1355.0558517000002,
+        613.4521437000002
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "ab7ed78f-eade-4bc0-ac44-3b0b7341548f"
+    },
+    {
+      "points": [
+        1355.0558517000002,
+        613.4521437000002,
+        1355.0558517000002,
+        -271.26541970000034
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "e9f12388-513f-4754-8fa4-7f10b231d6ca"
+    },
+    {
+      "points": [
+        -138.8905703377521,
+        -896.5671910279631,
+        455.98330308589937,
+        -896.5671910279631
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "6f3b53aa-64dc-4eba-a553-69cfc3bdfded"
+    },
+    {
+      "points": [
+        921.2477850932246,
+        -542.6338529295336,
+        921.2477850932246,
+        -170.42226732367342
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "a10fb790-ee8b-4752-aa66-5f34e3abd5f7"
+    },
+    {
+      "points": [
+        921.2477850932246,
+        -170.42226732367342,
+        628.7958249743344,
+        -170.42226732367342
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "363ad9e3-3258-40d2-9a66-8cd3c0ad6940"
+    },
+    {
+      "points": [
+        628.7958249743344,
+        -170.42226732367342,
+        628.7958249743344,
+        33.96177298668728
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "d0935f9b-46f2-4364-b7eb-3efa49e88eea"
+    },
+    {
+      "points": [
+        628.7958249743344,
+        33.96177298668728,
+        482.5698449148894,
+        33.96177298668728
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "b8162ea9-318c-4642-8105-770ed1b90fdc"
+    },
+    {
+      "points": [
+        482.5698449148894,
+        33.96177298668728,
+        482.5698449148894,
+        -273.44511691100973
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "c77bce5c-7746-4f7b-b7fb-42318330966a"
+    },
+    {
+      "points": [
+        482.5698449148894,
+        -273.44511691100973,
+        798.2850291341458,
+        -273.44511691100973
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "efeb7bd1-db2a-439c-8aa8-a2bea31e56eb"
+    },
+    {
+      "points": [
+        798.2850291341458,
+        -273.44511691100973,
+        798.2850291341458,
+        -456.22759198531605
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "ff1f0731-a07c-48ae-bf20-d06636504d5d"
+    },
+    {
+      "points": [
+        798.2850291341458,
+        -456.22759198531605,
+        254.92258050416243,
+        -456.22759198531605
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "9d3d5d66-cd96-4499-a53e-d5cb2bc0ec3c"
+    },
+    {
+      "points": [
+        254.92258050416243,
+        -456.22759198531605,
+        254.92258050416243,
+        -248.5202339463316
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "21df8f9e-c4c6-4aae-8360-ad39dd122a4b"
+    },
+    {
+      "points": [
+        254.92258050416243,
+        -248.5202339463316,
+        -193.72531286004403,
+        -248.5202339463316
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "74acc67b-184d-4d67-be8c-5d559113c64e"
+    },
+    {
+      "points": [
+        -193.72531286004403,
+        -248.5202339463316,
+        -193.72531286004403,
+        -740.3712577826468
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "4c0ca54c-0a85-468e-a26e-c5d58801d401"
+    },
+    {
+      "points": [
+        -193.72531286004403,
+        -740.3712577826468,
+        95.40332953022235,
+        -740.3712577826468
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "d2f58800-8ebf-427d-b171-5821a70bafdd"
+    },
+    {
+      "points": [
+        95.40332953022235,
+        -740.3712577826468,
+        95.40332953022235,
+        -811.8225889480575
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "174f7316-996d-40ed-bd8d-7d42e1046f6e"
+    },
+    {
+      "points": [
+        95.40332953022235,
+        -811.8225889480575,
+        -138.8905703377521,
+        -811.8225889480575
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "01d8404a-50a6-4b62-9c9f-c9babcf41994"
+    },
+    {
+      "points": [
+        -138.8905703377521,
+        -811.8225889480575,
+        -138.8905703377521,
+        -896.5671910279631
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "243cf992-5b1e-41e3-a15d-df634af346d3"
+    },
+    {
+      "points": [
+        455.98330308589937,
+        -648.6862550052887,
+        455.98330308589937,
+        -542.6338529295336
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "4c56d196-2c6f-46ca-8283-c6a0eb3b393c"
+    },
+    {
+      "points": [
+        455.98330308589937,
+        -542.6338529295336,
+        611.914107785955,
+        -542.6338529295336
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "27304d23-fa0f-4a9f-89b1-664d7ed3adfd"
+    },
+    {
+      "points": [
+        455.98330308589937,
+        -648.6862550052887,
+        611.914107785955,
+        -648.6862550052887
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "22c2b2b8-6171-4e98-acd1-c610b75cf800"
+    },
+    {
+      "points": [
+        611.914107785955,
+        -648.6862550052887,
+        611.914107785955,
+        -542.6338529295336
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "8afc19cd-7afd-458f-9417-63172e0807da"
+    },
+    {
+      "points": [
+        455.98330308589937,
+        -896.5671910279631,
+        455.98330308589937,
+        -742.9745506697625
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "765c612d-1d79-4c23-a4f8-4d3ddcb49515"
+    },
+    {
+      "points": [
+        455.98330308589937,
+        -742.9745506697625,
+        455.98330308589937,
+        -648.6862550052887
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "5b446186-2e2b-4d28-b222-c39960acc5e1"
+    },
+    {
+      "points": [
+        455.98330308589937,
+        -742.9745506697625,
+        611.914107785955,
+        -742.9745506697625
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "7b78d544-7b58-4a98-aa47-8b113fb533e6"
+    },
+    {
+      "points": [
+        611.914107785955,
+        -742.9745506697625,
+        611.914107785955,
+        -648.6862550052887
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "4bd58861-d0db-42f5-afac-2a5c72797c33"
+    },
+    {
+      "points": [
+        611.914107785955,
+        -742.9745506697625,
+        611.914107785955,
+        -896.5671910279631
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "0916dddc-7586-445f-b308-98d6aec03bd0"
+    },
+    {
+      "points": [
+        611.914107785955,
+        -896.5671910279631,
+        455.98330308589937,
+        -896.5671910279631
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "056dc3e4-904f-49bb-99b6-95587fc8041b"
+    },
+    {
+      "points": [
+        611.914107785955,
+        -542.6338529295336,
+        805.4155428535199,
+        -542.6338529295336
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "ea4f9724-22b3-43d5-9a72-a305d6425de3"
+    },
+    {
+      "points": [
+        805.4155428535199,
+        -542.6338529295336,
+        921.2477850932246,
+        -542.6338529295336
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "0fa0ed6b-88cf-4548-8816-d6049e4893ec"
+    },
+    {
+      "points": [
+        611.914107785955,
+        -742.9745506697625,
+        611.914107785955,
+        -542.6338529295336
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "d048b469-b534-4ed5-bbe6-dfb8f4eee807"
+    },
+    {
+      "points": [
+        805.4155428535199,
+        -542.6338529295336,
+        805.4155428535199,
+        -742.9745506697625
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "37d96a21-3b31-4dda-8889-4193d557cf9c"
+    },
+    {
+      "points": [
+        805.4155428535199,
+        -742.9745506697625,
+        611.914107785955,
+        -742.9745506697625
+      ],
+      "thickness": 0.1,
+      "attenuation": 5,
+      "material": "drywall",
+      "id": "26dfbad5-1105-4a63-b17b-f03cfadb4578"
+    }
+  ],
+  "anchors": [],
+  "dimensions": [],
+  "layers": {
+    "walls": true,
+    "heatmap": true,
+    "floorplan": true,
+    "dimensions": true,
+    "anchors": true,
+    "rooms": true,
+    "roomLabels": true
+  },
+  "wallPreset": "thick",
+  "anchorMode": "auto",
+  "theme": "dark",
+  "anchorsSettings": {
+    "radius": 5,
+    "shape": "circle",
+    "showRadius": true
+  },
+  "heatmapSettings": {
+    "show": false,
+    "resolution": 50,
+    "thresholds": {
+      "red": 3,
+      "orange": 6,
+      "yellow": 9,
+      "green": 12,
+      "blue": 15
+    }
+  },
+  "importedObjects": []
+}

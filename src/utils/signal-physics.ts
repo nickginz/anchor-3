@@ -59,15 +59,23 @@ export const calculateObstacleLoss = (
     walls: Wall[]
 ): number => {
     let totalLoss = 0;
+    const REFERENCE_THICKNESS = 0.1; // 10cm standard reference
 
     for (const wall of walls) {
         const p1 = { x: wall.points[0], y: wall.points[1] };
         const p2 = { x: wall.points[2], y: wall.points[3] };
 
         if (intersects(tx, rx, p1, p2)) {
-            // Get material loss
+            // 1. Determine Base Attenuation (Instance override or Material default)
             const mat = MATERIAL_PROPERTIES[wall.material as WallMaterial] || MATERIAL_PROPERTIES.concrete;
-            let loss = mat.attenuationDb;
+            const baseAttenuation = wall.attenuation ?? mat.attenuationDb;
+
+            // 2. Calculate Thickness Factor (Linear scaling)
+            // Ensure we don't divide by zero or get negative loss
+            const thickness = Math.max(0.01, wall.thickness);
+            const factor = thickness / REFERENCE_THICKNESS;
+
+            let loss = baseAttenuation * factor;
 
             // Calculate Angle of Incidence Logic
             const rayVector = { x: rx.x - tx.x, y: rx.y - tx.y };

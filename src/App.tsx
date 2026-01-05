@@ -1,4 +1,5 @@
 import { Ribbon } from './components/UI/Ribbon';
+import { AutoPlacementSidebar } from './components/UI/Sidebar/AutoPlacementSidebar';
 import { MainStage } from './components/Canvas/MainStage';
 
 import { useProjectStore } from './store/useProjectStore';
@@ -9,6 +10,7 @@ function App() {
   return (
     <div className={`flex flex-col h-screen w-screen bg-[var(--bg-canvas)] ${theme === 'light' ? 'theme-light' : ''}`}>
       <Ribbon />
+      <AutoPlacementSidebar />
       <div className="flex-1 w-full h-full">
         <MainStage />
       </div>

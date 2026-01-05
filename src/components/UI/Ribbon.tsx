@@ -25,7 +25,7 @@ import { WallDetectionModal } from './WallDetectionModal';
 import { SettingsPanel } from './SettingsPanel';
 import { Settings } from 'lucide-react';
 
-import { AutoPlacementModal } from './AutoPlacementModal';
+
 
 // Custom Icons
 const RectWallIcon = ({ size, ...props }: any) => (
@@ -68,7 +68,7 @@ export const Ribbon: React.FC = () => {
 
     const [isConfigOpen, setIsConfigOpen] = React.useState<boolean | string>(false);
     const [isLayerManagerOpen, setIsLayerManagerOpen] = React.useState(false);
-    const [isAutoPlacementOpen, setIsAutoPlacementOpen] = React.useState(false);
+    const { isAutoPlacementOpen, setIsAutoPlacementOpen } = useProjectStore();
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     // Normalize check
@@ -80,8 +80,7 @@ export const Ribbon: React.FC = () => {
 
     return (
         <div className="h-16 panel-bg border-b panel-border flex items-center px-4 shadow-xl z-20 relative select-none">
-            {/* Auto Placement Modal */}
-            {isAutoPlacementOpen && <AutoPlacementModal onClose={() => setIsAutoPlacementOpen(false)} />}
+
 
             {/* Config Modal Overlay */}
             {isConfigOpen === true && (
@@ -271,11 +270,10 @@ export const Ribbon: React.FC = () => {
                     <ToolbarButton icon={Wifi} label="Manual" active={activeTool === 'anchor' && anchorMode === 'manual'} onClick={() => { setTool('anchor'); setAnchorMode('manual'); }} tooltip="Manual Anchor (A)" iconSize={16} className="p-1.5" />
 
 
-                    {/* Auto Place Button */}
                     <button
-                        onClick={() => setIsAutoPlacementOpen(true)}
-                        className="p-1.5 rounded hover:bg-[#333] text-blue-400 flex flex-col items-center"
-                        title="Auto-Place Anchors"
+                        onClick={() => setIsAutoPlacementOpen(!isAutoPlacementOpen)}
+                        className={`p-1.5 rounded hover:bg-[#333] transition-colors flex flex-col items-center ${isAutoPlacementOpen ? 'bg-[#333] text-white shadow-inner' : 'text-blue-400'}`}
+                        title="Auto-Place Sidebar"
                     >
                         <Wand2 size={16} />
                     </button>
@@ -372,72 +370,7 @@ export const Ribbon: React.FC = () => {
 
             <div className="h-10 w-px bg-[var(--border-color)] mx-2"></div>
 
-            {/* Geometry Group */}
-            <div className="flex flex-col items-center px-1">
-                <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Geometry</span>
-                <div className="flex items-center space-x-1">
-                    <button
-                        onClick={() => setShowOffsets(!showOffsets)}
-                        className={`p-1.5 rounded hover:bg-[#333] transition-colors ${showOffsets ? 'bg-[#0078d4] text-white' : 'text-secondary'}`}
-                        title="Show Wall Offsets"
-                    >
-                        <Map size={16} />
-                    </button>
-                    <button
-                        onClick={() => setShowSkeleton(!showSkeleton)}
-                        className={`p-1.5 rounded hover:bg-[#333] transition-colors ${showSkeleton ? 'bg-[#0078d4] text-white' : 'text-secondary'}`}
-                        title="Show Straight Skeleton"
-                    >
-                        <Network size={16} />
-                    </button>
-                    {(showOffsets || showSkeleton) && (
-                        <div className="flex flex-col items-center ml-1 animate-in fade-in zoom-in duration-200">
-                            <input
-                                type="number"
-                                min="0.01"
-                                step="0.05"
-                                value={offsetStep}
-                                onChange={(e) => setOffsetStep(parseFloat(e.target.value) || 0.05)}
-                                className="w-12 bg-[#222] border border-[#444] rounded px-1 py-0.5 text-[10px] text-center focus:outline-none focus:border-blue-500 text-white"
-                                title="Offset Step (meters)"
-                            />
-                        </div>
-                    )}
-                </div>
-            </div>
 
-            <div className="h-10 w-px bg-[var(--border-color)] mx-2"></div>
-
-            {/* Topology Group - NEW */}
-            <div className="flex flex-col items-center px-1">
-                <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Topology</span>
-                <div className="flex items-center space-x-1">
-                    <button
-                        onClick={() => setShowMedialAxis(!showMedialAxis)}
-                        className={`p-1.5 rounded hover:bg-[#333] transition-colors ${showMedialAxis ? 'bg-magenta text-white' : 'text-secondary'}`}
-                        style={{ backgroundColor: showMedialAxis ? '#ff00ff' : '' }}
-                        title="Show Medial Axis (Magenta)"
-                    >
-                        {/* Using Activity icon as proxy for a 'graph' look */}
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                        </svg>
-                    </button>
-                    {showMedialAxis && (
-                        <div className="flex flex-col items-center ml-1 animate-in fade-in zoom-in duration-200">
-                            <input
-                                type="number"
-                                min="0.1"
-                                step="0.1"
-                                value={medialAxisStep}
-                                onChange={(e) => setMedialAxisStep(parseFloat(e.target.value) || 0.1)}
-                                className="w-12 bg-[#222] border border-[#444] rounded px-1 py-0.5 text-[10px] text-center focus:outline-none focus:border-blue-500 text-white"
-                                title="Topology Precision (px)"
-                            />
-                        </div>
-                    )}
-                </div>
-            </div>
 
             <div className="flex-grow"></div>
 

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { temporal } from 'zundo';
 import { v4 as uuidv4 } from 'uuid';
-import type { Wall, Anchor, Dimension, ProjectLayers, ToolType, ImportedObject, ImageObject, DXFObject } from '../types';
+import type { Wall, Anchor, Dimension, ProjectLayers, ToolType, ImportedObject, ImageObject, DXFObject, Point } from '../types';
 
 interface ProjectState {
     scaleRatio: number; // px per meter
@@ -11,7 +11,9 @@ interface ProjectState {
     layers: ProjectLayers;
     activeTool: ToolType;
     selectedIds: string[];
-    wallPreset: 'default' | 'thick' | 'wide';
+    rooms: boolean;
+    roomLabels: boolean;
+    centroids: boolean; // Debug Layer
     standardWallThickness: number;
     thickWallThickness: number;
     wideWallThickness: number;
@@ -43,12 +45,26 @@ interface ProjectState {
         blue: number;
     };
 
-    // Global UI
+    // Auto Placement UI & Optimization
+    isAutoPlacementOpen: boolean;
+    optimizationSettings: {
+        radius: number;
+        coverageTarget: number;
+        minSignalStrength: number;
+        targetScope: 'small' | 'large' | 'all';
+    };
     theme: 'dark' | 'light';
     isSettingsOpen: boolean;
 
+    // Placement Area Tool
+    placementArea: { points: Point[] } | null;
+    setPlacementArea: (area: { points: Point[] } | null) => void;
+    placementAreaEnabled: boolean;
+    setPlacementAreaEnabled: (enabled: boolean) => void;
+
     // Actions
     setScaleRatio: (ratio: number) => void;
+
     setTool: (tool: ToolType) => void;
     setSelection: (ids: string[]) => void;
     setWallPreset: (preset: 'default' | 'thick' | 'wide') => void;
@@ -79,6 +95,8 @@ interface ProjectState {
 
     setTheme: (theme: 'dark' | 'light') => void;
     setIsSettingsOpen: (v: boolean) => void;
+    setIsAutoPlacementOpen: (v: boolean) => void;
+    setOptimizationSettings: (settings: Partial<ProjectState['optimizationSettings']>) => void;
 
     addWall: (wall: Omit<Wall, 'id'>) => void;
     addWalls: (walls: Omit<Wall, 'id'>[]) => void;
@@ -90,6 +108,7 @@ interface ProjectState {
     updateAnchor: (id: string, updates: Partial<Anchor>) => void;
     updateAnchors: (updates: { id: string; updates: Partial<Anchor> }[]) => void;
     addAnchors: (anchors: Omit<Anchor, 'id'>[]) => void;
+    setAnchors: (anchors: Anchor[]) => void;
     removeAnchor: (id: string) => void;
 
     // Import State (Multi-Object)
@@ -144,6 +163,13 @@ export interface ProjectData {
         resolution: number;
         thresholds: any;
     };
+    optimizationSettings?: {
+        radius: number;
+        coverageTarget: number;
+        minSignalStrength: number;
+        targetScope: 'small' | 'large' | 'all';
+    };
+    isAutoPlacementOpen?: boolean;
     importedObjects: ImportedObject[];
 }
 
@@ -162,7 +188,11 @@ export const useProjectStore = create<ProjectState>()(
                 anchors: true,
                 rooms: true,
                 roomLabels: true,
+                centroids: false, // New Centroid Layer
             },
+            rooms: true,
+            roomLabels: true,
+            centroids: false,
             activeTool: 'select',
             selectedIds: [],
             wallPreset: 'thick',
@@ -171,6 +201,11 @@ export const useProjectStore = create<ProjectState>()(
             wideWallThickness: 0.2,
             anchorMode: 'manual',
             isScaleSet: false,
+
+            placementArea: null,
+            setPlacementArea: (area) => set({ placementArea: area }),
+            placementAreaEnabled: true,
+            setPlacementAreaEnabled: (enabled) => set({ placementAreaEnabled: enabled }),
             lastLoaded: 0, // Timestamp of last project load
 
             // Anchor Settings Defaults
@@ -199,6 +234,13 @@ export const useProjectStore = create<ProjectState>()(
 
             // Global UI
             isSettingsOpen: false,
+            isAutoPlacementOpen: false,
+            optimizationSettings: {
+                radius: 5,
+                coverageTarget: 90,
+                minSignalStrength: -80,
+                targetScope: 'all',
+            },
             theme: 'dark', // Default
 
             // Actions
@@ -239,6 +281,10 @@ export const useProjectStore = create<ProjectState>()(
             setHeatmapThresholds: (t) => set({ heatmapThresholds: t }),
 
             setIsSettingsOpen: (v) => set({ isSettingsOpen: v }),
+            setIsAutoPlacementOpen: (v) => set({ isAutoPlacementOpen: v }),
+            setOptimizationSettings: (s) => set((state) => ({
+                optimizationSettings: { ...state.optimizationSettings, ...s }
+            })),
 
 
             alignAnchors: (type) => set((state) => {
@@ -486,6 +532,8 @@ export const useProjectStore = create<ProjectState>()(
                 };
             }),
 
+            setAnchors: (anchors) => set({ anchors }),
+
             updateAnchor: (id, updates) => set((state) => ({
                 anchors: state.anchors.map((a) => (a.id === id ? { ...a, ...updates } : a)),
             })),
@@ -665,6 +713,15 @@ export const useProjectStore = create<ProjectState>()(
                     importedObjects: data.importedObjects || [],
                     activeImportId: null,
                     selectedIds: [], // Clear selection
+
+                    isAutoPlacementOpen: data.isAutoPlacementOpen ?? state.isAutoPlacementOpen,
+                    optimizationSettings: data.optimizationSettings || {
+                        radius: 5,
+                        coverageTarget: 90,
+                        minSignalStrength: -80,
+                        targetScope: 'all',
+                    },
+
                     isScaleSet: true, // Assume loaded project has scale set
                     lastLoaded: Date.now()
                 };

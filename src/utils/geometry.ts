@@ -87,25 +87,35 @@ export const distToSegmentSquared = (p: Point, v: Point, w: Point): { dist2: num
 // Enhanced Snap Point Return Type
 export interface SnapResult {
     point: Point;
-    type: 'vertex' | 'edge';
-    wallId?: string; // ID of the wall snapped to (if edge or vertex belong to one) - for vertex it might be hard to verify uniqueness if multiple walls share it, so we might just use it for Edge mainly.
+    type: 'vertex' | 'edge' | 'anchor';
+    id?: string; // ID of the object snapped to
 }
 
 export const getSnapPoint = (
     cursor: Point,
     walls: import('../types').Wall[],
+    anchors: import('../types').Anchor[],
     threshold: number
 ): SnapResult | null => {
     let nearest: Point | null = null;
-    let nearestType: 'vertex' | 'edge' | null = null;
-    let nearestWallId: string | undefined = undefined;
+    let nearestType: 'vertex' | 'edge' | 'anchor' | null = null;
+    let nearestId: string | undefined = undefined;
 
     let minDist = threshold;
 
-    // 1. Check Vertices
-    // Note: A vertex can belong to multiple walls. We just need the point.
-    // If we want to be strict, we can iterate walls and check endpoints.
+    // 1. Check Anchors (Highest Priority for dimensioning)
+    for (const a of anchors) {
+        const p = { x: a.x, y: a.y };
+        const d = dist(cursor, p);
+        if (d < minDist) {
+            minDist = d;
+            nearest = p;
+            nearestType = 'anchor';
+            nearestId = a.id;
+        }
+    }
 
+    // 2. Check Vertices
     for (const w of walls) {
         // Start Point
         const p1 = { x: w.points[0], y: w.points[1] };
@@ -114,7 +124,7 @@ export const getSnapPoint = (
             minDist = d1;
             nearest = p1;
             nearestType = 'vertex';
-            nearestWallId = w.id; // Just take one
+            nearestId = w.id;
         }
 
         // End Point
@@ -124,15 +134,15 @@ export const getSnapPoint = (
             minDist = d2;
             nearest = p2;
             nearestType = 'vertex';
-            nearestWallId = w.id;
+            nearestId = w.id;
         }
     }
 
-    if (nearest && nearestType === 'vertex') {
-        return { point: nearest, type: 'vertex', wallId: nearestWallId };
+    if (nearest && (nearestType === 'vertex' || nearestType === 'anchor')) {
+        return { point: nearest, type: nearestType, id: nearestId };
     }
 
-    // 2. Check Edges (Centerlines)
+    // 3. Check Edges (Centerlines)
     for (const w of walls) {
         const p1 = { x: w.points[0], y: w.points[1] };
         const p2 = { x: w.points[2], y: w.points[3] };
@@ -143,12 +153,12 @@ export const getSnapPoint = (
             minDist = d;
             nearest = proj;
             nearestType = 'edge';
-            nearestWallId = w.id;
+            nearestId = w.id;
         }
     }
 
     if (nearest && nearestType) {
-        return { point: nearest, type: nearestType, wallId: nearestWallId };
+        return { point: nearest, type: nearestType, id: nearestId };
     }
 
     return null;
@@ -165,4 +175,50 @@ export const isPointInPolygon = (pt: Point, poly: Point[]): boolean => {
         if (intersect) inside = !inside;
     }
     return inside;
+};
+
+// Robust Geometric Centroid (Center of Mass)
+export const getPolygonCentroid = (poly: Point[]): Point => {
+    let A = 0;
+    let Cx = 0;
+    let Cy = 0;
+    for (let i = 0; i < poly.length; i++) {
+        const j = (i + 1) % poly.length;
+        const p1 = poly[i];
+        const p2 = poly[j];
+        const cross = (p1.x * p2.y - p2.x * p1.y);
+        A += cross;
+        Cx += (p1.x + p2.x) * cross;
+        Cy += (p1.y + p2.y) * cross;
+    }
+    A /= 2;
+    if (A === 0) {
+        // Fallback to vertex average if area is zero (collinear/degenerate)
+        let sumX = 0, sumY = 0;
+        poly.forEach(p => { sumX += p.x; sumY += p.y; });
+        return { x: sumX / poly.length, y: sumY / poly.length };
+    }
+    Cx /= (6 * A);
+    Cy /= (6 * A);
+    return { x: Cx, y: Cy };
+};
+
+export const getPolygonBBox = (poly: Point[]) => {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    poly.forEach(p => {
+        const px = Number(p.x);
+        const py = Number(p.y);
+        if (px < minX) minX = px;
+        if (px > maxX) maxX = px;
+        if (py < minY) minY = py;
+        if (py > maxY) maxY = py;
+    });
+    return { minX, maxX, minY, maxY, width: maxX - minX, height: maxY - minY };
+};
+
+export const getBBoxCenter = (bbox: { minX: number, maxX: number, minY: number, maxY: number }): Point => {
+    return {
+        x: (Number(bbox.minX) + Number(bbox.maxX)) / 2,
+        y: (Number(bbox.minY) + Number(bbox.maxY)) / 2
+    };
 };

@@ -1,35 +1,38 @@
-
 import React, { useMemo } from 'react';
-import { Line, Text, Group } from 'react-konva';
+import { Line, Text, Group, Circle } from 'react-konva';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { detectRooms, calculatePolygonArea } from '../../../utils/room-detection';
+import { getPolygonCentroid, getPolygonBBox } from '../../../utils/geometry';
 
 export const RoomsLayer: React.FC = () => {
     const { walls, layers, scaleRatio } = useProjectStore();
 
     const rooms = useMemo(() => {
         // Run detection if either Rooms OR Labels are enabled
-        if (!layers.rooms && !layers.roomLabels) return [];
+        if (!layers.rooms && !layers.roomLabels && !layers.centroids) return [];
         try {
             return detectRooms(walls);
         } catch (e) {
             console.error("Room detection failed:", e);
             return [];
         }
-    }, [walls, layers.rooms, layers.roomLabels]);
+    }, [walls, layers.rooms, layers.roomLabels, layers.centroids]);
 
-    if (!layers.rooms && !layers.roomLabels) return null;
+    if (!layers.rooms && !layers.roomLabels && !layers.centroids) return null;
 
     return (
         <React.Fragment>
             {rooms.map((poly, i) => {
-                // Calculate Centroid for Label
-                let cx = 0, cy = 0;
-                poly.forEach(p => { cx += p.x; cy += p.y; });
-                cx /= poly.length;
-                cy /= poly.length;
+                // Determine best center point
+                const areaPx = Math.abs(calculatePolygonArea(poly));
 
-                const areaSqMeters = Math.abs(calculatePolygonArea(poly)) / (scaleRatio * scaleRatio);
+                // Use Geometric Centroid for all small rooms to match Auto-Placement logic strictly
+                const c = getPolygonCentroid(poly);
+                const cx = c.x;
+                const cy = c.y;
+                console.log(`[RoomsLayer] Room ${i} (Poly): Center: ${cx}, ${cy}`);
+
+                const areaSqMeters = areaPx / (scaleRatio * scaleRatio);
                 const label = `${areaSqMeters.toFixed(1)} m²`;
 
                 return (
@@ -77,6 +80,18 @@ export const RoomsLayer: React.FC = () => {
                                 />
                             );
                         })()}
+                        {/* Centroid for All Rooms */}
+                        {layers.centroids && (
+                            <Circle
+                                x={cx}
+                                y={cy}
+                                radius={4} // Visible dot
+                                fill="#22c55e" // Green-500
+                                stroke="white"
+                                strokeWidth={1}
+                                listening={false}
+                            />
+                        )}
                     </Group>
                 );
             })}

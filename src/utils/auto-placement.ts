@@ -1,6 +1,6 @@
 import type { Wall, Anchor } from '../types';
-import { detectRooms } from './room-detection';
-import { dist, isPointInPolygon } from './geometry';
+import { detectRooms, calculatePolygonArea } from './room-detection';
+import { dist, getPolygonCentroid, getPolygonBBox, isPointInPolygon } from './geometry';
 import type { Point } from './geometry';
 import { generateOffsets, generateMedialAxis } from './geometry-tools';
 import * as turf from '@turf/turf';
@@ -14,212 +14,654 @@ export interface PlacementOptions {
     wallThickness: number; // For avoiding walls
     scaleRatio: number; // Pixels per meter
     spacingFactor?: number; // Usage depends on algorithm
+    // New Targeting & Optimization
+    targetScope?: 'small' | 'large' | 'all';
+    coverageTarget?: number; // 50-100%
+    minSignalStrength?: number; // -90 to -40 dBm
+    placementArea?: Point[]; // Optional polygon for filtering
+    placementAreaEnabled?: boolean; // New flag
+}
+
+interface ProcessedRoom {
+    poly: Point[];
+    areaM2: number;
+    maxEdgeLengthM: number;
+    type: 'compact' | 'extended' | 'large';
+    medialAxis: Point[][];
+    medialFeats: any[];
+    stitchedAxis: Point[][];
+    bbox: { minX: number, maxX: number, minY: number, maxY: number, width: number, height: number };
+    fillFactor: number;
+}
+
+type Priority = 'critical' | 'high' | 'normal';
+
+interface Candidate {
+    p: Point;
+    priority: Priority;
 }
 
 // Main Function: Advanced Auto-Placement (V2)
-// Algorithm:
-// 1. Check Geometry (Room) and Topology (Medial Axis).
-// 2. Zone 1: Place anchors at intersections of [5m Offset] and [Medial Axis].
-// 3. Zone 2: Place anchors at Medial Axis Junctions (3+ lines) that are OUTSIDE the 5m Offset.
-// 4. Zone 3 (Offset Fill): If 5m Offset line segment > 10m, fill symmetrically (Max overlap 2.5m).
-// 5. Zone 4 (Topology Fill): If Medial Axis segment OUTSIDE 5m Offset > 10m, fill symmetrically.
-
 export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, existingAnchors: Point[] = []): Omit<Anchor, 'id'>[] => {
-    const { radius, scaleRatio } = options;
+    const { radius, scaleRatio, targetScope = 'all' } = options;
 
-    // Constants from User Request
+    // Optimization Factors
+    // 1. Min Signal (dBm): Lower (e.g. -90) = Accept larger spacing. Higher (-40) = Tighter spacing.
+    // Map -90...-40 to a spacing multiplier?
+    // Let's rely on radius for drop-off calculation mostly, but adjust 'spacingFactor' based on coverageTarget.
 
-    const OVERLAP_METERS = 2.5;
+    // 2. Coverage Target (%): Higher = Tighter spacing
+    // Base overlap 1.9 (approx). 100% coverage might need 1.4-1.5 (closer to sqrt(2) or less). 
+    // 50% coverage might allow 2.5.
+    let densityMult = 1.0;
 
-    // Convert to Pixels
+    // 1. Coverage Factor (50% -> 1.3x, 100% -> 0.7x)
+    let coverageMod = 1.0;
+    if (options.coverageTarget) {
+        coverageMod = 1.3 - ((options.coverageTarget - 50) / 50) * 0.6;
+    }
 
+    // 2. Signal Factor (-90 -> 1.2x, -40 -> 0.6x)
+    let signalMod = 1.0;
+    if (options.minSignalStrength) {
+        // Normalize -90...-40 to 0...1
+        const norm = (options.minSignalStrength + 90) / 50;
+        signalMod = 1.2 - (norm * 0.6);
+    }
+
+    if (options.coverageTarget && options.minSignalStrength) {
+        densityMult = (coverageMod + signalMod) / 2;
+    } else if (options.coverageTarget) {
+        densityMult = coverageMod;
+    } else if (options.minSignalStrength) {
+        densityMult = signalMod;
+    }
 
     // Target Spacing for Fill Logic
-    // "Max overlap is 2.5 meters". 
-    // Spacing = Diameter - Overlap = 2 * Radius - 2.5.
-    // Ensure spacing is positive.
-    const spacingMeters = Math.max(1, (2 * radius) - OVERLAP_METERS);
+    const baseFactor = options.spacingFactor || 1.9;
+    const factor = baseFactor * densityMult;
+
+    const spacingMeters = Math.max(3, factor * radius);
     const spacingPx = spacingMeters * scaleRatio;
-
-
-
-    // Snap Distance (1.5m)
     const snapDistPx = 1.5 * scaleRatio;
 
-    // Fill Threshold (10m)
-    const fillThresholdPx = 10 * scaleRatio;
-
     // Detect Rooms
-    const rooms = detectRooms(walls);
+    const rawRooms = detectRooms(walls);
 
     // Global Accumulator for Candidates
-    // We check against `existingAnchors` before finalizing.
-    // We also dedup candidates against themselves.
-    const uniqueCandidates: Point[] = [];
+    const candidates: Candidate[] = [];
+
     const finalAnchors: Omit<Anchor, 'id'>[] = [];
 
-    // Helper: Stitch Medial Axis into Continuous Branches
-    // Converts disjoint segments into long polylines (branches between junctions/endpoints)
-    const stitchMedialAxis = (segments: Point[][]): Point[][] => {
-        const adj = new Map<string, Point[]>();
-        const coordMap = new Map<string, Point>();
+    // Helper: Robust Graph Stitching
+    const buildRobustGraph = (segments: Point[][], snapRadius: number): Point[][] => {
+        const uniquePoints: Point[] = [];
 
-        const key = (p: Point) => `${Math.round(p.x)},${Math.round(p.y)}`;
+        const getSnapped = (p: Point): Point => {
+            for (const up of uniquePoints) {
+                if (dist(p, up) < snapRadius) return up;
+            }
+            uniquePoints.push(p);
+            return p;
+        };
 
-        // Build Graph
+        // Pre-Process: Flatten and Cluster all points to find true nodes
+        const allPoints = segments.flat();
+        // Naive clustering O(N^2) - N is small per room
+        const finalCoords: Point[] = [];
+        const mapOriginalToFinal = new Map<Point, Point>();
+
+        allPoints.forEach(p => {
+            let found = false;
+            for (const fc of finalCoords) {
+                if (dist(p, fc) < snapRadius) {
+                    mapOriginalToFinal.set(p, fc);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                finalCoords.push(p);
+                mapOriginalToFinal.set(p, p);
+            }
+        });
+
+        const snappedSegments: Point[][] = [];
         segments.forEach(seg => {
-            const p1 = seg[0], p2 = seg[1];
-            const k1 = key(p1), k2 = key(p2);
-
-            if (!adj.has(k1)) adj.set(k1, []);
-            if (!adj.has(k2)) adj.set(k2, []);
-            adj.get(k1)!.push(p2);
-            adj.get(k2)!.push(p1);
-
-            coordMap.set(k1, p1);
-            coordMap.set(k2, p2);
+            const p1 = mapOriginalToFinal.get(seg[0])!;
+            const p2 = mapOriginalToFinal.get(seg[1])!;
+            if (p1 !== p2) { // Remove zero length
+                snappedSegments.push([p1, p2]);
+            }
         });
 
-        // Find Junctions & Endpoints (Degree != 2)
-        const nodes: string[] = [];
-        adj.forEach((neighbors, k) => {
-            if (neighbors.length !== 2) nodes.push(k);
+        const adj = new Map<Point, Point[]>();
+        snappedSegments.forEach(seg => {
+            const [p1, p2] = seg;
+            if (!adj.has(p1)) adj.set(p1, []);
+            if (!adj.has(p2)) adj.set(p2, []);
+            if (!adj.get(p1)!.includes(p2)) adj.get(p1)!.push(p2);
+            if (!adj.get(p2)!.includes(p1)) adj.get(p2)!.push(p1);
         });
 
-        // If loop (Circle), pick random node
+        const nodes: Point[] = [];
+        adj.forEach((neighbors, p) => {
+            if (neighbors.length !== 2) nodes.push(p);
+        });
+
         if (nodes.length === 0 && adj.size > 0) {
             nodes.push(adj.keys().next().value!);
         }
 
-        const branches: Point[][] = [];
+        const edges: Point[][] = [];
         const visitedEdges = new Set<string>();
+        const pointKey = (p: Point) => `${Math.round(p.x)},${Math.round(p.y)}`;
 
-        // Traverse from each node
-        nodes.forEach(startNodeKey => {
-            const neighbors = adj.get(startNodeKey)!;
-            neighbors.forEach(nextP => {
-                const nextKey = key(nextP);
-                const edgeKey = [startNodeKey, nextKey].sort().join('-');
+        const edgeKey = (p1: Point, p2: Point) => {
+            // Order independent
+            const k1 = pointKey(p1);
+            const k2 = pointKey(p2);
+            return k1 < k2 ? `${k1}|${k2}` : `${k2}|${k1}`;
+        };
 
-                if (visitedEdges.has(edgeKey)) return;
+        nodes.forEach(startNode => {
+            const neighbors = adj.get(startNode)!;
+            neighbors.forEach(firstStep => {
+                const k = edgeKey(startNode, firstStep);
+                if (visitedEdges.has(k)) return;
 
-                // Start Branch
-                visitedEdges.add(edgeKey);
-                const branch: Point[] = [coordMap.get(startNodeKey)!, nextP];
+                const currentPath: Point[] = [startNode, firstStep];
+                visitedEdges.add(k);
 
-                let currKey = nextKey;
-                let prevKey = startNodeKey;
+                let prev = startNode;
+                let curr = firstStep;
 
-                // Walk until another node
                 while (true) {
-                    const currNeighbors = adj.get(currKey)!;
-                    if (currNeighbors.length !== 2) break; // Reached node
+                    if (nodes.includes(curr)) break;
 
-                    // Find next step (not prev)
-                    const nextStep = currNeighbors.find(n => key(n) !== prevKey);
-                    if (!nextStep) break; // Should not happen
+                    const nexts = adj.get(curr)!;
+                    const next = nexts.find(n => n !== prev);
 
-                    const nextStepKey = key(nextStep);
-                    const stepEdgeKey = [currKey, nextStepKey].sort().join('-');
+                    if (!next) break;
 
-                    // Stability Fix: Break infinite loops if graph has cycles
-                    if (visitedEdges.has(stepEdgeKey)) break;
+                    const nextK = edgeKey(curr, next);
+                    if (visitedEdges.has(nextK)) break;
+                    visitedEdges.add(nextK);
 
-                    visitedEdges.add(stepEdgeKey);
-
-                    branch.push(nextStep);
-                    prevKey = currKey;
-                    currKey = nextStepKey;
+                    currentPath.push(next);
+                    prev = curr;
+                    curr = next;
                 }
-                branches.push(branch);
+                edges.push(currentPath);
             });
         });
 
-        return branches;
+        return edges;
     };
 
-    rooms.forEach(roomPoly => {
+    // Global Candidate Adder
+    const addCandidate = (p: Point, priority: Priority = 'normal', customThreshold?: number) => {
+        if (!p || isNaN(p.x) || isNaN(p.y)) return;
+        const dedupTolerance = 1.0 * scaleRatio;
+
+        if (candidates.some(c => dist(c.p, p) < dedupTolerance)) return;
+
+        if (priority !== 'critical') {
+            const overlapThreshold = customThreshold || (radius * scaleRatio * 1.2);
+            if (candidates.some(c => dist(c.p, p) < overlapThreshold)) return;
+        }
+
+        candidates.push({ p, priority });
+    };
+
+    const fillGaps = (p1: Point, p2: Point, thresholdPx: number, targetSpacingPx: number) => {
+        const d = dist(p1, p2);
+        if (d > thresholdPx) {
+            const numSegments = Math.ceil(d / targetSpacingPx);
+            const stepX = (p2.x - p1.x) / numSegments;
+            const stepY = (p2.y - p1.y) / numSegments;
+            for (let k = 1; k < numSegments; k++) {
+                const p = { x: p1.x + stepX * k, y: p1.y + stepY * k };
+                addCandidate(p, 'normal');
+            }
+        }
+    };
+
+    // Pre-process and categorize rooms
+    const processedRooms: ProcessedRoom[] = [];
+    rawRooms.forEach(roomPoly => {
         if (roomPoly.length < 3) return;
 
-        // 1. Generate Medial Axis (High Precision) - Once per Room
+        // BBox and Area (Use shared implementations for consistency with RoomsLayer)
+        const bbox = getPolygonBBox(roomPoly);
+        const bboxArea = bbox.width * bbox.height;
+
+        const areaPx = Math.abs(calculatePolygonArea(roomPoly));
+        const areaM2 = areaPx / (scaleRatio * scaleRatio);
+        const fillFactor = areaPx / bboxArea;
+
+        // Medial Axis
         const medialAxis = generateMedialAxis(roomPoly, 2);
-        // Pre-convert to Turf for Intersections
         const medialFeats = medialAxis.map(seg => turf.lineString(seg.map(p => [p.x, p.y])));
 
-        // Stitch Axis - Once per Room
-        const stitchedAxis = stitchMedialAxis(medialAxis);
+        // Increased Snap Radius to 20px (approx 0.5m-1m) for robustness
+        const stitchedAxis = buildRobustGraph(medialAxis, 20);
 
-        // Helper: Add Candidate (Dedup locally)
-        const addCandidate = (p: Point) => {
-            // Dedup against UNIQUE candidates (Close proximity check)
-            // 10px tolerance (~20cm)
-            if (!uniqueCandidates.some(u => dist(u, p) < 10)) {
-                uniqueCandidates.push(p);
-            }
-        };
+        // Metric: Max Topology Distance (Edge Length)
+        let maxEdgeLengthM = 0;
+        stitchedAxis.forEach(path => {
+            let len = 0;
+            for (let i = 0; i < path.length - 1; i++) len += dist(path[i], path[i + 1]);
+            const m = len / scaleRatio;
+            if (m > maxEdgeLengthM) maxEdgeLengthM = m;
+        });
 
-        // Helper: Symmetrical Fill
-        const symmetricalFill = (p1: Point, p2: Point) => {
-            const dx = p2.x - p1.x;
-            const dy = p2.y - p1.y;
-            const len = Math.sqrt(dx * dx + dy * dy);
+        // CLASSIFICATION (Shape Analysis + Topology)
+        let type: ProcessedRoom['type'] = 'large';
 
-            if (len > fillThresholdPx) { // > 10m
-                // Number of gaps to fill
-                // We want spacing <= targetSpacing.
-                // NumSegments = ceil(len / spacing)
-                const numSegments = Math.floor(len / spacingPx);
+        if (areaM2 <= 110) {
+            // Safety Override: Very small rooms
+            if (areaM2 < 40) {
+                type = 'compact';
+            } else {
+                // Shape Analysis
+                // const fillFactor = areaPx / bboxArea; // Already calculated
+                const aspectRatio = Math.max(bbox.width, bbox.height) / Math.min(bbox.width, bbox.height);
 
-                // If numSegments = 1, we don't need intermediate points?
-                // But len > 10m. Spacing (r=10m -> 17.5m).
-                // If len=15m. Spacing=17.5. num=1.
-                // Should we add point? 
-                // "add more anchors ... max overlap 2.5m".
-                // If we have just endpoints, distance is 15m.
-                // Coverage R=10. Overlap = 20 - 15 = 5m.
-                // This is > 2.5m overlap. So we don't *need* more anchors to satisfy min overlap?
-                // Wait, "max overlap is 2.5m" means overlap SHOULD NOT EXCEED 2.5m? (Efficiency).
-                // OR means overlap MUST BE AT LEAST 2.5m? (Redundancy).
-                // If user wants redundancy, they usually say "min overlap".
-                // "max overlap" sounds like "don't put them too close".
-                // BUT "add more anchors" implies we want to FILL the gap.
-                // If len > 10m. Maybe user wants one every 10m?
-                // Let's assume standard behavior: Ensuring coverage gap isn't too large?
-                // Or maybe the user means "Min Overlap"?
-                // Let's stick to "Symmetrical Way".
-                // If I divide into `numSegments`, points are equidistant.
-                // Step = len / numSegments.
-
-                const stepX = dx / numSegments;
-                const stepY = dy / numSegments;
-
-                // Add intermediate points (k=1 to n-1)
-                for (let k = 1; k < numSegments; k++) {
-                    addCandidate({ x: p1.x + stepX * k, y: p1.y + stepY * k });
+                if (fillFactor > 0.85) {
+                    // Convex Room (Square/Rect)
+                    if (aspectRatio < 3.0) {
+                        // Square or Short Rect -> Center
+                        type = 'compact';
+                    } else {
+                        // Long Corridor -> Joints
+                        type = 'extended';
+                    }
+                } else {
+                    // Complex Shape (L, T, U) -> Rely on Medial Axis Topology Check
+                    type = maxEdgeLengthM < 13 ? 'compact' : 'extended';
                 }
             }
-        };
+        }
 
-        // Loop State
+
+        processedRooms.push({
+            poly: roomPoly,
+            areaM2,
+            maxEdgeLengthM,
+            type,
+            medialAxis,
+            medialFeats,
+            stitchedAxis,
+            bbox,
+            fillFactor
+        });
+    });
+
+    // Sort order: Small rooms first
+    processedRooms.sort((a, b) => {
+        const order = { 'compact': 1, 'extended': 2, 'large': 3 };
+        return order[a.type] - order[b.type];
+    });
+
+    processedRooms.forEach(room => {
+        const { poly: roomPoly, type, bbox, areaM2, medialAxis, medialFeats, stitchedAxis } = room;
+
+        // --- SCOPE FILTERING ---
+        if (targetScope === 'small') {
+            // Include 'compact' and 'extended' (since extended < 110m2 usually, check logic)
+            // Logic: areaM2 <= 110 is classified as compact/extended.
+            if (areaM2 > 110) return;
+        } else if (targetScope === 'large') {
+            if (areaM2 <= 110) return;
+        }
+        // 'all' includes everyone
+
+        // --- AREA FILTERING ---
+        // Only if Area exists AND is Enabled
+        if (options.placementArea && options.placementArea.length > 2 && options.placementAreaEnabled !== false) {
+            // Create Turf Polygon for Area
+            const areaCoords = options.placementArea.map(p => [p.x, p.y]);
+            // Close loop
+            if (areaCoords[0][0] !== areaCoords[areaCoords.length - 1][0] || areaCoords[0][1] !== areaCoords[areaCoords.length - 1][1]) {
+                areaCoords.push(areaCoords[0]);
+            }
+            // Safely try to create polygon
+            try {
+                const areaPoly = turf.polygon([areaCoords]);
+
+                // Create Polygon for Room
+                const roomCoords = roomPoly.map(p => [p.x, p.y]);
+                if (roomCoords[0][0] !== roomCoords[roomCoords.length - 1][0] || roomCoords[0][1] !== roomCoords[roomCoords.length - 1][1]) {
+                    roomCoords.push(roomCoords[0]);
+                }
+                const roomTurf = turf.polygon([roomCoords]);
+
+                // Check intersection
+                if (!turf.booleanIntersects(areaPoly, roomTurf)) {
+                    return; // Skip room if outside area
+                }
+            } catch (e) {
+                console.warn("[AutoPlacement] Error checking area intersection", e);
+            }
+        }
+
+
+
+        // --- SMALL ROOM LOGIC ---
+        // 1. COMPACT ROOMS
+        if (type === 'compact') {
+            const center = getPolygonCentroid(roomPoly);
+            addCandidate(center, 'critical');
+            console.log(`[AutoPlacement] Room (Center): ${center.x}, ${center.y}`);
+            return;
+        }
+
+        // 2. EXTENDED & LARGE ROOMS: Topological (Skeleton) Logic
+        if (type === 'extended' || type === 'large') {
+            const roomCandidates: Point[] = [];
+
+            const addLocal = (p: Point) => {
+                if (!p || isNaN(p.x) || isNaN(p.y)) return;
+                roomCandidates.push(p);
+            };
+
+            let centerForFallback: Point | null = null;
+            // Extended Room Logic: Topology Degree Analysis
+
+            // 2. Identification of JOINTS (high priority) and ENDPOINTS (low priority)
+            const joints: Point[] = [];
+            const endpoints: Point[] = [];
+
+            // 2.a Raw Medial Axis Analysis (Robustness against graph simplification)
+            // Use the raw medial axis segments to find convergence points (Degree >= 3)
+            // This handles cases where buildRobustGraph might have simplified/snapped the Y-junction away.
+            const rawNodeCounts = new Map<string, number>();
+            const rawNodeMap = new Map<string, Point>();
+            const getRawKey = (p: Point) => `${Math.round(p.x / 5)},${Math.round(p.y / 5)}`; // Grid snap 5px
+
+            medialAxis.forEach(seg => {
+                seg.forEach(p => {
+                    const k = getRawKey(p);
+                    rawNodeCounts.set(k, (rawNodeCounts.get(k) || 0) + 1);
+                    // Running average for position? Or just first one.
+                    if (!rawNodeMap.has(k)) rawNodeMap.set(k, p);
+                });
+            });
+
+            // If a raw node appears in 3 different segments (start/end or continuous?), it's a junction.
+            // Wait, medialAxis from voronoi is segments. Junctions are shared endpoints.
+            // A junction of 3 paths will have 3 segments meeting there.
+            // So counts should be >= 3?
+            // Actually medialAxis might be continuous polylines?
+            // Type is Point[][]. "medialAxis" variable comes from `generateMedialAxis`.
+            // Let's assume it returns segments.
+
+            rawNodeCounts.forEach((count, k) => {
+                // Note: Simple segments share endpoints, so count=2 is a simple connection.
+                // Count >= 3 implies a T or Y junction.
+                if (count >= 3) {
+                    joints.push(rawNodeMap.get(k)!);
+                }
+            });
+
+            // 2.a.2 SECONDARY PASS: Spatial Clustering (Robust Fallback)
+            // If the grid-based approach above failed (due to alignment), try clustering by distance.
+            const rawEndpoints: Point[] = [];
+            medialAxis.forEach(seg => {
+                if (seg.length > 0) {
+                    rawEndpoints.push(seg[0]);
+                    rawEndpoints.push(seg[seg.length - 1]);
+                }
+            });
+
+            const jointTolerancePx = 20; // 20px clustering tolerance
+            const potentialJoints: { center: Point, count: number }[] = [];
+
+            rawEndpoints.forEach(p => {
+                let found = false;
+                for (const cluster of potentialJoints) {
+                    if (dist(p, cluster.center) < jointTolerancePx) {
+                        cluster.count++;
+                        cluster.center.x = (cluster.center.x * (cluster.count - 1) + p.x) / cluster.count;
+                        cluster.center.y = (cluster.center.y * (cluster.count - 1) + p.y) / cluster.count;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    potentialJoints.push({ center: { ...p }, count: 1 });
+                }
+            });
+
+            potentialJoints.forEach(cluster => {
+                // If 3 or more segments end here, it's a junction (T/Y/Cross)
+                if (cluster.count >= 3) {
+                    // Check if we already added something close?
+                    if (!joints.some(j => dist(j, cluster.center) < jointTolerancePx)) {
+                        joints.push(cluster.center);
+                        console.log(`[AutoPlacement] Found Raw Joint (Clustered) at ${cluster.center.x}, ${cluster.center.y}`);
+                    }
+                }
+            });
+
+            // 2.a.3 FINAL PASS: Full-Vertex Graph Analysis (Robust Fallback for Voronoi T-Junctions)
+            // Use a spatial graph of ALL vertices to find T/Y-junctions, even mid-segment.
+            const vertexGraph = new Map<string, Set<string>>(); // ID -> NeighborIDs
+            const vertexCoords = new Map<string, Point>();
+            const vertexIdMap = new Map<string, string>(); // RawCoordKey -> ClusterID
+            // 20px tolerance for clustering vertices (robust against noisy Voronoi)
+            const VERTEX_TOLERANCE = 20;
+
+            const getClusterId = (p: Point): string => {
+                const rawKey = `${Math.round(p.x)},${Math.round(p.y)}`;
+                if (vertexIdMap.has(rawKey)) return vertexIdMap.get(rawKey)!;
+
+                // Check existing clusters
+                for (const [id, center] of vertexCoords) {
+                    if (dist(p, center) < VERTEX_TOLERANCE) {
+                        vertexIdMap.set(rawKey, id);
+                        return id;
+                    }
+                }
+
+                // New Cluster
+                const newId = rawKey;
+                vertexCoords.set(newId, p);
+                vertexIdMap.set(rawKey, newId);
+                return newId;
+            };
+
+            medialAxis.forEach(seg => {
+                if (seg.length < 2) return;
+                for (let i = 0; i < seg.length - 1; i++) {
+                    const u = getClusterId(seg[i]);
+                    const v = getClusterId(seg[i + 1]);
+                    if (u !== v) {
+                        if (!vertexGraph.has(u)) vertexGraph.set(u, new Set());
+                        if (!vertexGraph.has(v)) vertexGraph.set(v, new Set());
+                        vertexGraph.get(u)!.add(v);
+                        vertexGraph.get(v)!.add(u);
+                    }
+                }
+            });
+
+            vertexGraph.forEach((neighbors, id) => {
+                // Degree >= 3 is a Joint
+                if (neighbors.size >= 3) {
+                    const center = vertexCoords.get(id)!;
+                    // Check dups against existing joints
+                    if (!joints.some(j => dist(j, center) < VERTEX_TOLERANCE)) {
+                        joints.push(center);
+                        console.log(`[AutoPlacement] Found Graph Degree-3 Joint at ${center.x}, ${center.y}`);
+                    }
+                }
+            });
+
+            // 2.b Rebuild Graph Topology from Stitched Axis to find Node Degrees
+            const nodeDegrees = new Map<string, number>();
+            const nodeMap = new Map<string, Point>();
+            const getKey = (p: Point) => `${Math.round(p.x)},${Math.round(p.y)}`;
+
+            stitchedAxis.forEach(path => {
+                if (path.length < 2) return;
+                const starts = [path[0], path[path.length - 1]];
+                starts.forEach(p => {
+                    const k = getKey(p);
+                    nodeDegrees.set(k, (nodeDegrees.get(k) || 0) + 1);
+                    nodeMap.set(k, p);
+                });
+            });
+
+            // 2. Identify Joints (Deg >= 3) and Endpoints (Deg 1 or 2 ends)
+            // (Already declared above)
+
+            nodeDegrees.forEach((deg, k) => {
+                const p = nodeMap.get(k)!;
+                if (deg >= 3) joints.push(p);
+                else if (deg === 1) endpoints.push(p);
+            });
+
+            // 2.5 Identify "Geometric Joints" (Sharp Bends in paths)
+            // This catches L-shaped rooms where the corner spur was snapped away (Deg 2 but sharp turn)
+            stitchedAxis.forEach(path => {
+                if (path.length < 3) return;
+                for (let i = 1; i < path.length - 1; i++) {
+                    const p0 = path[i - 1];
+                    const p1 = path[i]; // potential corner
+                    const p2 = path[i + 1];
+
+                    // Vector A (p0 -> p1), Vector B (p1 -> p2)
+                    const dx1 = p0.x - p1.x; const dy1 = p0.y - p1.y;
+                    const dx2 = p2.x - p1.x; const dy2 = p2.y - p1.y;
+
+                    // Angle calculation
+                    const angle1 = Math.atan2(dy1, dx1);
+                    const angle2 = Math.atan2(dy2, dx2);
+                    let diff = Math.abs(angle1 - angle2);
+                    // Normalize to 0-PI deviation from straight line
+                    if (diff > Math.PI) diff = 2 * Math.PI - diff;
+                    // Straight is PI (180deg). Sharp turn is < 135deg (PI * 0.75).
+                    // Deviation angle: Math.abs(PI - diff).
+
+                    // If the path bends by more than 45 degrees (PI/4)
+                    const deviation = Math.abs(Math.PI - diff);
+                    if (deviation > Math.PI / 4) {
+                        joints.push(p1);
+                    }
+                }
+            });
+
+            // 2.a.4 FINAL PASS: Geometric T-Junction Detection (Definitive Fix)
+            // Check if any endpoint (tips of lines) lies close to the middle of another segment.
+            // This catches T-junctions where the "spur" end touches a long backbone segment.
+            const allTips: Point[] = [];
+            const allSegments: [Point, Point][] = [];
+
+            medialAxis.forEach(seg => {
+                if (seg.length < 2) return;
+                allTips.push(seg[0]);
+                allTips.push(seg[seg.length - 1]);
+                for (let i = 0; i < seg.length - 1; i++) {
+                    allSegments.push([seg[i], seg[i + 1]]);
+                }
+            });
+
+            const distToSegmentFinal = (p: Point, v: Point, w: Point) => {
+                const l2 = (v.x - w.x) ** 2 + (v.y - w.y) ** 2;
+                if (l2 === 0) return dist(p, v);
+                let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+                t = Math.max(0, Math.min(1, t));
+                const projection = { x: v.x + t * (w.x - v.x), y: v.y + t * (w.y - v.y) };
+                return dist(p, projection);
+            };
+
+            const TJUNCTION_TOLERANCE_FINAL = 25 * scaleRatio;
+
+            allTips.forEach(tip => {
+                let isTJunction = false;
+                for (const [p1, p2] of allSegments) {
+                    if (dist(tip, p1) < 1 || dist(tip, p2) < 1) continue;
+                    if (distToSegmentFinal(tip, p1, p2) < TJUNCTION_TOLERANCE_FINAL) {
+                        isTJunction = true;
+                        break;
+                    }
+                }
+                if (isTJunction) {
+                    if (!joints.some(j => dist(j, tip) < TJUNCTION_TOLERANCE_FINAL)) {
+                        joints.push(tip);
+                        console.log(`[AutoPlacement] Found Geometric T-Junction at ${tip.x}, ${tip.y}`);
+                    }
+                }
+            });
+
+            // 3. Selection Strategy
+            if (joints.length > 0) {
+                // Complex Shape (L, T, Cross): Prioritize Joints
+                joints.forEach(p => addLocal(p));
+            } else {
+                // Linear Corridor (I-shape): Use Endpoints
+                // Determine if we need one center or two ends based on length?
+                // For "Small Extended", usually just ends is fine, or mid if very short.
+                // Let's stick to endpoints for now, consistent with "Skeleton" view.
+                endpoints.forEach(p => addLocal(p));
+            }
+
+            // Backup: If for some reason graph failed, fallback to Medial Axis Center
+            if (roomCandidates.length === 0 && stitchedAxis.length > 0) {
+                centerForFallback = stitchedAxis[0][Math.floor(stitchedAxis[0].length / 2)];
+            }
+
+
+            // Proximity Cleanup: Merge close points instead of failing to Centroid
+            const minAllowedDistPx = 5 * scaleRatio;
+
+            // removeLocal Duplicates/Close points
+            const uniqueCandidates: Point[] = [];
+
+            // Sort by priority? Joints (already added) are implicitly high val.
+            // Just greedy dedup.
+            roomCandidates.forEach(p => {
+                const existing = uniqueCandidates.find(u => dist(u, p) < minAllowedDistPx);
+                if (!existing) {
+                    uniqueCandidates.push(p);
+                } else {
+                    // If we found a Joint (Deg>=3) and existing was Endpoint, we might want to keep Joint?
+                    // But in our logic above, we ONLY added Joints if they existed.
+                    // So we are only deduping Joints against Joints, or Endpoints against Endpoints.
+                    // Safe to just skip.
+                }
+            });
+
+            if (uniqueCandidates.length === 0 && centerForFallback) {
+                addCandidate(centerForFallback, 'high');
+            } else {
+                uniqueCandidates.forEach(p => addCandidate(p, 'high'));
+            }
+            if (type === 'extended') return; // Done for extended, continue for Large
+        }
+
+        // --- LARGE ROOM LOGIC (> 110m2) ---
+
         const allOffsetPolys: Point[][] = [];
         let layerIndex = 0;
-
-        // 3. Multi-Layer Offsets Loop
         const MAX_LAYERS = 20;
+
+        let deepZonePoly: Point[] | null = null;
+
         while (layerIndex < MAX_LAYERS) {
             const currentOffsetMeters = 5 + (10 * layerIndex);
             const offsetPx = currentOffsetMeters * scaleRatio;
-
-            // Generate Offset for this Layer
             const offsetPolys = generateOffsets(roomPoly, offsetPx);
 
-            // Break if no offsets fit
             if (!offsetPolys.length) break;
 
-            // Accumulate for Zone 4 check later
+            if (layerIndex === 0 && offsetPolys.length > 0) {
+                deepZonePoly = offsetPolys.sort((a, b) => b.length - a.length)[0];
+            }
+
             allOffsetPolys.push(...offsetPolys);
 
-            // Convert Offset to Turf
             const offsetLines: any[] = [];
             offsetPolys.forEach(poly => {
                 const coords = poly.map(p => [p.x, p.y]);
@@ -230,111 +672,51 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
                 offsetLines.push(turf.lineString(coords));
             });
 
-            // Zone 1: Intersections (Medial Axis x Offset Line)
-            offsetLines.forEach(offLine => {
-                medialFeats.forEach(medLine => {
-                    const intersects = turf.lineIntersect(offLine, medLine);
-                    turf.featureEach(intersects, (pt) => {
-                        let [x, y] = pt.geometry.coordinates;
-
-                        // Snap Logic
-                        let snapped = false;
-                        for (const poly of offsetPolys) {
-                            for (const v of poly) {
-                                if (dist({ x, y }, v) < snapDistPx) {
-                                    x = v.x;
-                                    y = v.y;
-                                    snapped = true;
-                                    break;
+            if (layerIndex === 0) {
+                offsetLines.forEach(offLine => {
+                    medialFeats.forEach(medLine => {
+                        const intersects = turf.lineIntersect(offLine, medLine);
+                        turf.featureEach(intersects, (pt) => {
+                            let [x, y] = pt.geometry.coordinates;
+                            let snapped = false;
+                            for (const poly of offsetPolys) {
+                                for (const v of poly) {
+                                    if (dist({ x, y }, v) < snapDistPx) {
+                                        x = v.x;
+                                        y = v.y;
+                                        snapped = true;
+                                        break;
+                                    }
                                 }
+                                if (snapped) break;
                             }
-                            if (snapped) break;
-                        }
-                        addCandidate({ x, y });
+                            addCandidate({ x, y }, 'high');
+                        });
                     });
                 });
-            });
+            }
 
-            // Zone 3: Fill Offset Lines (Strict 12.5m)
             const zone3Threshold = 12.5 * scaleRatio;
-
-            const strictFill = (p1: Point, p2: Point) => {
-                const d = dist(p1, p2);
-                if (d > zone3Threshold) {
-                    // Force break if > 12.5m
-                    // Use Ceil to ensure at least 2 segments (1 mid point) if > 12.5
-                    // spacing = 12.5 -> num = ceil(d/12.5)
-                    const numSegments = Math.ceil(d / zone3Threshold);
-                    const stepX = (p2.x - p1.x) / numSegments;
-                    const stepY = (p2.y - p1.y) / numSegments;
-
-                    for (let k = 1; k < numSegments; k++) {
-                        addCandidate({ x: p1.x + stepX * k, y: p1.y + stepY * k });
-                    }
-                }
-            };
-
             offsetPolys.forEach(poly => {
                 for (let i = 0; i < poly.length; i++) {
                     const p1 = poly[i];
                     const p2 = poly[(i + 1) % poly.length];
-                    strictFill(p1, p2);
+                    fillGaps(p1, p2, zone3Threshold, spacingPx);
                 }
             });
+
             layerIndex++;
-        } // End Loop
+        }
 
-        // Helper: Generate Circle Polygon for Turf (Approximation)
-        const getCircleTurfPoly = (center: Point, r: number) => {
-            const steps = 32;
-            const coords: number[][] = [];
-            for (let i = 0; i < steps; i++) {
-                const theta = (i / steps) * Math.PI * 2;
-                coords.push([
-                    center.x + Math.cos(theta) * r,
-                    center.y + Math.sin(theta) * r
-                ]);
-            }
-            coords.push(coords[0]); // Close ring
-            return turf.polygon([coords]);
+        const calculateOverlapRatio = (candidate: Point, others: Candidate[], r: number) => {
+            const rPx = r * scaleRatio;
+            const covering = others.filter(o => dist(candidate, o.p) < rPx);
+            return covering.length >= 2 ? 0.8 : 0.0;
         };
 
-        const calculateOverlapRatio = (candidate: Point, others: Point[], r: number) => {
-            // 1. Create candidate circle polygon
-            const subjPoly = getCircleTurfPoly(candidate, r);
-            const subjArea = turf.area(subjPoly);
-            if (subjArea === 0) return 0;
-
-            // 2. Find nearby circles
-            const nearby = others.filter(p => dist(candidate, p) < (2 * r));
-            if (nearby.length === 0) return 0;
-
-            // 3. Union all nearby circles into one "Covered Shape"
-            let unionPoly: any = null;
-            for (const p of nearby) {
-                const circle = getCircleTurfPoly(p, r);
-                if (!unionPoly) {
-                    unionPoly = circle;
-                } else {
-                    unionPoly = turf.union(turf.featureCollection([unionPoly, circle]));
-                }
-            }
-
-            if (!unionPoly) return 0;
-
-            // 4. Intersect Candidate with Union
-            const intersection = turf.intersect(turf.featureCollection([subjPoly, unionPoly]));
-
-            if (!intersection) return 0;
-
-            const intersectArea = turf.area(intersection);
-            return intersectArea / subjArea;
-        };
-
-        // 2. Zone 2: Global Junctions (Moved After Loop)
+        // Zone 2
         const nodeCounts = new Map<string, number>();
         const nodeCoords = new Map<string, Point>();
-
         medialAxis.forEach(seg => {
             seg.forEach(p => {
                 const k = `${Math.round(p.x)},${Math.round(p.y)}`;
@@ -343,141 +725,156 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
             });
         });
 
+        const deepGapThresholdPx = 12 * scaleRatio;
+
         nodeCounts.forEach((count, key) => {
-            if (count >= 3) { // Junction
+            if (count >= 3) {
                 const p = nodeCoords.get(key)!;
-
-                // User Request: "inside offsets check overlaping of areas"
-                // Check if Inside ANY offset (Inner Layers)
-                // Actually, if it is "Inside", it means it's deeper in the room.
-                // We generated offsets 5, 15, 25...
-                // Ideally we check overlap regardless?
-                // Or only for "Inside" ones?
-                // "junction of topologu inside... use logic of placment like outside but inside"
-                // "if it > 40% ... dont place"
-
-                // Let's apply the Overlap Check universally for Junctions -> safer density.
-                // Use Radius from options (in Pixels)
-                // Note: `radius` in store is "Coverage Radius".
-                // `options.radius` comes from `activeAnchor.range` usually?
-                // Actually `useProjectStore` passes `radius` (pixels).
-                // Let's use `radius`.
-
-                const ratio = calculateOverlapRatio(p, uniqueCandidates, radius);
-
+                if (deepZonePoly && !isPointInPolygon(p, deepZonePoly)) return;
+                if (deepZonePoly && isPointInPolygon(p, deepZonePoly)) {
+                    const nearest = candidates.reduce((min, c) => Math.min(min, dist(p, c.p)), Infinity);
+                    if (nearest < deepGapThresholdPx) return;
+                }
+                const ratio = calculateOverlapRatio(p, candidates, radius);
                 if (ratio <= 0.40) {
-                    addCandidate(p);
+                    addCandidate(p, 'high');
                 }
             }
         });
 
-        // Zone 4: Fill Exposed Topology (Stitched Paths - Gap Fill 12.5m)
-        // Runs on the Medial Axis where it is NOT covered by any Offset Ring.
-        // Fix: Use a snapshot of candidates for projection to act as a "stable" base.
-        // This prevents feedback loops where adding an anchor on one path creates a new interval on a nearby overlapping path, causing infinite density (The "Beam" Bug).
-        const baseCandidatesForZone4 = [...uniqueCandidates];
-
+        // Zone 4
         stitchedAxis.forEach(path => {
             if (path.length < 2) return;
-
-            // Check Exposure: Is this path covered by ANY offset ring?
-            // We sample points. If vast majority are INSIDE an offset ring, we skip.
-            // If they are OUTSIDE ALL offset rings, we fill.
-
             let coveredCount = 0;
             const sampleCount = 5;
             for (let k = 0; k <= sampleCount; k++) {
                 const idx = Math.floor((path.length - 1) * (k / sampleCount));
                 const p = path[idx];
-                // Check against ALL accumulated offsets
-                // If point is inside ANY of them, it's covered.
                 if (allOffsetPolys.some(poly => isPointInPolygon(p, poly))) {
                     coveredCount++;
                 }
             }
-
-            // If mostly EXPOSED (coveredCount < half), let's fill it.
             if (coveredCount < sampleCount / 2) {
-                // Project existing candidates (from SNAPSHOT) to path
-                const getPathPos = (pt: Point, path: Point[]): number | null => {
-                    let accLen = 0;
-                    let minD = Infinity;
-                    let bestT = -1;
-
-                    for (let i = 0; i < path.length - 1; i++) {
-                        const p1 = path[i];
-                        const p2 = path[i + 1];
-                        const len = dist(p1, p2);
-                        if (len === 0) continue;
-
-                        const t = ((pt.x - p1.x) * (p2.x - p1.x) + (pt.y - p1.y) * (p2.y - p1.y)) / (len * len);
-                        const clampedT = Math.max(0, Math.min(1, t));
-                        const projX = p1.x + clampedT * (p2.x - p1.x);
-                        const projY = p1.y + clampedT * (p2.y - p1.y);
-
-                        const d = dist(pt, { x: projX, y: projY });
-                        if (d < minD) {
-                            minD = d;
-                            bestT = accLen + (clampedT * len);
-                        }
-                        accLen += len;
+                const startP = path[0];
+                const checkAndAdd = (pt: Point) => {
+                    const inDeep = deepZonePoly ? isPointInPolygon(pt, deepZonePoly) : false;
+                    const farFromHP = !candidates.some(c => (c.priority === 'high' || c.priority === 'critical') && dist(pt, c.p) < spacingPx * 0.8);
+                    if (inDeep || farFromHP) {
+                        addCandidate(pt, 'normal');
                     }
-
-                    if (minD < 10) return bestT;
-                    return null;
                 };
-
-                const pathAnchors: { t: number, p: Point }[] = [];
-                // USE SNAPSHOT:
-                baseCandidatesForZone4.forEach(cand => {
-                    const t = getPathPos(cand, path);
-                    if (t !== null) pathAnchors.push({ t, p: cand });
-                });
-
-                pathAnchors.sort((a, b) => a.t - b.t);
-
-                // Dedup on Path
-                const uniquePathAnchors = pathAnchors.filter((item, index, self) =>
-                    index === 0 || (item.t - self[index - 1].t) > 1
-                );
-
-                // Fill Gaps
-                const threshold = 12.5 * scaleRatio;
-
-                for (let i = 0; i < uniquePathAnchors.length - 1; i++) {
-                    const start = uniquePathAnchors[i];
-                    const end = uniquePathAnchors[i + 1];
-                    const linearDist = dist(start.p, end.p);
-
-                    if (linearDist > threshold) {
-                        const midX = (start.p.x + end.p.x) / 2;
-                        const midY = (start.p.y + end.p.y) / 2;
-                        // addCandidate still updates the LIVE set, checking for global duplicates.
-                        addCandidate({ x: midX, y: midY });
+                checkAndAdd(startP);
+                for (let i = 0; i < path.length - 1; i++) {
+                    const p1 = path[i];
+                    const p2 = path[i + 1];
+                    const d = dist(p1, p2);
+                    const numSteps = Math.floor(d / spacingPx);
+                    const ux = (p2.x - p1.x) / d;
+                    const uy = (p2.y - p1.y) / d;
+                    for (let k = 1; k <= numSteps; k++) {
+                        const px = p1.x + ux * (k * spacingPx);
+                        const py = p1.y + uy * (k * spacingPx);
+                        checkAndAdd({ x: px, y: py });
                     }
                 }
+                checkAndAdd(path[path.length - 1]);
             }
         });
     });
 
-    // Final Processing: Filter against existingAnchors and map to object
-    uniqueCandidates.forEach(c => {
-        // Check against input existingAnchors (Global prevention)
-        const conflict = existingAnchors.some(e => dist(e, c) < 10);
-        if (!conflict) {
-            finalAnchors.push({
-                x: c.x, y: c.y,
-                radius, range: radius,
-                showRadius: options.showRadius ?? true,
-                shape: options.shape || 'circle',
-                power: -40,
-                txPower: 0
-            });
+    // 3. Safety Check
+    const gridStepPx = 1.41 * scaleRatio;
+    const radiusPx = radius * scaleRatio;
+
+    processedRooms.forEach(room => {
+        // Respect Scope in Safety Check
+        if (targetScope === 'small' && room.areaM2 > 110) return;
+        if (targetScope === 'large' && room.areaM2 <= 110) return;
+
+        // Skip Safety Check for Compact rooms - we explicitly want ONLY the centroid
+        if (room.type === 'compact') return;
+
+        const { poly, bbox } = room;
+        const weakPoints: Point[] = [];
+
+        for (let x = bbox.minX; x <= bbox.maxX; x += gridStepPx) {
+            for (let y = bbox.minY; y <= bbox.maxY; y += gridStepPx) {
+                const pt = { x, y };
+                if (isPointInPolygon(pt, poly)) {
+                    let minDist = Infinity;
+                    for (const cand of candidates) {
+                        const d = dist(cand.p, pt);
+                        if (d < minDist) minDist = d;
+                    }
+                    if (existingAnchors.length > 0) {
+                        for (const cand of existingAnchors) {
+                            const d = dist(cand, pt);
+                            if (d < minDist) minDist = d;
+                        }
+                    }
+
+                    const strength = Math.max(0, 1 - (minDist / radiusPx));
+                    if (strength < 0.3) {
+                        weakPoints.push(pt);
+                    }
+                }
+            }
+        }
+
+        if (weakPoints.length > 0) {
+            let sumX = 0, sumY = 0;
+            weakPoints.forEach(p => { sumX += p.x; sumY += p.y; });
+            const center = { x: sumX / weakPoints.length, y: sumY / weakPoints.length };
+
+            if (isPointInPolygon(center, poly)) {
+                addCandidate(center, 'critical');
+            } else {
+                if (weakPoints.length > 0) addCandidate(weakPoints[0], 'critical');
+            }
         }
     });
 
-    return finalAnchors;
-};
+    // 4. Final Clean
+    const priorityVal = { 'critical': 3, 'high': 2, 'normal': 1 };
+    candidates.sort((a, b) => priorityVal[b.priority] - priorityVal[a.priority]);
 
-// --- Classification Helper (Kept for compatibility imports if any, dummy implementation) ---
-// Note: Previous internal helpers were not exported, so safe to remove if unused internally.
+    candidates.forEach(c => {
+        let threshold = radius * scaleRatio * 1.2;
+        if (c.priority === 'high') threshold = radius * scaleRatio * 0.9;
+        if (c.priority === 'critical') threshold = radius * scaleRatio * 0.4;
+
+        const internalConflict = finalAnchors.some(d => dist(d, c.p) < threshold);
+        if (internalConflict) return;
+
+        const externalConflict = existingAnchors.some(e => dist(e, c.p) < 10);
+        if (!externalConflict) {
+            // STRICT AREA CHECK (Final Guard)
+            let inArea = true;
+            if (options.placementArea && options.placementArea.length > 2 && options.placementAreaEnabled !== false) {
+                const pt = turf.point([c.p.x, c.p.y]);
+                const areaCoords = options.placementArea.map(p => [p.x, p.y]);
+                if (areaCoords[0][0] !== areaCoords[areaCoords.length - 1][0]) areaCoords.push(areaCoords[0]);
+                const areaPoly = turf.polygon([areaCoords]);
+                if (!turf.booleanPointInPolygon(pt, areaPoly)) {
+                    inArea = false;
+                }
+            }
+
+            if (inArea) {
+                finalAnchors.push({
+                    x: c.p.x, y: c.p.y,
+                    radius, range: radius,
+                    showRadius: options.showRadius ?? true,
+                    shape: options.shape || 'circle',
+                    power: -40,
+                    txPower: 0
+                });
+            }
+        }
+    });
+
+    return finalAnchors.map(a => ({
+        ...a,
+        isAuto: true
+    }));
+};

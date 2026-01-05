@@ -78,21 +78,21 @@ export const SelectionMenu: React.FC = () => {
                                 <button
                                     onClick={() => {
                                         const t = useProjectStore.getState().standardWallThickness;
-                                        selectedWalls.forEach(w => updateWall(w.id, { thickness: t, material: 'drywall' }));
+                                        selectedWalls.forEach(w => updateWall(w.id, { thickness: t, material: 'drywall', attenuation: undefined }));
                                     }}
                                     className="flex-1 bg-[#444] hover:bg-[#555] text-[10px] py-1 rounded text-center transition-colors"
                                 >Std</button>
                                 <button
                                     onClick={() => {
                                         const t = useProjectStore.getState().thickWallThickness;
-                                        selectedWalls.forEach(w => updateWall(w.id, { thickness: t, material: 'drywall' }));
+                                        selectedWalls.forEach(w => updateWall(w.id, { thickness: t, material: 'drywall', attenuation: undefined }));
                                     }}
                                     className="flex-1 bg-[#444] hover:bg-[#555] text-[10px] py-1 rounded text-center transition-colors"
                                 >Thick</button>
                                 <button
                                     onClick={() => {
                                         const t = useProjectStore.getState().wideWallThickness;
-                                        selectedWalls.forEach(w => updateWall(w.id, { thickness: t, material: 'concrete' }));
+                                        selectedWalls.forEach(w => updateWall(w.id, { thickness: t, material: 'concrete', attenuation: undefined }));
                                     }}
                                     className="flex-1 bg-[#444] hover:bg-[#555] text-[10px] py-1 rounded text-center transition-colors"
                                 >Wide</button>
@@ -105,7 +105,7 @@ export const SelectionMenu: React.FC = () => {
                                 value={selectedWalls.length > 1 ? '' : (selectedWalls[0].material || 'concrete')}
                                 onChange={(e) => {
                                     const mat = e.target.value as any;
-                                    selectedWalls.forEach(w => updateWall(w.id, { material: mat }));
+                                    selectedWalls.forEach(w => updateWall(w.id, { material: mat, attenuation: undefined }));
                                 }}
                                 className="bg-[#222] border border-[#444] rounded px-2 py-1 text-xs w-full focus:outline-none focus:border-blue-500 transition-colors text-white"
                             >

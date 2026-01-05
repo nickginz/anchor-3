@@ -17,7 +17,7 @@ export interface Wall {
     points: [number, number, number, number]; // x1, y1, x2, y2
     thickness: number; // meters
     material: WallMaterial;
-    attenuation: number; // dB
+    attenuation?: number; // dB (Optional override)
 }
 
 export interface Anchor {
@@ -31,6 +31,7 @@ export interface Anchor {
     showRadius?: boolean; // Show coverage radius
     groupId?: string; // For grouping anchors
     txPower?: number; // Transmit Power in dBm (Default 0)
+    isAuto?: boolean; // Flag for auto-placed anchors
 }
 
 export interface Dimension {
@@ -41,7 +42,7 @@ export interface Dimension {
     textOffset?: { x: number; y: number }; // Offset from default position
 }
 
-export type ToolType = 'select' | 'wall' | 'wall_rect' | 'wall_rect_edge' | 'anchor' | 'anchor_auto' | 'scale' | 'dimension' | 'trim' | 'extend' | 'mirror';
+export type ToolType = 'select' | 'wall' | 'wall_rect' | 'wall_rect_edge' | 'anchor' | 'anchor_auto' | 'scale' | 'dimension' | 'trim' | 'extend' | 'mirror' | 'placement_area';
 
 export interface ProjectLayers {
     walls: boolean;
@@ -51,6 +52,7 @@ export interface ProjectLayers {
     anchors: boolean;
     rooms: boolean;
     roomLabels: boolean;
+    centroids: boolean;
 }
 
 export const MATERIAL_PROPERTIES: Record<WallMaterial, WallPhysics> = {

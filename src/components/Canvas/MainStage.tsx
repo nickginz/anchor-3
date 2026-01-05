@@ -6,6 +6,7 @@ import { FloorplanImageLayer } from './Layers/FloorplanImageLayer';
 import { DXFLayer } from './Layers/DXFLayer';
 import { HeatmapLayer } from './Layers/HeatmapLayer';
 import { RoomsLayer } from './Layers/RoomsLayer';
+import { PlacementAreaLayer } from './Layers/PlacementAreaLayer';
 import { ValidationLayer } from './Layers/ValidationLayer';
 import InteractionLayer from './InteractionLayer';
 import { DimensionsLayer } from './Layers/DimensionsLayer';
@@ -64,8 +65,14 @@ export const MainStage: React.FC = () => {
 
             roomsList.forEach(roomPoly => {
                 if (showOffsets) {
-                    const offsets = generateOffsets(roomPoly, offsetStep * scaleRatio);
-                    offsets.forEach(poly => lines.push(poly));
+                    const stepPx = offsetStep * scaleRatio;
+                    // Limit iterations to prevent freeze, e.g. 50 layers max
+                    for (let i = 1; i <= 50; i++) {
+                        const currentDist = stepPx * i;
+                        const offsets = generateOffsets(roomPoly, currentDist);
+                        if (!offsets || offsets.length === 0) break;
+                        offsets.forEach(poly => lines.push(poly));
+                    }
                 }
 
                 if (showSkeleton) {
@@ -218,6 +225,7 @@ export const MainStage: React.FC = () => {
                         <DXFLayer />
                         <HeatmapLayer stage={stage} />
                         <RoomsLayer />
+                        <PlacementAreaLayer />
                     </Layer>
 
                     {/* Layer 2: Geometry & Validation */}

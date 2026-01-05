@@ -13,9 +13,9 @@ interface InteractionLayerProps {
 
 const getWallParams = (preset: string, standard: number, thick: number, wide: number) => {
     switch (preset) {
-        case 'thick': return { thickness: thick, attenuation: 5, material: 'drywall' as const };
-        case 'wide': return { thickness: wide, attenuation: 12.5, material: 'concrete' as const };
-        default: return { thickness: standard, attenuation: 4, material: 'drywall' as const };
+        case 'thick': return { thickness: thick, material: 'drywall' as const };
+        case 'wide': return { thickness: wide, material: 'concrete' as const };
+        default: return { thickness: standard, material: 'drywall' as const };
     }
 };
 
@@ -116,7 +116,9 @@ const THEME_COLORS = {
 
 export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpenMenu, onOpenScaleModal }) => {
     console.log("InteractionLayer mounted - Force Refresh");
-    const { activeTool, addWall, addWalls, addAnchor, setTool, walls, anchors, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, selectedIds, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme } = useProjectStore();
+    const { activeTool, addWall, addWalls, addAnchor, setTool, walls, anchors, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme } = useProjectStore();
+
+    if (!stage) return null;
 
     const colors = THEME_COLORS[theme || 'dark'] || THEME_COLORS.dark;
 
@@ -176,14 +178,21 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
             // Delete / Backspace
             if ((e.key === 'Delete' || e.key === 'Backspace')) {
-                // Fix: Access fresh state directly
                 const currentSelectedIds = useProjectStore.getState().selectedIds;
+                const PLACEMENT_AREA_ID = 'placement_area_poly'; // Define constant locally or import
+
                 if (currentSelectedIds.length > 0) {
                     currentSelectedIds.forEach(id => {
-                        removeWall(id);
-                        removeAnchor(id);
-                        removeDimension(id);
+                        if (id === PLACEMENT_AREA_ID) {
+                            useProjectStore.getState().setPlacementArea(null);
+                        } else {
+                            removeWall(id);
+                            removeAnchor(id);
+                            removeDimension(id);
+                        }
                     });
+
+                    // Cleanup selection
                     setSelection([]);
                 }
             }
@@ -423,46 +432,46 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             // Select it if not selected (unless Shift is down, handled in Click)
             const isSelected = useProjectStore.getState().selectedIds.includes(anchorId);
 
-            // --- 1. Disable Selection if other tools active (Request 1) ---
-            if (activeTool !== 'select' && activeTool !== 'anchor') {
-                // If tool is 'dimension' or 'wall' or 'anchor_auto', do nothing on anchor click
+            // --- logic for select or anchor tool only ---
+            if (activeTool === 'select' || activeTool === 'anchor') {
+                if (!e.evt.shiftKey) {
+                    // Logic: If NOT selected, Select ONLY this one (and its group).
+                    // If ALREADY selected, Keep the group selection (so we can drag the whole group).
+                    if (!isSelected) {
+                        const anchor = useProjectStore.getState().anchors.find(a => a.id === anchorId);
+                        if (anchor && anchor.groupId) {
+                            const groupIds = useProjectStore.getState().anchors
+                                .filter(a => a.groupId === anchor.groupId)
+                                .map(a => a.id);
+                            setSelection(groupIds);
+                        } else {
+                            setSelection([anchorId]);
+                        }
+                    }
+                } else {
+                    // Logic: Toggle selection or Add to selection
+                    if (!isSelected) {
+                        const anchor = useProjectStore.getState().anchors.find(a => a.id === anchorId);
+                        const current = useProjectStore.getState().selectedIds;
+                        if (anchor && anchor.groupId) {
+                            const groupIds = useProjectStore.getState().anchors
+                                .filter(a => a.groupId === anchor.groupId)
+                                .map(a => a.id);
+                            setSelection([...new Set([...current, ...groupIds])]);
+                        } else {
+                            setSelection([...current, anchorId]);
+                        }
+                    }
+                }
+
+                dragAnchorId.current = anchorId;
+                lastDragPos.current = pos;
+                useProjectStore.temporal.getState().pause(); // Pause Undo History
                 return;
             }
-
-            if (!e.evt.shiftKey) {
-                // Logic: If NOT selected, Select ONLY this one (and its group).
-                // If ALREADY selected, Keep the group selection (so we can drag the whole group).
-                if (!isSelected) {
-                    const anchor = useProjectStore.getState().anchors.find(a => a.id === anchorId);
-                    if (anchor && anchor.groupId) {
-                        const groupIds = useProjectStore.getState().anchors
-                            .filter(a => a.groupId === anchor.groupId)
-                            .map(a => a.id);
-                        setSelection(groupIds);
-                    } else {
-                        setSelection([anchorId]);
-                    }
-                }
-            } else {
-                // Logic: Toggle selection or Add to selection
-                if (!isSelected) {
-                    const anchor = useProjectStore.getState().anchors.find(a => a.id === anchorId);
-                    const current = useProjectStore.getState().selectedIds;
-                    if (anchor && anchor.groupId) {
-                        const groupIds = useProjectStore.getState().anchors
-                            .filter(a => a.groupId === anchor.groupId)
-                            .map(a => a.id);
-                        setSelection([...new Set([...current, ...groupIds])]);
-                    } else {
-                        setSelection([...current, anchorId]);
-                    }
-                }
-            }
-
-            dragAnchorId.current = anchorId;
-            lastDragPos.current = pos;
-            useProjectStore.temporal.getState().pause(); // Pause Undo History
-            return;
+            // If drawing tools active (wall, dimension, etc.), do NOT return. 
+            // This allows the event to continue to the tool handlers below,
+            // which will then call getSnapPoint and snap to this anchor.
         }
 
         // Text Drag Check
@@ -537,7 +546,8 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     action: () => {
                         targetIds.forEach(id => {
                             const w = state.walls.find(x => x.id === id);
-                            if (w) state.updateWall(id, { material: type.toLowerCase() as any });
+                            // Clear specific attenuation so material default takes over
+                            if (w) state.updateWall(id, { material: type.toLowerCase() as any, attenuation: undefined });
                         });
                     }
                 }));
@@ -583,7 +593,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         } else if (activeTool === 'dimension') {
             // Simply set the first point. Logic for click vs drag will be in MouseUp.
             if (!points.length) {
-                setPoints([pos]);
+                const state = useProjectStore.getState();
+                const snap = (state.layers.walls || state.layers.anchors) ? getSnapPoint(pos, walls, anchors, 20 / stage.scaleX()) : null;
+                setPoints([snap ? snap.point : pos]);
             }
             // Wall Tool
         } else if (activeTool === 'wall') {
@@ -591,14 +603,14 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 let finalPos = pos;
                 // Check if snapping allowed (hidden layer = no snap)
                 const state = useProjectStore.getState();
-                const snap = state.layers.walls ? getSnapPoint(pos, walls, 20 / (stage.scaleX())) : null;
+                const snap = state.layers.walls ? getSnapPoint(pos, walls, anchors, 20 / (stage.scaleX())) : null;
 
                 if (snap) {
                     finalPos = snap.point;
 
                     // Auto-Split Logic
-                    if (snap.type === 'edge' && snap.wallId) {
-                        state.splitWall(snap.wallId, snap.point);
+                    if (snap.type === 'edge' && snap.id) {
+                        state.splitWall(snap.id, snap.point);
                     }
                 }
 
@@ -630,12 +642,12 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             if (e.evt.button === 0) {
                 let finalPos = pos;
                 const state = useProjectStore.getState();
-                const snap = state.layers.walls ? getSnapPoint(pos, walls, 20 / (stage.scaleX())) : null;
+                const snap = state.layers.walls ? getSnapPoint(pos, walls, anchors, 20 / (stage.scaleX())) : null;
                 if (snap) {
                     finalPos = snap.point;
                     // Auto-Split Logic for Start Point
-                    if (!rectStart && snap.type === 'edge' && snap.wallId) {
-                        state.splitWall(snap.wallId, snap.point);
+                    if (!rectStart && snap.type === 'edge' && snap.id) {
+                        state.splitWall(snap.id, snap.point);
                     }
                 }
 
@@ -651,19 +663,19 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
                     if (Math.abs(x1 - x2) > 0.1 || Math.abs(y1 - y2) > 0.1) { // Changed AND to OR for validity check
                         // Auto-Split for End Point
-                        if (snap && snap.type === 'edge' && snap.wallId) {
-                            state.splitWall(snap.wallId, snap.point);
+                        if (snap && snap.type === 'edge' && snap.id) {
+                            state.splitWall(snap.id, snap.point);
                         }
 
                         // Check Implicit Points (p3, p4) for Splitting
                         const p3 = { x: x2, y: y1 };
                         const p4 = { x: x1, y: y2 };
 
-                        const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, 20 / (stage.scaleX())) : null;
-                        if (snapP3 && snapP3.type === 'edge' && snapP3.wallId) state.splitWall(snapP3.wallId, snapP3.point);
+                        const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, anchors, 20 / (stage.scaleX())) : null;
+                        if (snapP3 && snapP3.type === 'edge' && snapP3.id) state.splitWall(snapP3.id, snapP3.point);
 
-                        const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, 20 / (stage.scaleX())) : null;
-                        if (snapP4 && snapP4.type === 'edge' && snapP4.wallId) state.splitWall(snapP4.wallId, snapP4.point);
+                        const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, anchors, 20 / (stage.scaleX())) : null;
+                        if (snapP4 && snapP4.type === 'edge' && snapP4.id) state.splitWall(snapP4.id, snapP4.point);
 
                         const params = getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness);
 
@@ -684,12 +696,12 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             if (e.evt.button === 0) {
                 let finalPos = pos;
                 const state = useProjectStore.getState();
-                const snap = state.layers.walls ? getSnapPoint(pos, walls, 20 / (stage.scaleX())) : null;
+                const snap = state.layers.walls ? getSnapPoint(pos, walls, anchors, 20 / (stage.scaleX())) : null;
                 if (snap) {
                     finalPos = snap.point;
                     // Auto-Split Logic for Start Point
-                    if (!rectEdgeStart && snap.type === 'edge' && snap.wallId) {
-                        state.splitWall(snap.wallId, snap.point);
+                    if (!rectEdgeStart && snap.type === 'edge' && snap.id) {
+                        state.splitWall(snap.id, snap.point);
                     }
                 }
 
@@ -701,8 +713,8 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 } else if (!rectEdgeBaseEnd) {
                     // Phase 2: Base End Point
                     if (dist(rectEdgeStart, finalPos) > 0.001) {
-                        if (snap && snap.type === 'edge' && snap.wallId) {
-                            state.splitWall(snap.wallId, snap.point);
+                        if (snap && snap.type === 'edge' && snap.id) {
+                            state.splitWall(snap.id, snap.point);
                         }
                         setRectEdgeBaseEnd(finalPos);
                     }
@@ -740,11 +752,11 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     const p3 = { x: p3x, y: p3y };
                     const p4 = { x: p4x, y: p4y };
 
-                    const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, 20 / (stage.scaleX())) : null;
-                    if (snapP3 && snapP3.type === 'edge' && snapP3.wallId) state.splitWall(snapP3.wallId, snapP3.point);
+                    const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, anchors, 20 / (stage.scaleX())) : null;
+                    if (snapP3 && snapP3.type === 'edge' && snapP3.id) state.splitWall(snapP3.id, snapP3.point);
 
-                    const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, 20 / (stage.scaleX())) : null;
-                    if (snapP4 && snapP4.type === 'edge' && snapP4.wallId) state.splitWall(snapP4.wallId, snapP4.point);
+                    const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, anchors, 20 / (stage.scaleX())) : null;
+                    if (snapP4 && snapP4.type === 'edge' && snapP4.id) state.splitWall(snapP4.id, snapP4.point);
 
                     const params = getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness);
 
@@ -776,6 +788,35 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         } else if (activeTool === 'select') {
             if (e.evt.button === 0) {
                 setSelectionStart(pos);
+            }
+
+            // Placement Area Tool (Orange Zone)
+        } else if (activeTool === 'placement_area') {
+            if (e.evt.button === 0) {
+                const state = useProjectStore.getState();
+                let currentPoints = state.placementArea?.points || [];
+
+                // If no points, start new
+                if (currentPoints.length === 0) {
+                    state.setPlacementArea({ points: [pos] });
+                    return;
+                }
+
+                // Check for Closing (Click near start)
+                const start = currentPoints[0];
+                const d = dist(pos, start);
+                // Tolerance 10px screen space
+                const tolerance = 10 / stage.scaleX();
+
+                if (currentPoints.length >= 3 && d < tolerance) {
+                    // Close the loop (points are already correct for polygon, just stop adding)
+                    // Optionally switch to Select tool to allow editing
+                    setTool('select');
+                    // Add alert or toast? "Area Defined"
+                } else {
+                    // Add point
+                    state.setPlacementArea({ points: [...currentPoints, pos] });
+                }
             }
         }
     };
@@ -889,13 +930,11 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         }
 
         // Tool Mouse Move checks...
-        if (activeTool === 'wall' || activeTool === 'wall_rect' || activeTool === 'wall_rect_edge') {
+        if (activeTool === 'wall' || activeTool === 'wall_rect' || activeTool === 'wall_rect_edge' || activeTool === 'dimension') {
             const state = useProjectStore.getState();
-            const snap = state.layers.walls ? getSnapPoint(pos, walls, 20 / (stage.scaleX())) : null;
+            const snap = (state.layers.walls || state.layers.anchors) ? getSnapPoint(pos, walls, anchors, 20 / (stage.scaleX())) : null;
             setCurrentMousePos(snap ? snap.point : pos);
         } else if (activeTool === 'scale' && points.length > 0) {
-            setCurrentMousePos(pos);
-        } else if (activeTool === 'dimension' && points.length > 0) {
             setCurrentMousePos(pos);
         } else if (activeTool === 'select') {
             if (selectionStart && isMouseDown.current) {
@@ -1023,7 +1062,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 // If we dragged and released, we should FINISH the dim (Drag-to-Measure behavior)
                 // "Click and pressing without release" -> Drag behavior.
                 // On Release:
-                const end = pos;
+                const state = useProjectStore.getState();
+                const snap = (state.layers.walls || state.layers.anchors) ? getSnapPoint(pos, walls, anchors, 20 / stage.scaleX()) : null;
+                const end = snap ? snap.point : pos;
                 const distPx = Math.hypot(end.x - start.x, end.y - start.y);
                 const scaleRatio = useProjectStore.getState().scaleRatio;
                 const validDist = distPx / scaleRatio;
@@ -1048,7 +1089,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             let snap: import('../../utils/geometry').SnapResult | null = null;
             const state = useProjectStore.getState();
             if ((activeTool === 'wall_rect' || activeTool === 'wall_rect_edge') && state.layers.walls) {
-                snap = getSnapPoint(pos, walls, 20 / (stage.scaleX()));
+                snap = getSnapPoint(pos, walls, anchors, 20 / (stage.scaleX()));
                 if (snap) finalPos = snap.point;
             }
 
@@ -1063,19 +1104,19 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
                         if (Math.abs(x1 - x2) > 0.1 || Math.abs(y1 - y2) > 0.1) {
                             // Auto-Split for End Point
-                            if (snap && snap.type === 'edge' && snap.wallId) {
-                                state.splitWall(snap.wallId, snap.point);
+                            if (snap && snap.type === 'edge' && snap.id) {
+                                state.splitWall(snap.id, snap.point);
                             }
 
                             // Check Implicit Points (p3, p4) for Splitting
                             const p3 = { x: x2, y: y1 };
                             const p4 = { x: x1, y: y2 };
 
-                            const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, 20 / (stage.scaleX())) : null;
-                            if (snapP3 && snapP3.type === 'edge' && snapP3.wallId) state.splitWall(snapP3.wallId, snapP3.point);
+                            const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, anchors, 20 / (stage.scaleX())) : null;
+                            if (snapP3 && snapP3.type === 'edge' && snapP3.id) state.splitWall(snapP3.id, snapP3.point);
 
-                            const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, 20 / (stage.scaleX())) : null;
-                            if (snapP4 && snapP4.type === 'edge' && snapP4.wallId) state.splitWall(snapP4.wallId, snapP4.point);
+                            const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, anchors, 20 / (stage.scaleX())) : null;
+                            if (snapP4 && snapP4.type === 'edge' && snapP4.id) state.splitWall(snapP4.id, snapP4.point);
 
                             const params = getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness);
                             addWalls([
@@ -1114,14 +1155,14 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                         const p3y = p2.y + ny * h;
 
                         // Check Splitting for all 4 corners
-                        if (snap && snap.type === 'edge' && snap.wallId) state.splitWall(snap.wallId, snap.point);
+                        if (snap && snap.type === 'edge' && snap.id) state.splitWall(snap.id, snap.point);
 
                         const p3 = { x: p3x, y: p3y };
                         const p4 = { x: p4x, y: p4y };
-                        const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, 20 / (stage.scaleX())) : null;
-                        if (snapP3 && snapP3.type === 'edge' && snapP3.wallId) state.splitWall(snapP3.wallId, snapP3.point);
-                        const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, 20 / (stage.scaleX())) : null;
-                        if (snapP4 && snapP4.type === 'edge' && snapP4.wallId) state.splitWall(snapP4.wallId, snapP4.point);
+                        const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, anchors, 20 / (stage.scaleX())) : null;
+                        if (snapP3 && snapP3.type === 'edge' && snapP3.id) state.splitWall(snapP3.id, snapP3.point);
+                        const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, anchors, 20 / (stage.scaleX())) : null;
+                        if (snapP4 && snapP4.type === 'edge' && snapP4.id) state.splitWall(snapP4.id, snapP4.point);
 
                         // Note: P1 and P2 splits were handled in previous steps/clicks, but could re-check if dragged? 
                         // P1 was set at start. P2 set at Phase 2. Height drag only changes P3/P4.
@@ -1480,10 +1521,11 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     useEffect(() => {
         if (lastLoaded > 0 && stage) {
             // Determine bounding box and fit
-            // Small delay to ensure render updates? Usually not needed if state is fresh.
-            // But Konva might need a tick. 
-            // Let's try immediate.
-            fitScreen();
+            // Use setTimeout to ensure all layers (Walls, Anchors) have finished rendering
+            const timer = setTimeout(() => {
+                fitScreen();
+            }, 50);
+            return () => clearTimeout(timer);
         }
     }, [lastLoaded, stage]);
 
@@ -1689,8 +1731,8 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 </React.Fragment>
             )}
 
-            {/* Snap Cursor Indicator for Wall Tools (Hover) */}
-            {currentMousePos && (activeTool === 'wall' || activeTool === 'wall_rect' || activeTool === 'wall_rect_edge') && (
+            {/* Snap Cursor Indicator for Wall & Dimension Tools (Hover) */}
+            {currentMousePos && (activeTool === 'wall' || activeTool === 'wall_rect' || activeTool === 'wall_rect_edge' || activeTool === 'dimension') && (
                 <Circle
                     x={currentMousePos.x}
                     y={currentMousePos.y}
@@ -1824,7 +1866,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                             radius={handleRadius}
                             fill="#00aaff"
                             stroke="white"
-                            strokeWidth={2 / (stage?.scaleX() || 1)}
+                            strokeWidth={2 / (stage.scaleX())}
                             draggable
                             onDragStart={(e) => {
                                 e.cancelBubble = true;
@@ -1836,7 +1878,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                                 // Snap
                                 if (state.layers.walls) {
                                     const otherWalls = state.walls.filter(w => w.id !== id);
-                                    const snap = getSnapPoint(newPos, otherWalls, 20 / (stage?.scaleX() || 1));
+                                    const snap = getSnapPoint(newPos, otherWalls, anchors, 20 / (stage.scaleX()));
                                     if (snap) {
                                         newPos = snap.point;
                                         e.target.position(newPos);
@@ -1861,7 +1903,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                             radius={handleRadius}
                             fill={colors.preview}
                             stroke={colors.anchorStroke}
-                            strokeWidth={2 / (stage?.scaleX() || 1)}
+                            strokeWidth={2 / (stage.scaleX())}
                             draggable
                             onDragStart={(e) => e.cancelBubble = true}
                             onDragMove={(e) => {
@@ -1871,7 +1913,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                                 // Snap
                                 if (state.layers.walls) {
                                     const otherWalls = state.walls.filter(w => w.id !== id);
-                                    const snap = getSnapPoint(newPos, otherWalls, 20 / (stage?.scaleX() || 1));
+                                    const snap = getSnapPoint(newPos, otherWalls, anchors, 20 / (stage.scaleX()));
                                     if (snap) {
                                         newPos = snap.point;
                                         e.target.position(newPos);
@@ -1882,6 +1924,105 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                                 if (currentWall) {
                                     // This handle is END [2,3]
                                     state.updateWallPoint(currentWall.points[2], currentWall.points[3], newPos.x, newPos.y);
+                                }
+                            }}
+                        />
+                    );
+                });
+
+                return handles;
+            })()}
+
+            {/* Dimension Endpoint Handles */}
+            {(() => {
+                const state = useProjectStore.getState();
+                if (!state.layers.dimensions) return null;
+
+                const selectedDimIds = state.selectedIds.filter(id => state.dimensions.some(d => d.id === id));
+                const handles: JSX.Element[] = [];
+                const handleRadius = 6 / (stage?.scaleX() || 1);
+
+                selectedDimIds.forEach(id => {
+                    const dim = state.dimensions.find(d => d.id === id);
+                    if (!dim) return;
+
+                    // Start Point
+                    handles.push(
+                        <Circle
+                            key={`${id}-start`}
+                            x={dim.points[0]}
+                            y={dim.points[1]}
+                            radius={handleRadius}
+                            fill="#00aaff"
+                            stroke="white"
+                            strokeWidth={2 / (stage.scaleX())}
+                            draggable
+                            onDragStart={(e) => {
+                                e.cancelBubble = true;
+                                useProjectStore.temporal.getState().pause();
+                            }}
+                            onDragEnd={(e) => {
+                                e.cancelBubble = true;
+                                useProjectStore.temporal.getState().resume();
+                            }}
+                            onDragMove={(e) => {
+                                e.cancelBubble = true;
+                                let newPos = { x: e.target.x(), y: e.target.y() };
+                                const state = useProjectStore.getState();
+                                // Snap
+                                const snap = (state.layers.walls || state.layers.anchors) ? getSnapPoint(newPos, walls, anchors, 20 / (stage.scaleX())) : null;
+                                if (snap) {
+                                    newPos = snap.point;
+                                    e.target.position(newPos);
+                                }
+
+                                const currentDim = useProjectStore.getState().dimensions.find(d => d.id === id);
+                                if (currentDim) {
+                                    const newPoints: [number, number, number, number] = [newPos.x, newPos.y, currentDim.points[2], currentDim.points[3]];
+                                    const distPx = Math.hypot(newPoints[2] - newPoints[0], newPoints[3] - newPoints[1]);
+                                    const distMeters = distPx / state.scaleRatio;
+                                    state.updateDimension(id, { points: newPoints, label: `${distMeters.toFixed(2)}m` });
+                                }
+                            }}
+                        />
+                    );
+
+                    // End Point
+                    handles.push(
+                        <Circle
+                            key={`${id}-end`}
+                            x={dim.points[2]}
+                            y={dim.points[3]}
+                            radius={handleRadius}
+                            fill="#00aaff"
+                            stroke="white"
+                            strokeWidth={2 / (stage.scaleX())}
+                            draggable
+                            onDragStart={(e) => {
+                                e.cancelBubble = true;
+                                useProjectStore.temporal.getState().pause();
+                            }}
+                            onDragEnd={(e) => {
+                                e.cancelBubble = true;
+                                useProjectStore.temporal.getState().resume();
+                            }}
+                            onDragMove={(e) => {
+                                e.cancelBubble = true;
+                                let newPos = { x: e.target.x(), y: e.target.y() };
+                                const state = useProjectStore.getState();
+                                // Snap
+                                const snap = (state.layers.walls || state.layers.anchors) ? getSnapPoint(newPos, walls, anchors, 20 / (stage.scaleX())) : null;
+                                if (snap) {
+                                    newPos = snap.point;
+                                    e.target.position(newPos);
+                                }
+
+                                const currentDim = useProjectStore.getState().dimensions.find(d => d.id === id);
+                                if (currentDim) {
+                                    const newPoints: [number, number, number, number] = [currentDim.points[0], currentDim.points[1], newPos.x, newPos.y];
+                                    const distPx = Math.hypot(newPoints[2] - newPoints[0], newPoints[3] - newPoints[1]);
+                                    const distMeters = distPx / state.scaleRatio;
+                                    state.updateDimension(id, { points: newPoints, label: `${distMeters.toFixed(2)}m` });
                                 }
                             }}
                         />
