@@ -259,32 +259,31 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
         // CLASSIFICATION (Shape Analysis + Topology)
         let type: ProcessedRoom['type'] = 'large';
 
-        if (areaM2 <= 110) {
-            // Safety Override: Very small rooms
-            if (areaM2 < 40) {
-                type = 'compact';
-            } else {
-                // Shape Analysis
-                // const fillFactor = areaPx / bboxArea; // Already calculated
-                const aspectRatio = Math.max(bbox.width, bbox.height) / Math.min(bbox.width, bbox.height);
+        const maxSpan = Math.max(bbox.width, bbox.height) / scaleRatio;
 
-                if (fillFactor > 0.85) {
-                    // Convex Room (Square/Rect)
-                    if (aspectRatio < 3.0) {
-                        // Square or Short Rect -> Center
-                        type = 'compact';
-                    } else {
-                        // Long Corridor -> Joints
-                        type = 'extended';
-                    }
-                } else {
-                    // Complex Shape (L, T, U) -> Rely on Medial Axis Topology Check
-                    type = maxEdgeLengthM < 13 ? 'compact' : 'extended';
-                }
+        if (areaM2 > 110) {
+            type = 'large';
+        } else {
+            // Small/Medium Room Logic
+            if (maxSpan >= 13) {
+                // Extended (Long)
+                type = 'extended';
+            } else {
+                // Compact (approx square/rect)
+                type = 'compact';
             }
         }
 
+        console.log(`[AutoPlacement] Room Area: ${areaM2.toFixed(1)}m2, Type: ${type}`);
 
+        if (type === 'large') {
+            // Processing continues to specialized function
+        }
+
+        // Shape Analysis (Optional refinement, but defaulting to above logic is safer for now)
+        // const fillFactor = areaPx / bboxArea; 
+
+        // Push to Processed List
         processedRooms.push({
             poly: roomPoly,
             areaM2,
@@ -294,7 +293,7 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
             medialFeats,
             stitchedAxis,
             bbox,
-            fillFactor
+            fillFactor: 0 // Placeholder as we skipped detailed calc
         });
     });
 
@@ -357,8 +356,8 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
             return;
         }
 
-        // 2. EXTENDED & LARGE ROOMS: Topological (Skeleton) Logic
-        if (type === 'extended' || type === 'large') {
+        // 2. EXTENDED ROOMS: Topological (Skeleton) Logic
+        if (type === 'extended') {
             const roomCandidates: Point[] = [];
 
             const addLocal = (p: Point) => {
@@ -641,7 +640,83 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
             if (type === 'extended') return; // Done for extended, continue for Large
         }
 
+        // --- NEW LARGE ROOM LOGIC (V2: Offsets Only) ---
+        function generateLargeRoomOffsetsV2(
+            room: ProcessedRoom,
+            scaleRatio: number,
+            settings: any,
+            candidates: { p: Point, priority: Priority }[]
+        ) {
+            const { radius } = settings;
+            const stepPx = (settings.offsetStep || 5) * scaleRatio;
+            const threshold13mPx = 13 * scaleRatio;
+
+            // Local Helper for Symmetrical Edge Filling
+            const fillEdge = (p1: Point, p2: Point) => {
+                const d = dist(p1, p2);
+                if (d <= threshold13mPx) return;
+
+                // Constraint: Overlap <= 1.5m
+                // Spacing S must satisfy: 2*R - S <= 1.5  =>  S >= 2*R - 1.5
+                const minSpacingMeters = Math.max(0.1, (2 * radius) - 1.5);
+                const minSpacingPx = minSpacingMeters * scaleRatio;
+
+                // Number of internal points N
+                // Segment length d is divided into N+1 gaps.
+                // Gap size = d / (N+1)
+                // We need Gap size >= minSpacingPx
+                // N+1 <= d / minSpacingPx
+                // N <= (d / minSpacingPx) - 1
+                let maxN = Math.floor((d / minSpacingPx) - 1);
+
+                // Ensure at least 1 point if strict calculation yields < 0 but edge is long?
+                // Logic implies if 2*R overlaps > 1.5 even at max spacing, we might skip?
+                // But usually R=5, minSpacing=8.5. d=20. maxN = floor(20/8.5 - 1) = floor(2.35 - 1) = 1. 20/2=10m.
+
+                maxN = Math.max(0, maxN);
+
+                if (maxN > 0) {
+                    const dx = (p2.x - p1.x) / (maxN + 1);
+                    const dy = (p2.y - p1.y) / (maxN + 1);
+
+                    for (let k = 1; k <= maxN; k++) {
+                        candidates.push({
+                            p: { x: p1.x + dx * k, y: p1.y + dy * k },
+                            priority: 'critical'
+                        });
+                    }
+                }
+            };
+
+            // Generate Offsets at Odd Intervals (1, 3, 5...)
+            const MAX_LAYERS = 25; // Enough for very large rooms
+            for (let i = 0; i < MAX_LAYERS; i++) {
+                const multiplier = 1 + (2 * i); // 1, 3, 5, 7...
+                const currentOffsetPx = stepPx * multiplier;
+
+                const offsetPolys = generateOffsets(room.poly, currentOffsetPx);
+                if (!offsetPolys || offsetPolys.length === 0) break;
+
+                offsetPolys.forEach(poly => {
+                    // 1. Corners
+                    poly.forEach(vertex => {
+                        candidates.push({ p: vertex, priority: 'critical' });
+                    });
+
+                    // 2. Edges
+                    for (let j = 0; j < poly.length; j++) {
+                        const nextVertex = poly[(j + 1) % poly.length];
+                        fillEdge(poly[j], nextVertex);
+                    }
+                });
+            }
+        }
+
         // --- LARGE ROOM LOGIC (> 110m2) ---
+        if (type === 'large') {
+            generateLargeRoomOffsetsV2(room, scaleRatio, options, candidates);
+            return;
+        }
 
         const allOffsetPolys: Point[][] = [];
         let layerIndex = 0;
@@ -793,6 +868,8 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
 
         // Skip Safety Check for Compact rooms - we explicitly want ONLY the centroid
         if (room.type === 'compact') return;
+        // Skip Safety Check for Large rooms - we explicitly want ONLY the Offsets
+        if (room.type === 'large') return;
 
         const { poly, bbox } = room;
         const weakPoints: Point[] = [];
