@@ -15,7 +15,8 @@ git reset --hard <COMMIT_HASH>
 
 | Date | Commit Hash | Description |
 | :--- | :--- | :--- |
-| **Current** | `0a8a874` | **Large Room Logic V2**<br>Completely rewrote Large Room auto-placement logic. Now strictly uses offset layers (1x, 3x, 5x steps) with anchors at corners and symmetrical edge filling (max overlap 1.5m). Removed legacy skeleton logic for large rooms. |
+| **Current** | `04cff5c` | **Placement Area Refinement**<br>Refined Placement Area behavior: Default OFF, Strict Containment for Auto-Placement & Optimization (only affects anchors inside area). Updated UI: split Eye toggle from Tool button, icon-only tool button. Fixed drag event bubbling. |
+| Previous | `0a8a874` | **Large Room Logic V2**<br>Completely rewrote Large Room auto-placement logic. Now strictly uses offset layers (1x, 3x, 5x steps) with anchors at corners and symmetrical edge filling (max overlap 1.5m). Removed legacy skeleton logic for large rooms. |
 | Previous | `baf901e` | **Skeleton Simplification & Chain Decomposition**<br>Implmented tri-state Skeleton toggle (Off/Full/Simplified). Rewrote simplification logic to use Chain Decomposition: preserves main arteries, prunes short spurs (<3m), and straightens lines. |
 | Previous | `c12f9ce` | **Fixed Signal Attenuation**<br>Removed hardcoded attenuation on wall creation/modification, allowing material defaults to function properly. Fixed Selection Panel to clear attenuation override on material change. |
 | Previous | `cc68747` | **Auto-Placement V2 (Medial Axis & Topology)**<br>Implemented Voronoi-based medial axis skeletonization, multi-layer Euclidean offsets (ClipperLib), and gap-filling logic. Resolved critical "Invalid Hook" and "Black Screen" (Geodesic/Turf) issues. Unified dimension tool (Click/Drag) and selection safety. |

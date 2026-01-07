@@ -118,8 +118,6 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     console.log("InteractionLayer mounted - Force Refresh");
     const { activeTool, addWall, addWalls, addAnchor, setTool, walls, anchors, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme } = useProjectStore();
 
-    if (!stage) return null;
-
     const colors = THEME_COLORS[theme || 'dark'] || THEME_COLORS.dark;
 
     const [points, setPoints] = useState<Point[]>([]);

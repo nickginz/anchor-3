@@ -3,15 +3,17 @@ import { Group, Path, Line } from 'react-konva';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { generateJoinedWalls, generateUnionBoundary } from '../../../utils/wall-joining';
 import type { Wall } from '../../../types';
+import { getWallPattern } from '../../../utils/wall-patterns';
 
 export const WallsLayer: React.FC = () => {
     const { walls, scaleRatio, layers, selectedIds, theme } = useProjectStore();
 
-    // Group walls by thickness to render them with different styles
+    // Group walls by thickness AND material to render them with different styles
     const groupedWalls = useMemo(() => {
         const groups: Record<string, Wall[]> = {};
         walls.forEach(w => {
-            const key = w.thickness.toFixed(2); // Group by thickness '0.10', '0.20'
+            // Key: thickness|material
+            const key = `${w.thickness.toFixed(2)}|${w.material || 'concrete'}`;
             if (!groups[key]) groups[key] = [];
             groups[key].push(w);
         });
@@ -23,8 +25,14 @@ export const WallsLayer: React.FC = () => {
         if (!layers.walls) return [];
 
         return Object.entries(groupedWalls)
-            .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0])) // Sort by thickness ascending
-            .map(([thickness, groupWalls]) => {
+            .sort((a, b) => {
+                // Sort by thickness ascending (thinner on bottom? or top? actually doesn't matter much for same Z)
+                const tA = parseFloat(a[0].split('|')[0]);
+                const tB = parseFloat(b[0].split('|')[0]);
+                return tA - tB;
+            })
+            .map(([key, groupWalls]) => {
+                const [thicknessStr, material] = key.split('|');
                 const polygons = generateJoinedWalls(groupWalls, scaleRatio, walls);
 
                 // Generate Path Data
@@ -35,26 +43,52 @@ export const WallsLayer: React.FC = () => {
                         ' Z';
                 }).join(' ');
 
-                // Color Logic
-                const numThickness = parseFloat(thickness);
-                // Theme-based colors
-                let fillColor = theme === 'light' ? '#9ca3af' : '#71717a'; // Gray-400 (Light) vs Gray-600 (Dark)
-                if (numThickness >= 0.2) {
-                    fillColor = theme === 'light' ? '#60a5fa' : '#5b7c99'; // Blue-400 (Light) vs Blueish (Dark)
+                // Pattern Handling
+                let fillColor = '#9ca3af'; // Default
+                let patternImage: HTMLCanvasElement | null = null;
+                let opacity = 1;
+
+                const pattern = getWallPattern(material, theme as 'light' | 'dark');
+                if (pattern) {
+                    patternImage = pattern;
+                }
+
+                if (theme === 'light') {
+                    // Light Theme Colors
+                    switch (material) {
+                        case 'brick': fillColor = '#ef4444'; break; // Fallback
+                        case 'wood': fillColor = '#d97706'; break; // Amber-600
+                        case 'glass': fillColor = '#93c5fd'; opacity = 0.5; break; // Blue-300 + Opacity
+                        case 'metal': fillColor = '#cbd5e1'; break; // Slate-300 (Shiny-ish)
+                        case 'drywall': fillColor = '#e5e7eb'; break; // Gray-200 (Very Light)
+                        case 'concrete': default: fillColor = '#9ca3af'; break; // Gray-400
+                    }
+                } else {
+                    // Dark Theme Colors
+                    switch (material) {
+                        case 'brick': fillColor = '#b91c1c'; break; // Fallback
+                        case 'wood': fillColor = '#92400e'; break; // Amber-800
+                        case 'glass': fillColor = '#3b82f6'; opacity = 0.3; break; // Blue-500 + Opacity
+                        case 'metal': fillColor = '#64748b'; break; // Slate-500
+                        case 'drywall': fillColor = '#374151'; break; // Gray-700
+                        case 'concrete': default: fillColor = '#52525b'; break; // Zinc-600
+                    }
                 }
 
                 return (
                     <Path
-                        key={`group-${thickness}`}
+                        key={`group-${key}`}
                         data={pathData}
-                        fill={fillColor}
-                        strokeEnabled={false} // No stroke on individual parts
+                        fill={patternImage ? undefined : fillColor}
+                        fillPatternImage={patternImage || undefined}
+                        strokeEnabled={false}
                         hitStrokeWidth={0}
                         fillRule="nonzero"
+                        opacity={opacity}
                     />
                 );
             });
-    }, [groupedWalls, scaleRatio, layers.walls, walls]);
+    }, [groupedWalls, scaleRatio, layers.walls, walls, theme]);
 
     // 2. Generate Unified Boundary Stroke
     const renderBoundary = useMemo(() => {

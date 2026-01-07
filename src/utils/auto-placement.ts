@@ -356,6 +356,34 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
 
 
 
+        // --- COMPLEX SMALL ROOM LOGIC ---
+        // Check for Complex Topology even in Small Rooms
+        // "for small room with 3 or more T.Y joints use same logic as for big rooms"
+        if (type === 'compact' || type === 'extended') {
+            const nodeDegrees = new Map<string, number>();
+            const getKey = (p: Point) => `${Math.round(p.x)},${Math.round(p.y)}`;
+
+            stitchedAxis.forEach(path => {
+                if (path.length < 2) return;
+                const ends = [path[0], path[path.length - 1]];
+                ends.forEach(p => {
+                    const k = getKey(p);
+                    nodeDegrees.set(k, (nodeDegrees.get(k) || 0) + 1);
+                });
+            });
+
+            let jointCount = 0;
+            nodeDegrees.forEach(deg => {
+                if (deg >= 3) jointCount++;
+            });
+
+            if (jointCount >= 3) {
+                console.log(`[AutoPlacement] Complex Small Room (${jointCount} joints). Using Skeleton Logic.`);
+                generateLargeRoomSkeletonPlacement(room, scaleRatio, options, candidates);
+                return;
+            }
+        }
+
         // --- SMALL ROOM LOGIC ---
         // 1. COMPACT ROOMS
         if (type === 'compact') {
@@ -649,8 +677,99 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
             if (type === 'extended') return; // Done for extended, continue for Large
         }
 
-        // --- NEW LARGE ROOM LOGIC (V2: Offsets Only) ---
-        function generateLargeRoomOffsetsV2(
+        // --- NEW LARGE ROOM LOGIC (V3: Explicit Skeleton) ---
+        function generateLargeRoomSkeletonPlacement(
+            room: ProcessedRoom,
+            scaleRatio: number,
+            settings: any,
+            candidates: { p: Point, priority: Priority }[]
+        ) {
+            const { radius } = settings;
+            const threshold15m = 15; // meters
+            // Max overlap 1.5m => Spacing S >= 2R - 1.5
+            // If spacing is less than this, overlap exceeds 1.5m.
+            const minSpacingMeters = Math.max(1, (radius * 2) - 1.5);
+
+            // 1. Identify Topology (Nodes & Degrees)
+            const nodeDegrees = new Map<string, number>();
+            const nodeMap = new Map<string, Point>();
+            const getKey = (p: Point) => `${Math.round(p.x)},${Math.round(p.y)}`;
+
+            // Build Node Map from Stitched Axis
+            room.stitchedAxis.forEach(path => {
+                if (path.length < 2) return;
+                const ends = [path[0], path[path.length - 1]];
+                ends.forEach(p => {
+                    const k = getKey(p);
+                    nodeDegrees.set(k, (nodeDegrees.get(k) || 0) + 1);
+                    if (!nodeMap.has(k)) nodeMap.set(k, p);
+                });
+            });
+
+            // 2. Identify and Place Anchors at Joints (Degree >= 3)
+            // (Note: Endpoints are degree 1. We don't force anchors there unless filled)
+            nodeDegrees.forEach((deg, k) => {
+                if (deg >= 3) {
+                    const p = nodeMap.get(k)!;
+                    candidates.push({ p, priority: 'critical' });
+                }
+            });
+
+            // 3. Process All Skeleton Edges
+            room.stitchedAxis.forEach(path => {
+                if (path.length < 2) return;
+
+                // Calculate Metric Length
+                let lenPx = 0;
+                for (let i = 0; i < path.length - 1; i++) lenPx += dist(path[i], path[i + 1]);
+                const lenM = lenPx / scaleRatio;
+
+                if (lenM > threshold15m) {
+                    // Logic: Place anchors symmetrically on simplified line
+                    // Constraints: Max overlap 1.5m -> Limit count so Spacing >= minSpacingMeters
+
+                    // We divide the edge into N segments.
+                    // N anchors = segments - 1 (internal points).
+                    // We want segments such that: Length / segments >= minSpacingMeters
+                    // segments <= Length / minSpacingMeters
+                    // Max Segments = floor(Length / minSpacingMeters)
+
+                    const maxSegments = Math.floor(lenM / minSpacingMeters);
+
+                    // We need at least 2 segments to place 1 internal anchor
+                    // If maxSegments < 2, we can't place any internal anchors without violating overlap constraint
+                    // (Unless we force it? But user said "max overlap 1.5". We prioritize constraint).
+
+                    if (maxSegments >= 2) {
+                        const numAnchors = maxSegments - 1;
+                        const spacingPx = lenPx / maxSegments;
+
+                        // Walk path and add points
+                        let currentDist = 0;
+                        let pointIdx = 1; // looking for 1*spacing, 2*spacing... through (N-1)*spacing
+
+                        for (let i = 0; i < path.length - 1; i++) {
+                            const pA = path[i];
+                            const pB = path[i + 1];
+                            const segLen = dist(pA, pB);
+
+                            while (pointIdx <= numAnchors && (pointIdx * spacingPx) <= (currentDist + segLen + 0.1)) {
+                                const rem = (pointIdx * spacingPx) - currentDist;
+                                const t = Math.max(0, Math.min(1, rem / segLen));
+                                const newX = pA.x + (pB.x - pA.x) * t;
+                                const newY = pA.y + (pB.y - pA.y) * t;
+                                candidates.push({ p: { x: newX, y: newY }, priority: 'normal' });
+                                pointIdx++;
+                            }
+                            currentDist += segLen;
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- V2: Legacy Offset Logic (Restored) ---
+        function generateLargeRoomOffsets(
             room: ProcessedRoom,
             scaleRatio: number,
             settings: any,
@@ -666,22 +785,11 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
                 if (d <= threshold13mPx) return;
 
                 // Constraint: Overlap <= 1.5m
-                // Spacing S must satisfy: 2*R - S <= 1.5  =>  S >= 2*R - 1.5
                 const minSpacingMeters = Math.max(0.1, (2 * radius) - 1.5);
                 const minSpacingPx = minSpacingMeters * scaleRatio;
 
-                // Number of internal points N
-                // Segment length d is divided into N+1 gaps.
-                // Gap size = d / (N+1)
-                // We need Gap size >= minSpacingPx
-                // N+1 <= d / minSpacingPx
-                // N <= (d / minSpacingPx) - 1
+                // Calculate max segments
                 let maxN = Math.floor((d / minSpacingPx) - 1);
-
-                // Ensure at least 1 point if strict calculation yields < 0 but edge is long?
-                // Logic implies if 2*R overlaps > 1.5 even at max spacing, we might skip?
-                // But usually R=5, minSpacing=8.5. d=20. maxN = floor(20/8.5 - 1) = floor(2.35 - 1) = 1. 20/2=10m.
-
                 maxN = Math.max(0, maxN);
 
                 if (maxN > 0) {
@@ -698,18 +806,18 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
             };
 
             // Generate Offsets at Odd Intervals (1, 3, 5...)
-            const MAX_LAYERS = 25; // Enough for very large rooms
+            const MAX_LAYERS = 25;
             for (let i = 0; i < MAX_LAYERS; i++) {
-                const multiplier = 1 + (2 * i); // 1, 3, 5, 7...
+                const multiplier = 1 + (2 * i); // 1, 3, 5...
                 const currentOffsetPx = stepPx * multiplier;
 
                 const offsetPolys = generateOffsets(room.poly, currentOffsetPx);
                 if (!offsetPolys || offsetPolys.length === 0) break;
 
                 offsetPolys.forEach(poly => {
-                    // 1. Corners (Mark as isCorner=true)
+                    // 1. Corners
                     poly.forEach(vertex => {
-                        candidates.push({ p: vertex, priority: 'critical', isCorner: true });
+                        candidates.push({ p: vertex, priority: 'critical' }); // Not passing isCorner strictly if old logic didn't
                     });
 
                     // 2. Edges
@@ -723,147 +831,146 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
 
         // --- LARGE ROOM LOGIC (> 110m2) ---
         if (type === 'large') {
-            generateLargeRoomOffsetsV2(room, scaleRatio, options, candidates);
+            // New Decision Logic:
+            // Check if room supports a 5 meter offset.
+            // If YES -> Use Standard Offset Logic (generateLargeRoomOffsets).
+            // If NO -> Use Skeleton Logic (generateLargeRoomSkeletonPlacement).
+
+            const checkOffsetPx = 5 * scaleRatio;
+            const testOffsets = generateOffsets(room.poly, checkOffsetPx); // Assuming single offset generation
+            // generateOffsets returns Point[][]
+
+            if (testOffsets && testOffsets.length > 0) {
+                // Room is wide enough for offsets
+                console.log("[AutoPlacement] Big Room: Using Offset Logic (Wide)");
+                generateLargeRoomOffsets(room, scaleRatio, options, candidates);
+
+                // --- GAP FILLING LOGIC (User Request) ---
+                // "if simplified skeleton Y,T junction distance from 5meter ofset ... is more then 8 meter"
+                // 1. Identify Junctions
+                const junctionMap = new Map<string, Point>();
+                const getKey = (p: Point) => `${Math.round(p.x)},${Math.round(p.y)}`;
+                // Re-build graph node counts
+                const nodeDegrees = new Map<string, number>();
+                room.stitchedAxis.forEach(path => {
+                    if (path.length < 2) return;
+                    [path[0], path[path.length - 1]].forEach(p => {
+                        const k = getKey(p);
+                        nodeDegrees.set(k, (nodeDegrees.get(k) || 0) + 1);
+                        junctionMap.set(k, p);
+                    });
+                });
+
+                const gapAnchors: Point[] = [];
+                const threshold8mPx = 8 * scaleRatio;
+
+                for (const [key, degree] of nodeDegrees.entries()) {
+                    if (degree >= 3) {
+                        const p = junctionMap.get(key)!;
+                        // 2. Check Distance to Nearest Candidate (Offset Anchor)
+                        let minDist = Infinity;
+                        for (const c of candidates) {
+                            const d = dist(c.p, p);
+                            if (d < minDist) minDist = d;
+                        }
+
+                        if (minDist > threshold8mPx) {
+                            // Valid Gap Anchor
+                            console.log(`[AutoPlacement] Gap Anchor found at junction (Dist: ${(minDist / scaleRatio).toFixed(1)}m > 8m)`);
+
+                            // Check if ALREADY added (to avoid duplicates if candidates updated?)
+                            // candidates are updated in place, so we check against them again?
+                            // No, minDist check covers it if we push immediately.
+                            // But we wait to push to process connections?
+                            // Better to push now to 'candidates' so subsequent checks see it? 
+                            // But we need to distinguish "Gap Anchors" for the "fill between" step.
+
+                            candidates.push({ p, priority: 'critical' });
+                            gapAnchors.push(p);
+                        }
+                    }
+                }
+
+                // 3. Symmetric Fill between Gap Anchors
+                if (gapAnchors.length > 1) {
+                    // Find paths between pairs
+                    // Simple approach: Check all pairs. If connected by a SINGLE skeleton segment (or path), fill it.
+                    // room.stitchedAxis is a list of paths (polylines).
+                    // We need to see if a path connects A and B.
+
+                    for (let i = 0; i < gapAnchors.length; i++) {
+                        for (let j = i + 1; j < gapAnchors.length; j++) {
+                            const pA = gapAnchors[i];
+                            const pB = gapAnchors[j];
+                            const kA = getKey(pA);
+                            const kB = getKey(pB);
+
+                            // Find path in stitchedAxis that has these ends
+                            const connectingPath = room.stitchedAxis.find(path => {
+                                if (path.length < 2) return false;
+                                const startK = getKey(path[0]);
+                                const endK = getKey(path[path.length - 1]);
+                                return (startK === kA && endK === kB) || (startK === kB && endK === kA);
+                            });
+
+                            if (connectingPath) {
+                                // Fill it!
+                                console.log("[AutoPlacement] Filling gap between connected junctions");
+                                // Logic similar to fillEdge but along a polyline? 
+                                // Or assume straight line? "simplified line betwen that junctions" -> suggests straight or simply the path.
+                                // Using the path is safer.
+
+                                // Symmetrical Fill on Path
+                                // Total Path Length
+                                let totalLen = 0;
+                                for (let k = 0; k < connectingPath.length - 1; k++) totalLen += dist(connectingPath[k], connectingPath[k + 1]);
+
+                                // Max overlap 1.5m => Spacing >= 2R - 1.5
+                                const { radius } = options;
+                                const minSpacingMeters = Math.max(0.1, (2 * radius) - 1.5);
+                                const minSpacingPx = minSpacingMeters * scaleRatio;
+
+                                let count = Math.floor(totalLen / minSpacingPx) - 1; // -1 because endpoints exist
+                                count = Math.max(0, count);
+
+                                if (count > 0) {
+                                    // Place 'count' anchors uniformly along path
+                                    const step = totalLen / (count + 1);
+                                    let currentTravel = 0;
+                                    let nextTarget = step;
+                                    let placed = 0;
+
+                                    for (let k = 0; k < connectingPath.length - 1; k++) {
+                                        const p1 = connectingPath[k];
+                                        const p2 = connectingPath[k + 1];
+                                        const segLen = dist(p1, p2);
+
+                                        while (nextTarget <= currentTravel + segLen && placed < count) {
+                                            const rem = nextTarget - currentTravel;
+                                            const ratio = rem / segLen;
+                                            const newX = p1.x + (p2.x - p1.x) * ratio;
+                                            const newY = p1.y + (p2.y - p1.y) * ratio;
+
+                                            candidates.push({ p: { x: newX, y: newY }, priority: 'high' });
+                                            placed++;
+                                            nextTarget += step;
+                                        }
+                                        currentTravel += segLen;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            } else {
+                // Room is narrow/irregular (cannot fit 5m offset)
+                console.log("[AutoPlacement] Big Room: Using Skeleton Logic (Narrow)");
+                generateLargeRoomSkeletonPlacement(room, scaleRatio, options, candidates);
+            }
             return;
         }
 
-        const allOffsetPolys: Point[][] = [];
-        let layerIndex = 0;
-        const MAX_LAYERS = 20;
-
-        let deepZonePoly: Point[] | null = null;
-
-        while (layerIndex < MAX_LAYERS) {
-            const currentOffsetMeters = 5 + (10 * layerIndex);
-            const offsetPx = currentOffsetMeters * scaleRatio;
-            const offsetPolys = generateOffsets(roomPoly, offsetPx);
-
-            if (!offsetPolys.length) break;
-
-            if (layerIndex === 0 && offsetPolys.length > 0) {
-                deepZonePoly = offsetPolys.sort((a, b) => b.length - a.length)[0];
-            }
-
-            allOffsetPolys.push(...offsetPolys);
-
-            const offsetLines: any[] = [];
-            offsetPolys.forEach(poly => {
-                const coords = poly.map(p => [p.x, p.y]);
-                if (coords.length < 2) return;
-                if (coords[0][0] !== coords[coords.length - 1][0] || coords[0][1] !== coords[coords.length - 1][1]) {
-                    coords.push(coords[0]);
-                }
-                offsetLines.push(turf.lineString(coords));
-            });
-
-            if (layerIndex === 0) {
-                offsetLines.forEach(offLine => {
-                    medialFeats.forEach(medLine => {
-                        const intersects = turf.lineIntersect(offLine, medLine);
-                        turf.featureEach(intersects, (pt) => {
-                            let [x, y] = pt.geometry.coordinates;
-                            let snapped = false;
-                            for (const poly of offsetPolys) {
-                                for (const v of poly) {
-                                    if (dist({ x, y }, v) < snapDistPx) {
-                                        x = v.x;
-                                        y = v.y;
-                                        snapped = true;
-                                        break;
-                                    }
-                                }
-                                if (snapped) break;
-                            }
-                            addCandidate({ x, y }, 'high');
-                        });
-                    });
-                });
-            }
-
-            const zone3Threshold = 12.5 * scaleRatio;
-            offsetPolys.forEach(poly => {
-                for (let i = 0; i < poly.length; i++) {
-                    const p1 = poly[i];
-                    const p2 = poly[(i + 1) % poly.length];
-                    fillGaps(p1, p2, zone3Threshold, spacingPx);
-                }
-            });
-
-            layerIndex++;
-        }
-
-        const calculateOverlapRatio = (candidate: Point, others: Candidate[], r: number) => {
-            const rPx = r * scaleRatio;
-            const covering = others.filter(o => dist(candidate, o.p) < rPx);
-            return covering.length >= 2 ? 0.8 : 0.0;
-        };
-
-        // Zone 2
-        const nodeCounts = new Map<string, number>();
-        const nodeCoords = new Map<string, Point>();
-        medialAxis.forEach(seg => {
-            seg.forEach(p => {
-                const k = `${Math.round(p.x)},${Math.round(p.y)} `;
-                nodeCounts.set(k, (nodeCounts.get(k) || 0) + 1);
-                nodeCoords.set(k, p);
-            });
-        });
-
-        const deepGapThresholdPx = 12 * scaleRatio;
-
-        nodeCounts.forEach((count, key) => {
-            if (count >= 3) {
-                const p = nodeCoords.get(key)!;
-                if (deepZonePoly && !isPointInPolygon(p, deepZonePoly)) return;
-                if (deepZonePoly && isPointInPolygon(p, deepZonePoly)) {
-                    const nearest = candidates.reduce((min, c) => Math.min(min, dist(p, c.p)), Infinity);
-                    if (nearest < deepGapThresholdPx) return;
-                }
-                const ratio = calculateOverlapRatio(p, candidates, radius);
-                if (ratio <= 0.40) {
-                    addCandidate(p, 'high');
-                }
-            }
-        });
-
-        // Zone 4
-        stitchedAxis.forEach(path => {
-            if (path.length < 2) return;
-            let coveredCount = 0;
-            const sampleCount = 5;
-            for (let k = 0; k <= sampleCount; k++) {
-                const idx = Math.floor((path.length - 1) * (k / sampleCount));
-                const p = path[idx];
-                if (allOffsetPolys.some(poly => isPointInPolygon(p, poly))) {
-                    coveredCount++;
-                }
-            }
-            if (coveredCount < sampleCount / 2) {
-                const startP = path[0];
-                const checkAndAdd = (pt: Point) => {
-                    const inDeep = deepZonePoly ? isPointInPolygon(pt, deepZonePoly) : false;
-                    const farFromHP = !candidates.some(c => (c.priority === 'high' || c.priority === 'critical') && dist(pt, c.p) < spacingPx * 0.8);
-                    if (inDeep || farFromHP) {
-                        addCandidate(pt, 'normal');
-                    }
-                };
-                checkAndAdd(startP);
-                for (let i = 0; i < path.length - 1; i++) {
-                    const p1 = path[i];
-                    const p2 = path[i + 1];
-                    const d = dist(p1, p2);
-                    const numSteps = Math.floor(d / spacingPx);
-                    const ux = (p2.x - p1.x) / d;
-                    const uy = (p2.y - p1.y) / d;
-                    for (let k = 1; k <= numSteps; k++) {
-                        const px = p1.x + ux * (k * spacingPx);
-                        const py = p1.y + uy * (k * spacingPx);
-                        checkAndAdd({ x: px, y: py });
-                    }
-                }
-                checkAndAdd(path[path.length - 1]);
-            }
-        });
     });
 
     // 3. Safety Check
@@ -1000,20 +1107,9 @@ export const densityOptimization = (
         });
     }
 
-    // 2. Filter Candidates (Anchors allowed to be removed)
-    // - Must be AUTO
-    // - Must be in Scope (if defined)
-    // - Must be in Placement Area (if defined)
+    // 2. Filter Candidates
     const candidates: Anchor[] = [];
     const others: Anchor[] = [];
-
-    // Pre-calculate Turf Polygon for Area if needed
-    let areaPoly: any = null;
-    if (placementArea && placementArea.length >= 3) {
-        const coords = placementArea.map(p => [p.x, p.y]);
-        if (coords[0][0] !== coords[coords.length - 1][0]) coords.push(coords[0]);
-        areaPoly = turf.polygon([coords]);
-    }
 
     anchors.forEach(a => {
         if (!a.isAuto || a.locked) {
@@ -1021,26 +1117,19 @@ export const densityOptimization = (
             return;
         }
 
-        // Check Placement Area Constraint FIRST
-        if (areaPoly) {
-            const pt = turf.point([a.x, a.y]);
-            if (!turf.booleanPointInPolygon(pt, areaPoly)) {
-                others.push(a); // Outside area -> Protect it (Treat as 'other')
+        // Check Placement Area Constraint
+        if (placementArea && placementArea.length >= 3) {
+            if (!isPointInPolygon(a, placementArea)) {
+                others.push(a); // Outside area -> Protect it
                 return;
             }
         }
 
-        // Check Scope Constraint
+        // Scope Check
         if (scopePolygons.length > 0) {
-            const pt = turf.point([a.x, a.y]);
             let inScope = false;
             for (const poly of scopePolygons) {
-                // simple bbox check first? Turf is fast enough.
-                const coords = poly.map(p => [p.x, p.y]);
-                // Close loop
-                if (coords[0][0] !== coords[coords.length - 1][0]) coords.push(coords[0]);
-                const turfPoly = turf.polygon([coords]);
-                if (turf.booleanPointInPolygon(pt, turfPoly)) {
+                if (isPointInPolygon(a, poly)) {
                     inScope = true;
                     break;
                 }
@@ -1055,15 +1144,6 @@ export const densityOptimization = (
     });
 
     // 3. Sort Candidates: Strictly by ID (User Request)
-    // "start from minimum id number"
-    candidates.sort((a, b) => {
-        // Stable sort by ID
-        return a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' });
-    });
-
-
-
-    // 4. Sequential Optimization Loop with RESTART
     let activeCandidates = [...candidates];
     let restart = true;
     let ops = 0;
@@ -1083,7 +1163,7 @@ export const densityOptimization = (
 
             // Count Overlaps
             let overlapCount = 0;
-            const factor = 1.0; // Match UI overlap logic (1.0 = Full Radius)
+            const factor = 1.0;
             const rPx = ((candidate.radius || globalRadius) * scaleRatio) * factor;
 
             for (const other of currentPool) {
@@ -1100,15 +1180,13 @@ export const densityOptimization = (
             }
 
             if (overlapCount >= thresholdN) {
-                // DELETE
-
+                console.log(`[Density] Removing Anchor ${candidate.id}`);
                 activeCandidates.splice(i, 1);
                 restart = true;
-                break; // Break inner loop, restart outer
+                break;
             }
         }
     }
-
     const finalAnchors = [...activeCandidates, ...others];
 
 

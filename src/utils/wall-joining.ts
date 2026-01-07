@@ -39,6 +39,8 @@ export const generateJoinedWalls = (walls: Wall[], scaleRatio: number, allWalls:
 
     const allOffsetPaths = new ClipperLib.Paths();
 
+    const subsetIds = new Set(walls.map(w => w.id));
+
     const getNextPath = (): Wall[] | null => {
         let startWall: Wall | null = null;
         for (const w of walls) { // Iterate over the SUBSET
@@ -61,7 +63,7 @@ export const generateJoinedWalls = (walls: Wall[], scaleRatio: number, allWalls:
             const neighbors = adj.get(pEndKey);
             if ((degrees.get(pEndKey) || 0) !== 2) break;
 
-            const nextW = neighbors?.find(w => !processedWalls.has(w.id));
+            const nextW = neighbors?.find(w => !processedWalls.has(w.id) && subsetIds.has(w.id));
             if (!nextW) break;
 
             // Break chain if thickness changes (handle visual join via extension instead)
@@ -82,7 +84,7 @@ export const generateJoinedWalls = (walls: Wall[], scaleRatio: number, allWalls:
             if ((degrees.get(pStartKey) || 0) !== 2) break;
 
             const neighbors = adj.get(pStartKey);
-            const nextW = neighbors?.find(w => !processedWalls.has(w.id));
+            const nextW = neighbors?.find(w => !processedWalls.has(w.id) && subsetIds.has(w.id));
             if (!nextW) break;
 
             // Break chain if thickness changes

@@ -35,6 +35,15 @@ export const MainStage: React.FC = () => {
             }
         };
         updateSize();
+
+        // Ensure focus is on the container so keyboard events bubble correctly/window is active context
+        // Use timeout to ensure it happens after paint/mount
+        setTimeout(() => {
+            if (containerRef.current) {
+                containerRef.current.focus();
+            }
+        }, 100);
+
         window.addEventListener('resize', updateSize);
         return () => window.removeEventListener('resize', updateSize);
     }, []);
@@ -187,7 +196,12 @@ export const MainStage: React.FC = () => {
     };
 
     return (
-        <div ref={containerRef} className="w-full h-full bg-[var(--bg-canvas)] overflow-hidden relative" onContextMenu={(e) => e.preventDefault()}>
+        <div
+            ref={containerRef}
+            className="w-full h-full bg-[var(--bg-canvas)] overflow-hidden relative outline-none"
+            onContextMenu={(e) => e.preventDefault()}
+            tabIndex={-1} // Make focusable for keyboard shortcuts
+        >
             {menu && (
                 <ContextMenu
                     x={menu.x}

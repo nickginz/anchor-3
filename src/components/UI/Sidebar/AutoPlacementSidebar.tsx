@@ -318,7 +318,9 @@ export const AutoPlacementSidebar: React.FC = () => {
                                 key={n}
                                 onClick={() => {
                                     const state = useProjectStore.getState();
-                                    const area = state.placementAreaEnabled && state.placementArea ? state.placementArea.points : undefined;
+                                    const isAreaActive = state.placementAreaEnabled && state.placementArea && state.placementArea.points.length > 2;
+                                    const area = isAreaActive ? state.placementArea.points : undefined;
+                                    const effectiveScope = isAreaActive ? 'all' : densityTarget;
 
                                     const newAnchors = densityOptimization(
                                         state.anchors,
@@ -326,7 +328,7 @@ export const AutoPlacementSidebar: React.FC = () => {
                                         state.scaleRatio,
                                         state.anchorRadius,
                                         state.walls,
-                                        densityTarget,
+                                        effectiveScope,
                                         area // Pass area constraint
                                     );
                                     state.setAnchors(newAnchors);
