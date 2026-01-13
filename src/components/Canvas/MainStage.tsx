@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { Stage, Layer, Line } from 'react-konva';
+import { Stage, Layer, Line, Group } from 'react-konva';
 import Konva from 'konva';
 import { WallsLayer } from './Layers/WallsLayer';
 import { FloorplanImageLayer } from './Layers/FloorplanImageLayer';
@@ -152,16 +152,22 @@ export const MainStage: React.FC = () => {
     const gridLines = [];
 
     // Theme Colors
-    const gridColor = theme === 'light' ? '#9ca3af' : '#333';
     const axisColor = theme === 'light' ? '#6b7280' : '#666';
 
-    // Render grid for +/- 50 meters
-    for (let i = -50; i <= 50; i++) {
-        const pos = i * gridSize;
+    // Render grid for +/- 500 meters (Functionally "everywhere" for most floorplans)
+    const gridSizeMeters = 1; // 1 meter grid
+    const gridRange = 500;
+
+    // Theme Colors
+    const gridColor = theme === 'light' ? '#e5e7eb' : '#333'; // Light mode: gray-200 (very light)
+
+    for (let i = -gridRange; i <= gridRange; i += gridSizeMeters) {
+        const pos = i * gridSize; // gridSize is px per meter
+
         // Vertical
-        gridLines.push(<Line key={`v${i}`} points={[pos, -2500, pos, 2500]} stroke={gridColor} strokeWidth={1} opacity={0.2} />);
+        gridLines.push(<Line key={`v${i}`} points={[pos, -gridRange * gridSize, pos, gridRange * gridSize]} stroke={gridColor} strokeWidth={1} listening={false} />);
         // Horizontal
-        gridLines.push(<Line key={`h${i}`} points={[-2500, pos, 2500, pos]} stroke={gridColor} strokeWidth={1} opacity={0.2} />);
+        gridLines.push(<Line key={`h${i}`} points={[-gridRange * gridSize, pos, gridRange * gridSize, pos]} stroke={gridColor} strokeWidth={1} listening={false} />);
     }
 
     // Grid rendering (simple visual aid)
@@ -246,10 +252,12 @@ export const MainStage: React.FC = () => {
                     className="cursor-crosshair"
                 >
                     {/* Layer 1: Background & Heavy Renders */}
-                    <Layer key="layer-bg">
-                        {gridLines}
-                        <Line points={[-20, 0, 20, 0]} stroke={axisColor} strokeWidth={2} />
-                        <Line points={[0, -20, 0, 20]} stroke={axisColor} strokeWidth={2} />
+                    <Layer key="layer-bg" name="background-layer">
+                        <Group name="grid-lines">
+                            {gridLines}
+                            <Line points={[-20, 0, 20, 0]} stroke={axisColor} strokeWidth={2} />
+                            <Line points={[0, -20, 0, 20]} stroke={axisColor} strokeWidth={2} />
+                        </Group>
                         <FloorplanImageLayer />
                         <DXFLayer />
                         <HeatmapLayer stage={stage} />

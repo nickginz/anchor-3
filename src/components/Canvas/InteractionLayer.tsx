@@ -116,7 +116,7 @@ const THEME_COLORS = {
 
 export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpenMenu, onOpenScaleModal }) => {
     console.log("InteractionLayer mounted - Force Refresh");
-    const { activeTool, addWall, addWalls, addAnchor, setTool, walls, anchors, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme } = useProjectStore();
+    const { activeTool, addWall, addWalls, addAnchor, setTool, walls, anchors, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme, setExportRegion, exportRegion } = useProjectStore();
 
     const colors = THEME_COLORS[theme || 'dark'] || THEME_COLORS.dark;
 
@@ -152,6 +152,28 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     // Moved early return after all hooks to satisfy Rules of Hooks!
     // Moved early return to end of function to satisfy Rules of Hooks
 
+
+    // ADDED: Export Event Listener
+    useEffect(() => {
+        const handleExportRequest = async (e: any) => {
+            // DEBUG ALERT
+            // alert('Event Received in InteractionLayer');
+            const { detail } = e;
+            if (stage) {
+                try {
+                    const { exportCanvas } = await import('../../utils/export-utils');
+                    await exportCanvas(stage, detail);
+                } catch (err) {
+                    alert('Error importing/running export: ' + err);
+                }
+            } else {
+                alert('Export Failed: Stage is missing/null in InteractionLayer');
+            }
+        };
+
+        window.addEventListener('request-export', handleExportRequest);
+        return () => window.removeEventListener('request-export', handleExportRequest);
+    }, [stage]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -814,6 +836,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
                 // Check for Closing (Click near start)
                 const start = currentPoints[0];
+
                 const d = dist(pos, start);
                 // Tolerance 10px screen space
                 const tolerance = 10 / stage.scaleX();
@@ -826,6 +849,26 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 } else {
                     // Add point
                     state.setPlacementArea({ points: [...currentPoints, pos] });
+                }
+            }
+
+        } else if (activeTool === 'export_area') { // NEW
+            if (e.evt.button === 0) {
+                if (!selectionStart) {
+                    setSelectionStart(pos);
+                    setSelectionRect({ x: pos.x, y: pos.y, width: 0, height: 0 });
+                } else {
+                    const x = Math.min(selectionStart.x, pos.x);
+                    const y = Math.min(selectionStart.y, pos.y);
+                    const width = Math.abs(pos.x - selectionStart.x);
+                    const height = Math.abs(pos.y - selectionStart.y);
+
+                    if (width > 0 && height > 0) {
+                        setExportRegion([{ x, y }, { x: x + width, y }, { x: x + width, y: y + height }, { x, y: y + height }]);
+                    }
+
+                    setSelectionStart(null);
+                    setSelectionRect(null);
                 }
             }
         }
@@ -955,6 +998,14 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     height: Math.abs(pos.y - selectionStart.y)
                 });
                 setCurrentMousePos(pos);
+            }
+        } else if (activeTool === 'export_area') {
+            if (selectionStart) {
+                const x = Math.min(selectionStart.x, pos.x);
+                const y = Math.min(selectionStart.y, pos.y);
+                const width = Math.abs(pos.x - selectionStart.x);
+                const height = Math.abs(pos.y - selectionStart.y);
+                setSelectionRect({ x, y, width, height });
             }
         }
     };
@@ -1850,6 +1901,38 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     stroke={currentMousePos.x < selectionStart.x ? "green" : "blue"}
                     strokeWidth={1 / (stage?.scaleX() || 1)}
                     dash={currentMousePos.x < selectionStart.x ? [5, 5] : undefined}
+                    listening={false}
+                />
+            )}
+
+            {/* Export Region Visualization */}
+            {exportRegion && (
+                <Line
+                    name="export-region-visual"
+                    points={[
+                        exportRegion[0].x, exportRegion[0].y,
+                        exportRegion[1].x, exportRegion[1].y,
+                        exportRegion[2].x, exportRegion[2].y,
+                        exportRegion[3].x, exportRegion[3].y,
+                        exportRegion[0].x, exportRegion[0].y
+                    ]}
+                    stroke="#22c55e"
+                    strokeWidth={2 / (stage?.scaleX() || 1)}
+                    dash={[10, 5]}
+                    listening={false}
+                />
+            )}
+
+            {/* Selection Rect (Reused for Drawing Export Area) */}
+            {selectionRect && activeTool === 'export_area' && (
+                <Rect
+                    x={selectionRect.x}
+                    y={selectionRect.y}
+                    width={selectionRect.width}
+                    height={selectionRect.height}
+                    fill="rgba(34, 197, 94, 0.2)"
+                    stroke="#22c55e"
+                    strokeWidth={1 / (stage?.scaleX() || 1)}
                     listening={false}
                 />
             )}

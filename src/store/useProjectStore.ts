@@ -58,6 +58,13 @@ interface ProjectState {
     theme: 'dark' | 'light';
     isSettingsOpen: boolean;
 
+    // Export Tool State
+    isExportSidebarOpen: boolean;
+    setIsExportSidebarOpen: (v: boolean) => void;
+    exportRegion: Point[] | null;
+    setExportRegion: (region: Point[] | null) => void;
+
+
     // Placement Area Tool
     placementArea: { points: Point[] } | null;
     setPlacementArea: (area: { points: Point[] } | null) => void;
@@ -295,6 +302,11 @@ export const useProjectStore = create<ProjectState>()(
             })),
             setShowOverlapCounts: (v) => set({ showOverlapCounts: v }),
 
+
+            isExportSidebarOpen: false,
+            setIsExportSidebarOpen: (v) => set({ isExportSidebarOpen: v }),
+            exportRegion: null,
+            setExportRegion: (region) => set({ exportRegion: region }),
 
             alignAnchors: (type) => set((state) => {
                 const selectedAnchors = state.anchors.filter(a => state.selectedIds.includes(a.id));

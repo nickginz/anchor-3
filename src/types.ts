@@ -44,7 +44,7 @@ export interface Dimension {
     textOffset?: { x: number; y: number }; // Offset from default position
 }
 
-export type ToolType = 'select' | 'wall' | 'wall_rect' | 'wall_rect_edge' | 'anchor' | 'anchor_auto' | 'scale' | 'dimension' | 'trim' | 'extend' | 'mirror' | 'placement_area';
+export type ToolType = 'select' | 'wall' | 'wall_rect' | 'wall_rect_edge' | 'anchor' | 'anchor_auto' | 'scale' | 'dimension' | 'trim' | 'extend' | 'mirror' | 'placement_area' | 'export_area';
 
 export interface ProjectLayers {
     walls: boolean;

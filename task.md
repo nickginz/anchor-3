@@ -53,16 +53,20 @@
 ## 🚀 Planned (To Do)
 
 ### Export System
-- [ ] **Image Export**:
-    - [ ] Export Viewport (PNG/JPG).
-    - [ ] High-Resolution support.
+- [x] **Image Export**:
+    - [x] Export Viewport (PNG).
+    - [x] **High-Resolution support**: Adjustable via pixelRatio.
+    - [x] **Region Export**: User defined area or "Fit Content".
 - [ ] **DXF Export (CAD)**:
     - [ ] Generate `.dxf` file with proper layers (`WALLS`, `ANCHORS`).
     - [ ] Export Walls as LINES, Anchors as CIRCLES.
-- [ ] **PDF Export (Report)**:
-    - [ ] **Vector Generation**: Draw sharp lines/text (not just screenshot).
-    - [ ] **PDF Layers**: Toggleable layers inside the PDF.
-    - [ ] **BOM Page**: Appendix with inventory/coordinates.
+- [x] **PDF Export**:
+    - [x] **High-Res Generation**: Embeds high-quality canvas capture.
+    - [x] **Paper Sizes**: standard sizes (A4-A0) and Orientation.
+- [ ] **Advanced PDF Features**:
+    - [ ] Vector paths (instead of raster).
+    - [ ] PDF Layers.
+    - [ ] BOM / Inventory Page.
 
 ### Debugging & Fixes (Priority)
 - [x] **DXF Interaction**:

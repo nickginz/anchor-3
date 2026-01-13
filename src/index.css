@@ -26,7 +26,7 @@
 
   .theme-light {
     /* Light Mode Overrides */
-    --bg-canvas: #e0e0e0;
+    --bg-canvas: #ffffff;
     /* Darker grey for canvas distinction */
     --bg-panel: #ffffff;
     --bg-input: #f3f4f6;

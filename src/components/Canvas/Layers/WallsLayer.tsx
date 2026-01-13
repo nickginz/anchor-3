@@ -75,9 +75,15 @@ export const WallsLayer: React.FC = () => {
                     }
                 }
 
+                if (theme === 'light') {
+                    // Export Style: Transparent Fill to show clean blueprint
+                    fillColor = 'transparent';
+                }
+
                 return (
                     <Path
                         key={`group-${key}`}
+                        name="wall-fill"
                         data={pathData}
                         fill={patternImage ? undefined : fillColor}
                         fillPatternImage={patternImage || undefined}
@@ -106,9 +112,10 @@ export const WallsLayer: React.FC = () => {
         return (
             <Path
                 key="wall-boundary"
+                name="wall-boundary"
                 data={pathData}
                 stroke={theme === 'light' ? '#000000' : '#ffffff'}
-                strokeWidth={2}
+                strokeWidth={theme === 'light' ? 1 : 2}
                 hitStrokeWidth={10} // Hit detection on the stroke
                 fillEnabled={false}
                 listening={false} // Let clicks pass to the Fills underneath (if they tracked IDs, but they don't here. Selection is overlay.)

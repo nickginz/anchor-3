@@ -22,7 +22,7 @@ export const AnchorsLayer: React.FC = () => {
 
                         {/* Coverage Area */}
                         {showAnchorRadius && (
-                            <>
+                            <Group name="anchor-radius">
                                 {effectiveShape === 'circle' ? (
                                     <Circle
                                         radius={radiusPx}
@@ -45,30 +45,33 @@ export const AnchorsLayer: React.FC = () => {
                                         listening={false}
                                     />
                                 )}
-                            </>
+
+                            </Group>
                         )}
 
                         {/* Anchor Center - Orange */}
-                        <Circle
-                            radius={8}
-                            fill="#ffaa00" // Orange center
-                            stroke={isSelected ? (theme === 'light' ? '#2563eb' : '#00aaff') : (theme === 'light' ? '#000000' : '#ffffff')}
-                            strokeWidth={2}
-                            // Name for hit detection in InteractionLayer
-                            name="anchor"
-                            id={anchor.id}
-                        />
+                        <Group name="anchor-core">
+                            <Circle
+                                radius={8}
+                                fill="#ffaa00" // Orange center
+                                stroke={isSelected ? (theme === 'light' ? '#2563eb' : '#00aaff') : (theme === 'light' ? '#000000' : '#ffffff')}
+                                strokeWidth={2}
+                                // Name for hit detection in InteractionLayer
+                                name="anchor"
+                                id={anchor.id}
+                            />
 
-                        {/* Label */}
-                        <Text
-                            y={12}
-                            text={`${anchor.id.slice(0, 4)}`}
-                            fontSize={10}
-                            fill={theme === 'light' ? '#111827' : '#00aaff'} // Dark text in light mode, Blue/Cyan in dark
-                            align="center"
-                            offsetX={15}
-                            listening={false}
-                        />
+                            {/* Label */}
+                            <Text
+                                y={12}
+                                text={`${anchor.id.slice(0, 4)}`}
+                                fontSize={10}
+                                fill={theme === 'light' ? '#111827' : '#00aaff'} // Dark text in light mode, Blue/Cyan in dark
+                                align="center"
+                                offsetX={15}
+                                listening={false}
+                            />
+                        </Group>
 
                         {/* Overlap Count Debug */}
                         {showOverlapCounts && (

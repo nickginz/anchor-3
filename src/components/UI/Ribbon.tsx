@@ -19,7 +19,8 @@ import {
     Type, // Icon for Labels
     Signal, // Icon for Heatmap
     Map, // Icon for Offsets
-    Network // Icon for Skeleton
+    Network, // Icon for Skeleton
+    FileUp // NEW Icon
 } from 'lucide-react';
 import { WallDetectionModal } from './WallDetectionModal';
 import { SettingsPanel } from './SettingsPanel';
@@ -38,11 +39,10 @@ const RectWallIcon = ({ size, ...props }: any) => (
 
 const RectFromWallIcon = ({ size, ...props }: any) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <path d="M2 21h20" stroke="currentColor" strokeOpacity="0.5" />
-        <rect x="5" y="5" width="14" height="12" />
-        <circle cx="5" cy="21" r="3" fill="#ef4444" stroke="none" />
-        <circle cx="19" cy="21" r="3" fill="#ef4444" stroke="none" />
-        <path d="M5 17v4 M19 17v4" stroke="currentColor" strokeDasharray="2 2" />
+        <rect x="4" y="4" width="16" height="16" rx="1" />
+        <circle cx="4" cy="20" r="3" fill="#ef4444" stroke="none" />
+        <circle cx="20" cy="20" r="3" fill="#ef4444" stroke="none" />
+        <circle cx="20" cy="4" r="3" fill="#ef4444" stroke="none" />
     </svg>
 );
 
@@ -271,7 +271,14 @@ export const Ribbon: React.FC = () => {
 
 
                     <button
-                        onClick={() => setIsAutoPlacementOpen(!isAutoPlacementOpen)}
+                        onClick={() => {
+                            if (isAutoPlacementOpen) {
+                                setIsAutoPlacementOpen(false);
+                            } else {
+                                setIsAutoPlacementOpen(true);
+                                useProjectStore.getState().setIsExportSidebarOpen(false);
+                            }
+                        }}
                         className={`p-1.5 rounded hover:bg-[#333] transition-colors flex flex-col items-center ${isAutoPlacementOpen ? 'bg-[#333] text-white shadow-inner' : 'text-blue-400'}`}
                         title="Auto-Place Sidebar"
                     >
@@ -490,6 +497,25 @@ export const Ribbon: React.FC = () => {
                     }}
                     tooltip="Save Project As..."
                     className="opacity-80 hover:opacity-100 p-1.5"
+                    iconSize={16}
+                />
+
+                <div className="w-px h-6 bg-[var(--border-color)] mx-2"></div>
+                <ToolbarButton
+                    icon={FileUp}
+                    label="Export"
+                    active={useProjectStore.getState().isExportSidebarOpen}
+                    onClick={() => {
+                        const { isExportSidebarOpen, setIsExportSidebarOpen, setIsAutoPlacementOpen } = useProjectStore.getState();
+                        if (isExportSidebarOpen) {
+                            setIsExportSidebarOpen(false);
+                        } else {
+                            setIsExportSidebarOpen(true);
+                            setIsAutoPlacementOpen(false);
+                        }
+                    }}
+                    tooltip="Export Image/PDF"
+                    className={`opacity-80 hover:opacity-100 p-1.5 ${useProjectStore.getState().isExportSidebarOpen ? 'text-blue-400' : ''}`}
                     iconSize={16}
                 />
 

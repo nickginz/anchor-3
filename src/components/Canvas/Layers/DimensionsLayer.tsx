@@ -8,7 +8,7 @@ export const DimensionsLayer: React.FC = () => {
     if (!layers.dimensions) return null;
 
     return (
-        <Group>
+        <Group name="dimensions-group">
             {dimensions.map((dim) => {
                 const [x1, y1, x2, y2] = dim.points;
                 const isSelected = useProjectStore.getState().selectedIds.includes(dim.id);
