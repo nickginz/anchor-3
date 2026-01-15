@@ -2,7 +2,7 @@ import React from 'react';
 import { useProjectStore } from '../../store/useProjectStore';
 
 export const SelectionMenu: React.FC = () => {
-    const { selectedIds, walls, anchors, hubs, updateWall, removeWall, removeAnchor, setSelection, alignAnchors, theme } = useProjectStore();
+    const { selectedIds, walls, anchors, hubs, cables, updateWall, removeWall, removeAnchor, setSelection, alignAnchors, theme } = useProjectStore();
 
     const isDark = theme === 'dark';
 
@@ -36,8 +36,9 @@ export const SelectionMenu: React.FC = () => {
     const selectedWalls = walls.filter(w => selectedIds.includes(w.id));
     const selectedAnchors = anchors.filter(a => selectedIds.includes(a.id));
     const selectedHubs = hubs.filter(h => selectedIds.includes(h.id));
+    const selectedCables = cables.filter(c => selectedIds.includes(c.id));
 
-    const hasSelection = selectedWalls.length > 0 || selectedAnchors.length > 0 || selectedHubs.length > 0;
+    const hasSelection = selectedWalls.length > 0 || selectedAnchors.length > 0 || selectedHubs.length > 0 || selectedCables.length > 0;
     if (!hasSelection) return null;
 
     return (
@@ -124,6 +125,46 @@ export const SelectionMenu: React.FC = () => {
                                 <option value="wood">Solid Wood</option>
                                 <option value="glass">Glass</option>
                             </select>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- CABLES SECTION --- */}
+            {selectedCables.length > 0 && (
+                <div className="mb-4 last:mb-0">
+                    <div className={`flex justify-between items-center mb-2 pb-2 border-b ${dividerClass}`}>
+                        <h3 className={`text-xs font-bold uppercase ${headerTextClass}`}>
+                            {selectedCables.length} Cable{selectedCables.length > 1 ? 's' : ''} Selected
+                        </h3>
+                        <button
+                            onClick={() => {
+                                // Deleting cables not implemented directly via delete key yet, but here we can
+                                // Actually, deleting a cable disconnects it.
+                                // We don't have a direct 'removeCable' action exposed in destructuring, use store directly or add it.
+                                // let's stick to just property editing for now as delete is tricky with auto-connect.
+                                // But user asked for drag/edit generally.
+                            }}
+                            className="text-red-400 hover:text-red-300 text-xs opacity-50 cursor-not-allowed"
+                            title="Delete disabled (manage via endpoints)"
+                        >
+                            Delete
+                        </button>
+                    </div>
+
+                    <div className="space-y-3">
+                        <div className="flex flex-col space-y-1">
+                            <label className={`text-[10px] ${subTextClass} uppercase`}>Color</label>
+                            <input
+                                type="color"
+                                value={selectedCables[0].color || '#00ff00'}
+                                onChange={(e) => {
+                                    selectedCables.forEach(c => {
+                                        useProjectStore.getState().updateCable(c.id, { color: e.target.value });
+                                    });
+                                }}
+                                className="w-full h-8 rounded cursor-pointer"
+                            />
                         </div>
                     </div>
                 </div>

@@ -44,7 +44,7 @@ export interface Dimension {
     textOffset?: { x: number; y: number }; // Offset from default position
 }
 
-export type ToolType = 'select' | 'wall' | 'wall_rect' | 'wall_rect_edge' | 'anchor' | 'anchor_auto' | 'hub' | 'scale' | 'dimension' | 'trim' | 'extend' | 'mirror' | 'placement_area' | 'export_area';
+export type ToolType = 'select' | 'wall' | 'wall_rect' | 'wall_rect_edge' | 'anchor' | 'anchor_auto' | 'hub' | 'scale' | 'dimension' | 'trim' | 'extend' | 'mirror' | 'placement_area' | 'export_area' | 'cable_edit';
 
 export interface Hub {
     id: string;
@@ -60,6 +60,7 @@ export interface Cable {
     toId: string;   // Anchor ID
     points: Point[]; // Orthogonal path
     length: number; // Meters
+    color?: string; // Hex color override
 }
 
 export interface ProjectLayers {

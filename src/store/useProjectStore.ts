@@ -137,9 +137,9 @@ interface ProjectState {
     addHub: (hub: Hub) => void;
     updateHub: (id: string, updates: Partial<Hub>) => void;
     removeHub: (id: string) => void;
+    updateCable: (id: string, updates: Partial<Cable>) => void;
 
     setCables: (cables: Cable[]) => void;
-    updateCable: (id: string, updates: Partial<Cable>) => void;
 
     // Import State (Multi-Object)
     importedObjects: ImportedObject[];
@@ -679,8 +679,15 @@ export const useProjectStore = create<ProjectState>()(
             })),
 
             setCables: (cables) => set({ cables }),
-            updateCable: (id, updates) => set((state) => ({
-                cables: state.cables.map(c => c.id === id ? { ...c, ...updates } : c)
+
+            addCable: (cable: Cable) => set((state) => ({
+                cables: [...(state.cables || []), cable]
+            })),
+            updateCable: (id: string, updates: Partial<Cable>) => set((state) => ({
+                cables: (state.cables || []).map((c) => c.id === id ? { ...c, ...updates } : c)
+            })),
+            removeCable: (id: string) => set((state) => ({
+                cables: (state.cables || []).filter((c) => c.id !== id)
             })),
 
             toggleLayer: (layer) => set((state) => {
@@ -830,7 +837,7 @@ export const useProjectStore = create<ProjectState>()(
                     hubs: data.hubs || [],
                     cables: data.cables || [],
                     dimensions: data.dimensions,
-                    layers: data.layers,
+                    layers: { ...state.layers, ...(data.layers || {}) },
                     wallPreset: data.wallPreset,
                     anchorMode: data.anchorMode,
                     // Restore Settings
@@ -849,7 +856,7 @@ export const useProjectStore = create<ProjectState>()(
                     },
 
                     isScaleSet: true, // Assume loaded project has scale set
-                    allowOutsideConnections: data.allowOutsideConnections ?? state.allowOutsideConnections
+                    allowOutsideConnections: data.allowOutsideConnections ?? state.allowOutsideConnections,
                 };
             }),
 

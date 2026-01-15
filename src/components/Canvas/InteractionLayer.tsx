@@ -5,7 +5,7 @@ import { Line, Circle, Rect } from 'react-konva';
 import { useProjectStore } from '../../store/useProjectStore';
 import { applyOrthogonal, getSnapPoint, dist } from '../../utils/geometry';
 // import type { Anchor, Wall, Hub } from '../../types';
-import { getOrthogonalPath } from '../../utils/routing';
+import { getOrthogonalPath, calculateLength } from '../../utils/routing';
 import type { Point } from '../../utils/geometry';
 
 interface InteractionLayerProps {
@@ -87,6 +87,24 @@ const isPointNearLine = (p: Point, x1: number, y1: number, x2: number, y2: numbe
     return dist <= tolerance;
 };
 
+// Helper: Point near Cable (poly-line) check
+// Returns { index: number, type: 'vertex' | 'segment', point: Point } or null
+const isPointNearCable = (p: Point, points: Point[], tolerance: number) => {
+    // Check vertices first
+    for (let i = 0; i < points.length; i++) {
+        if (Math.hypot(p.x - points[i].x, p.y - points[i].y) < tolerance) {
+            return { index: i, type: 'vertex' as const, point: points[i] };
+        }
+    }
+    // Check segments
+    for (let i = 0; i < points.length - 1; i++) {
+        if (isPointNearLine(p, points[i].x, points[i].y, points[i + 1].x, points[i + 1].y, tolerance)) {
+            return { index: i, type: 'segment' as const, point: p }; // Index i represents segment i -> i+1
+        }
+    }
+    return null;
+};
+
 // Theme Colors Definition
 const THEME_COLORS = {
     dark: {
@@ -118,7 +136,7 @@ const THEME_COLORS = {
 };
 
 export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpenMenu, onOpenScaleModal }) => {
-    const { activeTool, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setTool, walls, anchors, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme, setExportRegion, exportRegion } = useProjectStore();
+    const { activeTool, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setTool, walls, anchors, hubs, cables, addCable, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme, setExportRegion, exportRegion, updateCable } = useProjectStore();
 
     const colors = THEME_COLORS[theme || 'dark'] || THEME_COLORS.dark;
 
@@ -130,6 +148,11 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     // Rectangle Wall State
     const [rectStart, setRectStart] = useState<Point | null>(null);
     const [rectEdgeStart, setRectEdgeStart] = useState<Point | null>(null);
+
+    // Cable Drawing
+    const isDrawingCable = useRef(false);
+    const cableStartId = useRef<string | null>(null);
+    const [tempCablePath, setTempCablePath] = useState<{ start: Point; end: Point } | null>(null);
     const [rectEdgeBaseEnd, setRectEdgeBaseEnd] = useState<Point | null>(null);
 
     // Selection State
@@ -142,6 +165,10 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     const panStartTime = useRef<number>(0);
     const lastDragPos = useRef<Point | null>(null);
     const isMouseDown = useRef(false);
+
+    // Cable Management State
+    const [hoveredCable, setHoveredCable] = useState<{ id: string, handle?: { type: 'vertex' | 'segment', index: number, point: Point } } | null>(null);
+    const [dragCableHandle, setDragCableHandle] = useState<{ id: string, handle: { type: 'vertex' | 'segment', index: number }, startPoint: Point } | null>(null);
 
 
     const dragTextId = useRef<string | null>(null);
@@ -640,6 +667,65 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             return;
         }
 
+        // Cable Edit Tool
+        if (activeTool === 'cable_edit') {
+            // NEW: Check for Device Hit (Start Cable Draw) BEFORE checking cable hit (optional, or after selection miss)
+            const clickRadius = 20 / (stage?.scaleX() || 1);
+            let hitDevice = false;
+
+            // Check Anchors
+            const hitAnchor = anchors.find(a => dist(pos, a) < clickRadius);
+            if (hitAnchor) {
+                isDrawingCable.current = true;
+                cableStartId.current = hitAnchor.id;
+                setTempCablePath({ start: { x: hitAnchor.x, y: hitAnchor.y }, end: pos });
+                hitDevice = true;
+            } else {
+                // Check Hubs
+                const hitHub = hubs.find(h => dist(pos, h) < clickRadius);
+                if (hitHub) {
+                    isDrawingCable.current = true;
+                    cableStartId.current = hitHub.id;
+                    setTempCablePath({ start: { x: hitHub.x, y: hitHub.y }, end: pos });
+                    hitDevice = true;
+                }
+            }
+
+            if (hitDevice) return;
+
+            // Check for Cable Hit
+            let hitCableId: string | null = null;
+            let hitInfo: any = null;
+
+            for (const cable of cables) {
+                const hit = isPointNearCable(pos, cable.points, 10 / (stage?.scaleX() || 1));
+                if (hit) {
+                    hitCableId = cable.id;
+                    hitInfo = hit;
+                    break;
+                }
+            }
+
+            if (hitCableId) {
+                // Select Cable
+                if (!e.evt.shiftKey) {
+                    setSelection([hitCableId]);
+                } else {
+                    // Add to selection (not implemented fully for mixed types but ok)
+                }
+
+                // If hit segment, initiate segment drag?
+                if (hitInfo.type === 'segment') {
+                    setDragCableHandle({ id: hitCableId, handle: { type: 'segment', index: hitInfo.index }, startPoint: pos });
+                    lastDragPos.current = pos;
+                }
+            }
+            return;
+        }
+
+        // Deselect if clicking empty space in cable_edit mode
+        setSelection([]);
+
         // Scale Tool
         if (activeTool === 'scale') {
             if (!points.length) {
@@ -922,6 +1008,65 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         const pos = getStagePoint();
         if (!pos) return;
 
+        // Cable Edit Hover & Drag Logic
+        const currentActiveTool = useProjectStore.getState().activeTool;
+        if (currentActiveTool === 'cable_edit') {
+            // 0. Drawing Cable
+            if (isDrawingCable.current && tempCablePath) {
+                setTempCablePath({ start: tempCablePath.start, end: pos });
+                return;
+            }
+
+            // 1. Dragging Segment
+            if (isMouseDown.current && dragCableHandle && dragCableHandle.handle.type === 'segment') {
+                const cable = cables.find(c => c.id === dragCableHandle.id);
+                if (cable) {
+                    const deltaX = pos.x - lastDragPos.current!.x;
+                    const deltaY = pos.y - lastDragPos.current!.y;
+
+                    // Constrain to orthogonal
+                    const p1 = cable.points[dragCableHandle.handle.index];
+                    const p2 = cable.points[dragCableHandle.handle.index + 1];
+                    const isVertical = Math.abs(p1.x - p2.x) < 1;
+                    const isHorizontal = Math.abs(p1.y - p2.y) < 1;
+
+                    let moveX = deltaX;
+                    let moveY = deltaY;
+
+                    if (isVertical) moveY = 0;
+                    if (isHorizontal) moveX = 0;
+
+                    const newPoints = [...cable.points];
+                    newPoints[dragCableHandle.handle.index] = { x: p1.x + moveX, y: p1.y + moveY };
+                    newPoints[dragCableHandle.handle.index + 1] = { x: p2.x + moveX, y: p2.y + moveY };
+
+                    updateCable(dragCableHandle.id, { points: newPoints });
+                    lastDragPos.current = pos;
+                    return;
+                }
+            }
+
+            // 2. Hover Check (if not dragging)
+            if (!isMouseDown.current) {
+                let foundHover = false;
+                for (const cable of cables) {
+                    const hit = isPointNearCable(pos, cable.points, 10 / (stage?.scaleX() || 1));
+                    if (hit) {
+                        setHoveredCable({ id: cable.id, handle: hit });
+                        foundHover = true;
+                        if (hit.type === 'segment') {
+                            stage.container().style.cursor = 'move';
+                        }
+                        break;
+                    }
+                }
+                if (!foundHover) {
+                    setHoveredCable(null);
+                    stage.container().style.cursor = 'default';
+                }
+            }
+        }
+
         // ALT + Left Drag (Move Active Import)
         if (e.evt.altKey && isMouseDown.current && useProjectStore.getState().activeImportId) {
             if (lastDragPos.current) {
@@ -1111,6 +1256,57 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     };
 
     const handleMouseUp = (e: Konva.KonvaEventObject<MouseEvent>) => {
+        // Cable Drawing Finalize
+        if (isDrawingCable.current) {
+            const startId = cableStartId.current; // Capture before reset
+            isDrawingCable.current = false;
+            cableStartId.current = null;
+            setTempCablePath(null);
+
+            const pos = getStagePoint();
+            if (pos && startId) {
+                const clickRadius = 20 / (stage?.scaleX() || 1);
+                let targetId: string | null = null;
+
+                const hitAnchor = anchors.find(a => dist(pos, a) < clickRadius);
+                if (hitAnchor) targetId = hitAnchor.id;
+                else {
+                    const hitHub = hubs.find(h => dist(pos, h) < clickRadius);
+                    if (hitHub) targetId = hitHub.id;
+                }
+
+                if (targetId && targetId !== startId) {
+                    const startObj = anchors.find(a => a.id === startId) || hubs.find(h => h.id === startId);
+                    const endObj = anchors.find(a => a.id === targetId) || hubs.find(h => h.id === targetId);
+
+                    if (startObj && endObj) {
+                        const start = { x: startObj.x, y: startObj.y };
+                        const end = { x: endObj.x, y: endObj.y };
+                        // Use empty walls for "Direct" allowOutside logic or default walls
+                        // Ideally checking store.allowOutsideConnection but let's default to walls
+                        const routingWalls = useProjectStore.getState().allowOutsideConnections ? [] : walls;
+
+                        const path = getOrthogonalPath(start, end, routingWalls);
+                        const len = calculateLength(path, useProjectStore.getState().scaleRatio);
+
+                        addCable({
+                            id: uuidv4(),
+                            fromId: startObj.id,
+                            toId: endObj.id,
+                            points: path,
+                            length: len,
+                            color: '#FF9800' // Default orange for manual routes
+                        });
+                    }
+                }
+            }
+        }
+
+        // Cable Cleanup
+        if (dragCableHandle) {
+            setDragCableHandle(null);
+        }
+
         try {
             isMouseDown.current = false;
             setIsPanning(false);
@@ -1569,6 +1765,27 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     }, [lastLoaded, stage]);
 
     const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
+        // 1. Cable Split (Add Vertex)
+        if (useProjectStore.getState().activeTool === 'cable_edit') {
+            const pos = getStagePoint();
+            if (pos) {
+                const cables = useProjectStore.getState().cables;
+                for (const cable of cables) {
+                    const hit = isPointNearCable(pos, cable.points, 10 / (stage?.scaleX() || 1));
+                    if (hit && hit.type === 'segment') {
+                        // Add vertex at pos
+                        const newPoints = [...cable.points];
+                        // Insert after index
+                        newPoints.splice(hit.index + 1, 0, pos);
+                        useProjectStore.getState().updateCable(cable.id, { points: newPoints });
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Existing "Zoom to Fit" logic or similar (if any)
+        // ...
         if (e.evt.button === 1) { // MMB
             fitScreen();
         }
@@ -2140,6 +2357,112 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 });
 
                 return handles;
+                return handles;
+            })()}
+
+            {/* Cable Edit Handles */}
+            {activeTool === 'cable_edit' && (() => {
+                const state = useProjectStore.getState();
+                const handles: React.ReactElement[] = [];
+                const handleRadius = 5 / (stage?.scaleX() || 1);
+
+                // Helper to render handle
+                const renderHandle = (cableId: string, point: Point, index: number, isEndpoint: boolean) => (
+                    <Circle
+                        key={`cable-${cableId}-${index}`}
+                        x={point.x}
+                        y={point.y}
+                        radius={handleRadius}
+                        fill={isEndpoint ? '#f97316' : '#ffffff'} // Orange for endpoints, White for vertices
+                        stroke={isEndpoint ? 'white' : '#f97316'}
+                        strokeWidth={2 / ((stage?.scaleX() || 1))}
+                        draggable
+                        onDragStart={(e) => {
+                            e.cancelBubble = true;
+                            setDragCableHandle({ id: cableId, handle: { type: 'vertex', index }, startPoint: point });
+                            useProjectStore.temporal.getState().pause();
+                        }}
+                        onDragEnd={(e) => {
+                            e.cancelBubble = true;
+                            setDragCableHandle(null);
+                            useProjectStore.temporal.getState().resume();
+                        }}
+                        onDragMove={(e) => {
+                            e.cancelBubble = true;
+                            const newPos = { x: e.target.x(), y: e.target.y() };
+
+                            // Find current cable
+                            const cable = useProjectStore.getState().cables.find(c => c.id === cableId);
+                            if (!cable) return;
+
+                            const newPoints = [...cable.points];
+
+                            // 1. Endpoint Logic (Re-route snapping)
+                            if (isEndpoint) {
+                                // Snap to Hub/Anchor
+                                const snapDist = 20 / (stage?.scaleX() || 1);
+                                const otherAnchors = anchors.filter(a => a.id !== cable.fromId && a.id !== cable.toId); // Naive filter
+                                const hubs = useProjectStore.getState().hubs; // Get Hubs
+
+                                let snappedToId: string | undefined;
+
+                                // Check Hubs
+                                const hitHub = hubs.find(h => dist(newPos, h) < snapDist);
+                                if (hitHub) {
+                                    newPos.x = hitHub.x;
+                                    newPos.y = hitHub.y;
+                                    snappedToId = hitHub.id;
+                                } else {
+                                    // Check Anchors (only if not hub hit)
+                                    const hitAnchor = anchors.find(a => dist(newPos, a) < snapDist);
+                                    if (hitAnchor) {
+                                        newPos.x = hitAnchor.x;
+                                        newPos.y = hitAnchor.y;
+                                        snappedToId = hitAnchor.id;
+                                    }
+                                }
+
+                                // Update Cable Points visually
+                                newPoints[index] = newPos;
+
+                                // If snapped and index is 0 or last, we update connections?
+                                // We should probably do this on DragEnd to avoid constant re-routing calculation churn.
+                                // For now, just move the point.
+                                if (snappedToId) {
+                                    // Store provisional snap target in temp state if needed? 
+                                    // Actually dragging "by grabbing cable edge will reroute"
+                                    if (index === 0) {
+                                        // Changing start
+                                        useProjectStore.getState().updateCable(cableId, { fromId: snappedToId, points: newPoints });
+                                    } else {
+                                        // Changing end
+                                        useProjectStore.getState().updateCable(cableId, { toId: snappedToId, points: newPoints });
+                                    }
+                                } else {
+                                    // Just updating geometry (detached?) - Requirement says "didnt detouched from anchor/hub".
+                                    // This implies dragging cable *body* keeps attachment. 
+                                    // But dragging specific endpoint *can* detach/reroute.
+                                    useProjectStore.getState().updateCable(cableId, { points: newPoints });
+                                }
+
+                            } else {
+                                // 2. Internal Vertex Logic
+                                newPoints[index] = newPos;
+                                useProjectStore.getState().updateCable(cableId, { points: newPoints });
+                            }
+                        }}
+                    />
+                );
+
+                state.cables.forEach(cable => {
+                    // Render Vertices
+                    cable.points.forEach((p, i) => {
+                        const isEndpoint = i === 0 || i === cable.points.length - 1;
+                        handles.push(renderHandle(cable.id, p, i, isEndpoint));
+                    });
+                });
+
+                return handles;
             })()}
 
             {/* Import Selection Contour */}
@@ -2213,6 +2536,17 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 }
                 return null;
             })()}
+
+            {/* Temp Cable Line (Ghost) */}
+            {tempCablePath && (
+                <Line
+                    points={[tempCablePath.start.x, tempCablePath.start.y, tempCablePath.end.x, tempCablePath.end.y]}
+                    stroke="#FF9800"
+                    strokeWidth={2}
+                    dash={[5, 5]}
+                    listening={false}
+                />
+            )}
         </React.Fragment>
     );
 };

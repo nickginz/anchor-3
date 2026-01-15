@@ -5,6 +5,20 @@ import { getOrthogonalPath, calculateLength } from './routing';
 
 
 
+
+const HUB_COLORS = [
+    '#2196F3', // Blue
+    '#F44336', // Red
+    '#4CAF50', // Green
+    '#FFC107', // Amber
+    '#9C27B0', // Purple
+    '#00BCD4', // Cyan
+    '#FF5722', // Deep Orange
+    '#795548', // Brown
+    '#607D8B', // Blue Grey
+    '#E91E63'  // Pink
+];
+
 export const autoConnect = () => {
     const store = useProjectStore.getState();
     const { hubs, anchors, walls, scaleRatio, activeTopology, setCables } = store;
@@ -41,13 +55,15 @@ export const autoConnect = () => {
                 const routingWalls = store.allowOutsideConnections ? [] : walls;
                 const points = getOrthogonalPath(start, end, routingWalls);
                 const length = calculateLength(points, scaleRatio);
+                const color = HUB_COLORS[closestHub % HUB_COLORS.length];
 
                 newCables.push({
                     id: uuidv4(),
                     fromId: hub.id,
                     toId: anchor.id,
                     points,
-                    length
+                    length,
+                    color
                 });
             }
         });
@@ -58,12 +74,13 @@ export const autoConnect = () => {
 
         const unvisitedAnchors = new Set(anchors.map(a => a.id));
 
-        hubs.forEach(hub => {
+        hubs.forEach((hub, hubIndex) => {
             let currentPoint: Point = { x: hub.x, y: hub.y };
             let currentSourceId = hub.id;
             let chainCount = 0;
             // Basic limit to prevent infinite loops or crazy long chains if not intended.
             const MAX_CHAIN_LENGTH = 10;
+            const chainColor = HUB_COLORS[hubIndex % HUB_COLORS.length];
 
             while (chainCount < MAX_CHAIN_LENGTH && unvisitedAnchors.size > 0) {
                 // Find nearest unvisited anchor to currentPoint
@@ -98,7 +115,8 @@ export const autoConnect = () => {
                         fromId: currentSourceId,
                         toId: nearestId,
                         points,
-                        length
+                        length,
+                        color: chainColor
                     });
 
                     // Advance

@@ -28,6 +28,7 @@ import {
     Ghost,
     BookTemplate, // New Icon
     FilePlus,
+    Spline,
 } from 'lucide-react';
 import { WallDetectionModal } from './WallDetectionModal';
 import { SettingsPanel } from './SettingsPanel';
@@ -450,6 +451,15 @@ export const Ribbon: React.FC = () => {
                             tooltip="Auto-Connect Anchors to Hubs"
                             iconSize={16}
                             className="p-1.5 text-blue-400"
+                        />
+                        <ToolbarButton
+                            icon={Spline} // Using Spline as "Cable Edit" icon
+                            label="Route"
+                            active={activeTool === 'cable_edit'}
+                            onClick={() => setTool(activeTool === 'cable_edit' ? 'select' : 'cable_edit')}
+                            tooltip="Cable Management Mode (Edit/Re-route)"
+                            iconSize={16}
+                            className={`p-1.5 ${activeTool === 'cable_edit' ? 'text-orange-400' : ''}`}
                         />
                     </div>
                 </div>

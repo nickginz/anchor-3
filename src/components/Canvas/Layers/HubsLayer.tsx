@@ -5,10 +5,6 @@ import { useProjectStore } from '../../../store/useProjectStore';
 export const HubsLayer: React.FC = () => {
     const { hubs, cables, selectedIds, theme, layers, allowOutsideConnections, setSelection } = useProjectStore();
 
-    if (!hubs?.length && !cables?.length) return null;
-    // If both hidden, return null early? Or just render empty groups?
-    if (!layers.hubs && !layers.cables) return null;
-
     const colors = theme === 'light' ? {
         hubFill: '#9333ea', // Purple
         hubStroke: '#ffffff',
@@ -39,8 +35,10 @@ export const HubsLayer: React.FC = () => {
     const cablePaths = React.useMemo(() => {
         if (!layers.cables) return [];
 
-        return cables.map((cable) => {
+        return (cables || []).map((cable) => {
             const points = cable.points;
+            if (!points || points.length < 2) return { id: cable.id, data: '' };
+
             let path = `M ${points[0].x} ${points[0].y}`;
 
             for (let i = 0; i < points.length - 1; i++) {
@@ -58,7 +56,7 @@ export const HubsLayer: React.FC = () => {
                     const maxX = Math.max(p1.x, p2.x);
                     const y = p1.y;
 
-                    cables.forEach((otherCable) => {
+                    (cables || []).forEach((otherCable) => {
                         // Skip checking against itself? 
                         // Actually, a cable can cross itself, so we check self too, but effectively skip self-segment
                         // But strictly: Horizontal jumps over Vertical.
@@ -66,6 +64,7 @@ export const HubsLayer: React.FC = () => {
 
                         // Optimization: if strictly orthogonal, we only check V segments
                         const opoints = otherCable.points;
+                        if (!opoints) return;
                         for (let j = 0; j < opoints.length - 1; j++) {
                             const q1 = opoints[j];
                             const q2 = opoints[j + 1];
@@ -127,6 +126,10 @@ export const HubsLayer: React.FC = () => {
         });
     }, [cables, layers.cables, allowOutsideConnections]);
 
+    if (!hubs?.length && !cables?.length) return null;
+    // If both hidden, return null early? Or just render empty groups?
+    if (!layers.hubs && !layers.cables) return null;
+
     return (
         <Group>
             {/* Render Cables */}
@@ -137,7 +140,7 @@ export const HubsLayer: React.FC = () => {
                     <Path
                         key={cp.id}
                         data={cp.data}
-                        stroke={isSelected ? '#fde047' : colors.cable} // Yellow if selected
+                        stroke={isSelected ? '#fde047' : (cables.find(c => c.id === cp.id)?.color || colors.cable)} // Yellow if selected, else custom or theme blue
                         strokeWidth={isSelected ? 4 : 2}
                         lineCap="round"
                         lineJoin="round"
