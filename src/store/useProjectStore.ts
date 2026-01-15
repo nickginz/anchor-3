@@ -100,6 +100,9 @@ interface ProjectState {
     setTopology: (t: 'star' | 'daisy') => void;
 
 
+
+
+
     // Geometry Actions
     setShowOffsets: (v: boolean) => void;
     setOffsetStep: (v: number) => void;
@@ -140,6 +143,8 @@ interface ProjectState {
     updateCable: (id: string, updates: Partial<Cable>) => void;
 
     setCables: (cables: Cable[]) => void;
+    addCable: (cable: Cable) => void;
+    removeCable: (id: string) => void;
 
     // Import State (Multi-Object)
     importedObjects: ImportedObject[];

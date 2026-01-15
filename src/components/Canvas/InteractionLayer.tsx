@@ -167,7 +167,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     const isMouseDown = useRef(false);
 
     // Cable Management State
-    const [hoveredCable, setHoveredCable] = useState<{ id: string, handle?: { type: 'vertex' | 'segment', index: number, point: Point } } | null>(null);
+    // Cable Management State
     const [dragCableHandle, setDragCableHandle] = useState<{ id: string, handle: { type: 'vertex' | 'segment', index: number }, startPoint: Point } | null>(null);
 
 
@@ -1052,207 +1052,208 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 for (const cable of cables) {
                     const hit = isPointNearCable(pos, cable.points, 10 / (stage?.scaleX() || 1));
                     if (hit) {
-                        setHoveredCable({ id: cable.id, handle: hit });
+                        // setHoveredCable({ id: cable.id, handle: hit });
                         foundHover = true;
                         if (hit.type === 'segment') {
-                            stage.container().style.cursor = 'move';
+                            stage?.container().style.setProperty('cursor', 'move');
                         }
                         break;
                     }
-                }
-                if (!foundHover) {
-                    setHoveredCable(null);
-                    stage.container().style.cursor = 'default';
+                    if (!foundHover) {
+                        // setHoveredCable(null);
+                        stage?.container().style.setProperty('cursor', 'default');
+                    }
                 }
             }
-        }
 
-        // ALT + Left Drag (Move Active Import)
-        if (e.evt.altKey && isMouseDown.current && useProjectStore.getState().activeImportId) {
-            if (lastDragPos.current) {
+            // ALT + Left Drag (Move Active Import)
+            if (e.evt.altKey && isMouseDown.current && useProjectStore.getState().activeImportId) {
+                if (lastDragPos.current) {
+                    const dx = pos.x - lastDragPos.current.x;
+                    const dy = pos.y - lastDragPos.current.y;
+
+                    useProjectStore.getState().updateImportedObject(useProjectStore.getState().activeImportId!, {
+                        x: (useProjectStore.getState().importedObjects.find(o => o.id === useProjectStore.getState().activeImportId)?.x || 0) + dx,
+                        y: (useProjectStore.getState().importedObjects.find(o => o.id === useProjectStore.getState().activeImportId)?.y || 0) + dy
+                    });
+
+                    lastDragPos.current = pos;
+                    return;
+                } else {
+                    lastDragPos.current = pos;
+                }
+            }
+
+            // Panning
+            if (isPanning && lastPanPos.current) {
+                e.evt.preventDefault();
+                const stagePos = stage?.getPointerPosition();
+                if (stagePos) {
+                    const dx = stagePos.x - lastPanPos.current.x;
+                    const dy = stagePos.y - lastPanPos.current.y;
+                    stage?.position({ x: (stage?.x() || 0) + dx, y: (stage?.y() || 0) + dy });
+                    lastPanPos.current = { x: stagePos.x, y: stagePos.y };
+                    stage?.batchDraw();
+                }
+                return;
+            }
+
+            // Drag Dimension Text
+            if (dragTextId.current && useProjectStore.getState().layers.dimensions) {
+                const dim = useProjectStore.getState().dimensions.find(d => d.id === dragTextId.current);
+                if (dim) {
+                    const [x1, y1, x2, y2] = dim.points;
+                    const midX = (x1 + x2) / 2;
+                    const midY = (y1 + y2) / 2;
+                    // Calculate relative offset
+                    const offsetX = pos.x - midX;
+                    const offsetY = pos.y - midY;
+
+                    useProjectStore.getState().updateDimension(dragTextId.current, { textOffset: { x: offsetX, y: offsetY } });
+                }
+                return;
+            }
+
+            // Drag Dimension Line (Perpendicular)
+            if (dragDimLineId.current && lastDragPos.current && useProjectStore.getState().layers.dimensions) {
+                const dim = useProjectStore.getState().dimensions.find(d => d.id === dragDimLineId.current);
+                if (dim) {
+                    const dx = pos.x - lastDragPos.current.x;
+                    const dy = pos.y - lastDragPos.current.y;
+
+                    const [x1, y1, x2, y2] = dim.points;
+                    // Calculate Normal
+                    const dist = Math.hypot(x2 - x1, y2 - y1);
+                    if (dist > 0.001) {
+                        const nx = -(y2 - y1) / dist;
+                        const ny = (x2 - x1) / dist;
+
+                        // Project delta onto normal
+                        const dot = dx * nx + dy * ny;
+                        const moveX = dot * nx;
+                        const moveY = dot * ny;
+
+                        useProjectStore.getState().updateDimension(dim.id, {
+                            points: [x1 + moveX, y1 + moveY, x2 + moveX, y2 + moveY]
+                        });
+                    }
+                }
+                lastDragPos.current = pos;
+                return;
+            }
+
+            // Drag Anchor (Delta based)
+            if (dragAnchorId.current && lastDragPos.current && useProjectStore.getState().layers.anchors) {
                 const dx = pos.x - lastDragPos.current.x;
                 const dy = pos.y - lastDragPos.current.y;
+                const state = useProjectStore.getState();
 
-                useProjectStore.getState().updateImportedObject(useProjectStore.getState().activeImportId!, {
-                    x: (useProjectStore.getState().importedObjects.find(o => o.id === useProjectStore.getState().activeImportId)?.x || 0) + dx,
-                    y: (useProjectStore.getState().importedObjects.find(o => o.id === useProjectStore.getState().activeImportId)?.y || 0) + dy
-                });
+                const isDragSelected = state.selectedIds.includes(dragAnchorId.current);
+
+                if (isDragSelected) {
+                    // Update all selected anchors in batch
+                    const updates = state.anchors
+                        .filter(a => state.selectedIds.includes(a.id))
+                        .map(a => ({
+                            id: a.id,
+                            updates: { x: a.x + dx, y: a.y + dy }
+                        }));
+
+                    updateAnchors(updates);
+                } else {
+                    // Just update dragged anchor if for some reason it's not in selection (though logic ensures it is)
+                    const a = state.anchors.find(x => x.id === dragAnchorId.current);
+                    if (a) state.updateAnchor(a.id, { x: a.x + dx, y: a.y + dy });
+                }
 
                 lastDragPos.current = pos;
                 return;
-            } else {
-                lastDragPos.current = pos;
             }
-        }
 
-        // Panning
-        if (isPanning && lastPanPos.current) {
-            e.evt.preventDefault();
-            const stagePos = stage?.getPointerPosition();
-            if (stagePos) {
-                const dx = stagePos.x - lastPanPos.current.x;
-                const dy = stagePos.y - lastPanPos.current.y;
-                stage?.position({ x: (stage?.x() || 0) + dx, y: (stage?.y() || 0) + dy });
-                lastPanPos.current = { x: stagePos.x, y: stagePos.y };
-                stage?.batchDraw();
-            }
-            return;
-        }
-
-        // Drag Dimension Text
-        if (dragTextId.current && useProjectStore.getState().layers.dimensions) {
-            const dim = useProjectStore.getState().dimensions.find(d => d.id === dragTextId.current);
-            if (dim) {
-                const [x1, y1, x2, y2] = dim.points;
-                const midX = (x1 + x2) / 2;
-                const midY = (y1 + y2) / 2;
-                // Calculate relative offset
-                const offsetX = pos.x - midX;
-                const offsetY = pos.y - midY;
-
-                useProjectStore.getState().updateDimension(dragTextId.current, { textOffset: { x: offsetX, y: offsetY } });
-            }
-            return;
-        }
-
-        // Drag Dimension Line (Perpendicular)
-        if (dragDimLineId.current && lastDragPos.current && useProjectStore.getState().layers.dimensions) {
-            const dim = useProjectStore.getState().dimensions.find(d => d.id === dragDimLineId.current);
-            if (dim) {
+            // Drag Hub
+            if (dragHubId.current && lastDragPos.current) {
                 const dx = pos.x - lastDragPos.current.x;
                 const dy = pos.y - lastDragPos.current.y;
+                const state = useProjectStore.getState();
 
-                const [x1, y1, x2, y2] = dim.points;
-                // Calculate Normal
-                const dist = Math.hypot(x2 - x1, y2 - y1);
-                if (dist > 0.001) {
-                    const nx = -(y2 - y1) / dist;
-                    const ny = (x2 - x1) / dist;
+                const isDragSelected = state.selectedIds.includes(dragHubId.current);
+                if (isDragSelected) {
+                    state.hubs.forEach(h => {
+                        if (state.selectedIds.includes(h.id)) {
+                            state.updateHub(h.id, { x: h.x + dx, y: h.y + dy });
+                        }
+                    });
+                } else {
+                    const hub = state.hubs.find(h => h.id === dragHubId.current);
+                    if (hub) state.updateHub(hub.id, { x: hub.x + dx, y: hub.y + dy });
+                }
 
-                    // Project delta onto normal
-                    const dot = dx * nx + dy * ny;
-                    const moveX = dot * nx;
-                    const moveY = dot * ny;
+                // Auto Update Cables if "Connect" was active?
+                // For now, cables are static until "Connect" is pressed again OR we update them live.
+                // Requirement: "Dragging Hubs ... updates connected cables dynamically".
+                // Implementation: We need to re-route cables connected to this hub.
+                // Since we use orthogonal routing, we just need to update the points.
 
-                    useProjectStore.getState().updateDimension(dim.id, {
-                        points: [x1 + moveX, y1 + moveY, x2 + moveX, y2 + moveY]
+                // Allow batch update of cables
+                const cablesToUpdate = state.cables.filter(c =>
+                    c.fromId === dragHubId.current ||
+                    (isDragSelected && state.selectedIds.includes(c.fromId))
+                );
+
+                if (cablesToUpdate.length > 0) {
+                    // Import the smart router logic dynamically or duplicate simply but with walls
+                    // Since we need valid walls, getting them from state is easy.
+                    const walls = state.walls;
+
+                    const newCables = cablesToUpdate.map(c => {
+                        const hub = state.hubs.find(h => h.id === c.fromId);
+                        const anchor = state.anchors.find(a => a.id === c.toId);
+                        if (hub && anchor) {
+                            const points = getOrthogonalPath({ x: hub.x, y: hub.y }, { x: anchor.x, y: anchor.y }, walls);
+                            return { ...c, points };
+                        }
+                        return c;
+                    });
+
+                    // Batch update cables not supported by default actions, but we can set specific cable
+                    // Better: create a partial update capability or just loop
+                    newCables.forEach(c => {
+                        state.updateCable(c.id, { points: c.points });
                     });
                 }
-            }
-            lastDragPos.current = pos;
-            return;
-        }
 
-        // Drag Anchor (Delta based)
-        if (dragAnchorId.current && lastDragPos.current && useProjectStore.getState().layers.anchors) {
-            const dx = pos.x - lastDragPos.current.x;
-            const dy = pos.y - lastDragPos.current.y;
-            const state = useProjectStore.getState();
-
-            const isDragSelected = state.selectedIds.includes(dragAnchorId.current);
-
-            if (isDragSelected) {
-                // Update all selected anchors in batch
-                const updates = state.anchors
-                    .filter(a => state.selectedIds.includes(a.id))
-                    .map(a => ({
-                        id: a.id,
-                        updates: { x: a.x + dx, y: a.y + dy }
-                    }));
-
-                updateAnchors(updates);
-            } else {
-                // Just update dragged anchor if for some reason it's not in selection (though logic ensures it is)
-                const a = state.anchors.find(x => x.id === dragAnchorId.current);
-                if (a) state.updateAnchor(a.id, { x: a.x + dx, y: a.y + dy });
+                lastDragPos.current = pos;
+                return;
             }
 
-            lastDragPos.current = pos;
-            return;
-        }
-
-        // Drag Hub
-        if (dragHubId.current && lastDragPos.current) {
-            const dx = pos.x - lastDragPos.current.x;
-            const dy = pos.y - lastDragPos.current.y;
-            const state = useProjectStore.getState();
-
-            const isDragSelected = state.selectedIds.includes(dragHubId.current);
-            if (isDragSelected) {
-                state.hubs.forEach(h => {
-                    if (state.selectedIds.includes(h.id)) {
-                        state.updateHub(h.id, { x: h.x + dx, y: h.y + dy });
-                    }
-                });
-            } else {
-                const hub = state.hubs.find(h => h.id === dragHubId.current);
-                if (hub) state.updateHub(hub.id, { x: hub.x + dx, y: hub.y + dy });
-            }
-
-            // Auto Update Cables if "Connect" was active?
-            // For now, cables are static until "Connect" is pressed again OR we update them live.
-            // Requirement: "Dragging Hubs ... updates connected cables dynamically".
-            // Implementation: We need to re-route cables connected to this hub.
-            // Since we use orthogonal routing, we just need to update the points.
-
-            // Allow batch update of cables
-            const cablesToUpdate = state.cables.filter(c =>
-                c.fromId === dragHubId.current ||
-                (isDragSelected && state.selectedIds.includes(c.fromId))
-            );
-
-            if (cablesToUpdate.length > 0) {
-                // Import the smart router logic dynamically or duplicate simply but with walls
-                // Since we need valid walls, getting them from state is easy.
-                const walls = state.walls;
-
-                const newCables = cablesToUpdate.map(c => {
-                    const hub = state.hubs.find(h => h.id === c.fromId);
-                    const anchor = state.anchors.find(a => a.id === c.toId);
-                    if (hub && anchor) {
-                        const points = getOrthogonalPath({ x: hub.x, y: hub.y }, { x: anchor.x, y: anchor.y }, walls);
-                        return { ...c, points };
-                    }
-                    return c;
-                });
-
-                // Batch update cables not supported by default actions, but we can set specific cable
-                // Better: create a partial update capability or just loop
-                newCables.forEach(c => {
-                    state.updateCable(c.id, { points: c.points });
-                });
-            }
-
-            lastDragPos.current = pos;
-            return;
-        }
-
-        // Tool Mouse Move checks...
-        if (activeTool === 'wall' || activeTool === 'wall_rect' || activeTool === 'wall_rect_edge' || activeTool === 'dimension') {
-            const state = useProjectStore.getState();
-            const snap = (state.layers.walls || state.layers.anchors) ? getSnapPoint(pos, walls, anchors, 20 / ((stage?.scaleX() || 1))) : null;
-            setCurrentMousePos(snap ? snap.point : pos);
-        } else if (activeTool === 'scale' && points.length > 0) {
-            setCurrentMousePos(pos);
-        } else if (activeTool === 'select') {
-            if (selectionStart && isMouseDown.current) {
-                setSelectionRect({
-                    x: Math.min(selectionStart.x, pos.x),
-                    y: Math.min(selectionStart.y, pos.y),
-                    width: Math.abs(pos.x - selectionStart.x),
-                    height: Math.abs(pos.y - selectionStart.y)
-                });
+            // Tool Mouse Move checks...
+            if (activeTool === 'wall' || activeTool === 'wall_rect' || activeTool === 'wall_rect_edge' || activeTool === 'dimension') {
+                const state = useProjectStore.getState();
+                const snap = (state.layers.walls || state.layers.anchors) ? getSnapPoint(pos, walls, anchors, 20 / ((stage?.scaleX() || 1))) : null;
+                setCurrentMousePos(snap ? snap.point : pos);
+            } else if (activeTool === 'scale' && points.length > 0) {
                 setCurrentMousePos(pos);
+            } else if (activeTool === 'select') {
+                if (selectionStart && isMouseDown.current) {
+                    setSelectionRect({
+                        x: Math.min(selectionStart.x, pos.x),
+                        y: Math.min(selectionStart.y, pos.y),
+                        width: Math.abs(pos.x - selectionStart.x),
+                        height: Math.abs(pos.y - selectionStart.y)
+                    });
+                    setCurrentMousePos(pos);
+                }
+            } else if (activeTool === 'export_area') {
+                if (selectionStart) {
+                    const x = Math.min(selectionStart.x, pos.x);
+                    const y = Math.min(selectionStart.y, pos.y);
+                    const width = Math.abs(pos.x - selectionStart.x);
+                    const height = Math.abs(pos.y - selectionStart.y);
+                    setSelectionRect({ x, y, width, height });
+                }
             }
-        } else if (activeTool === 'export_area') {
-            if (selectionStart) {
-                const x = Math.min(selectionStart.x, pos.x);
-                const y = Math.min(selectionStart.y, pos.y);
-                const width = Math.abs(pos.x - selectionStart.x);
-                const height = Math.abs(pos.y - selectionStart.y);
-                setSelectionRect({ x, y, width, height });
-            }
-        }
+        };
+
     };
 
     const handleMouseUp = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -2401,7 +2402,6 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                             if (isEndpoint) {
                                 // Snap to Hub/Anchor
                                 const snapDist = 20 / (stage?.scaleX() || 1);
-                                const otherAnchors = anchors.filter(a => a.id !== cable.fromId && a.id !== cable.toId); // Naive filter
                                 const hubs = useProjectStore.getState().hubs; // Get Hubs
 
                                 let snappedToId: string | undefined;
@@ -2551,3 +2551,4 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     );
 };
 export default InteractionLayer;
+
