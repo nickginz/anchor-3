@@ -4,7 +4,7 @@ import { generateAutoAnchors } from '../../../utils/auto-placement';
 import { Activity, GitCommit, Sliders, CheckSquare, Wand2, Eye, EyeOff } from 'lucide-react';
 import { detectRooms, calculatePolygonArea } from '../../../utils/room-detection';
 import { getPolygonCentroid } from '../../../utils/geometry';
-import { calculateObstacleLoss, calculateFreeSpaceRSSI, mWToDBm, dBmToMW } from '../../../utils/signal-physics';
+import { calculateObstacleLoss, calculateFreeSpaceRSSI } from '../../../utils/signal-physics';
 import type { Wall, Anchor } from '../../../types';
 
 // --- Median Signal Component --- (Now Categorized Stats)
