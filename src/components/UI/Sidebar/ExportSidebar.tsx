@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useProjectStore } from '../../../store/useProjectStore';
-import { FileUp, Crop, FileText, Image as ImageIcon, Check } from 'lucide-react';
+import { FileUp, Crop, FileText, Image as ImageIcon, Check, FileCode } from 'lucide-react';
+import { generateHtmlContent } from '../../../utils/html-export-utils';
 
 
 export const ExportSidebar: React.FC = () => {
@@ -11,10 +12,11 @@ export const ExportSidebar: React.FC = () => {
         exportRegion,
         setTool,
         activeTool,
-        setExportRegion
+        setExportRegion,
+        toolbarSize
     } = useProjectStore();
 
-    const [format, setFormat] = useState<'png' | 'pdf'>('pdf');
+    const [format, setFormat] = useState<'png' | 'pdf' | 'html'>('pdf');
     const [pdfSize, setPdfSize] = useState<'a4' | 'a3' | 'a2' | 'a1' | 'a0'>('a4');
     const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('landscape');
     const quality = 2; // Pixel Ratio
@@ -43,14 +45,24 @@ export const ExportSidebar: React.FC = () => {
             // @ts-ignore
             if (window.showSaveFilePicker) {
                 const defaultName = `project-${new Date().toISOString().slice(0, 10)}`;
-                const ext = format === 'png' ? 'png' : 'pdf';
-                const mime = format === 'pdf' ? 'application/pdf' : 'image/png';
+
+                let ext = '';
+                let mime = '';
+                let description = '';
+
+                if (format === 'png') {
+                    ext = 'png'; mime = 'image/png'; description = 'PNG Image';
+                } else if (format === 'pdf') {
+                    ext = 'pdf'; mime = 'application/pdf'; description = 'PDF Document';
+                } else if (format === 'html') {
+                    ext = 'html'; mime = 'text/html'; description = 'Web Page';
+                }
 
                 // @ts-ignore
                 fileHandle = await window.showSaveFilePicker({
                     suggestedName: `${defaultName}.${ext}`,
                     types: [{
-                        description: format === 'png' ? 'PNG Image' : 'PDF Document',
+                        description,
                         accept: { [mime]: [`.${ext}`] }
                     }],
                 });
@@ -62,7 +74,58 @@ export const ExportSidebar: React.FC = () => {
             console.warn('File Picker failed, falling back to legacy download:', err);
         }
 
-        // Let's use a CustomEvent for loose coupling.
+        // HTML Export - Handle specific write logic here since we have the content ready
+        if (format === 'html') {
+            const state = useProjectStore.getState();
+            let htmlContent = "";
+            try {
+                htmlContent = generateHtmlContent(state, "AnchorCAD_Project");
+            } catch (e) {
+                console.error("HTML Generation Failed:", e);
+                alert("Failed to generate HTML content. Please check console for details.");
+                return;
+            }
+
+            if (!htmlContent) {
+                console.error("HTML Generation produced empty string options:", { state });
+                alert("Generated HTML is empty. Export aborted.");
+                return;
+            }
+            console.log("Generated HTML length:", htmlContent.length);
+
+            let writeSuccess = false;
+
+            if (fileHandle) {
+                try {
+                    // @ts-ignore
+                    const writable = await fileHandle.createWritable();
+                    // @ts-ignore
+                    await writable.write(htmlContent);
+                    // @ts-ignore
+                    await writable.close();
+                    writeSuccess = true;
+                } catch (err) {
+                    console.error("Failed to write to file handle:", err);
+                    // Fallback to legacy download below
+                }
+            }
+
+            if (!writeSuccess) {
+                // Legacy Fallback
+                const blob = new Blob([htmlContent], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `project-${new Date().toISOString().slice(0, 10)}.html`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }
+            return;
+        }
+
+        // PDF/PNG - Dispatch event for canvas processing
         const event = new CustomEvent('request-export', {
             detail: {
                 format,
@@ -77,7 +140,7 @@ export const ExportSidebar: React.FC = () => {
     };
 
     return (
-        <div className={`fixed left-0 top-16 bottom-8 w-64 ${bgClass} border-r z-20 flex flex-col shadow-lg`}>
+        <div className={`fixed left-0 ${toolbarSize === 'small' ? 'top-[46px]' : 'top-16'} bottom-8 w-64 ${bgClass} border-r z-20 flex flex-col shadow-lg transition-all duration-300`}>
             {/* Header */}
             <div className={`p-3 border-b ${isDark ? 'border-[#333]' : 'border-gray-200'} flex justify-between items-center`}>
                 <h3 className={`font-semibold text-sm ${textClass} flex items-center gap-2`}>
@@ -97,7 +160,7 @@ export const ExportSidebar: React.FC = () => {
                 {/* Format Section */}
                 <div>
                     <h4 className={`text-[11px] font-bold uppercase ${subTextClass} mb-2`}>Format</h4>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                         <button
                             onClick={() => setFormat('png')}
                             className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${format === 'png'
@@ -106,7 +169,7 @@ export const ExportSidebar: React.FC = () => {
                                 }`}
                         >
                             <ImageIcon size={20} className="mb-1" />
-                            <span className="text-xs">PNG Image</span>
+                            <span className="text-xs">PNG</span>
                         </button>
                         <button
                             onClick={() => setFormat('pdf')}
@@ -116,7 +179,17 @@ export const ExportSidebar: React.FC = () => {
                                 }`}
                         >
                             <FileText size={20} className="mb-1" />
-                            <span className="text-xs">PDF Document</span>
+                            <span className="text-xs">PDF</span>
+                        </button>
+                        <button
+                            onClick={() => setFormat('html')}
+                            className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${format === 'html'
+                                ? 'bg-blue-900/30 border-blue-500/50 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.15)]'
+                                : `${isDark ? 'bg-[#252526] border-[#333] hover:bg-[#2d2d2d]' : 'bg-gray-50 border-gray-200'} ${textClass} hover:opacity-80`
+                                }`}
+                        >
+                            <FileCode size={20} className="mb-1" />
+                            <span className="text-xs">HTML</span>
                         </button>
                     </div>
                 </div>
@@ -207,7 +280,6 @@ export const ExportSidebar: React.FC = () => {
                         </div>
                     )}
                 </div>
-
             </div>
 
             {/* Footer Action */}

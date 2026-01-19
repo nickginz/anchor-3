@@ -215,13 +215,31 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
         if (areaM2 > 110) {
             type = 'large';
         } else {
-            // Small/Medium Room Logic
-            if (maxSpan >= 13) {
-                // Extended (Long)
-                type = 'extended';
-            } else {
-                // Compact (approx square/rect)
+            // Check Walls for Small Rule Updates
+            const vertexCount = roomPoly.length;
+            let maxWallM = 0;
+            for (let i = 0; i < roomPoly.length; i++) {
+                const j = (i + 1) % roomPoly.length;
+                const d = dist(roomPoly[i], roomPoly[j]) / scaleRatio;
+                if (d > maxWallM) maxWallM = d;
+            }
+
+            // Rules:
+            // a. If no wall > 15m -> Single Anchor (Compact)
+            // b. If > 7 walls -> Single Anchor (Compact)
+            if (maxWallM <= 15 || vertexCount > 7) {
                 type = 'compact';
+                console.log(`[AutoPlacement] Small Room Force Compact: WallMax=${maxWallM.toFixed(1)}, Verts=${vertexCount}`);
+            } else {
+                // Determine Extended vs Compact normally?
+                // If it failed "no wall > 15" => implies there IS a wall > 15m.
+                // If vertex <= 7.
+                // This typically means it IS extended if we have such a long wall.
+                if (maxSpan >= 13) {
+                    type = 'extended';
+                } else {
+                    type = 'compact';
+                }
             }
         }
 
@@ -297,6 +315,27 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
         }
 
 
+
+
+        // --- STRICT RULE: FORCE SINGLE ANCHOR ---
+        // Overrides "Complex Small Room" logic for jagged or small-walled rooms.
+        if (areaM2 <= 110) {
+            const vertexCount = roomPoly.length;
+            let maxWallM = 0;
+            for (let i = 0; i < roomPoly.length; i++) {
+                const j = (i + 1) % roomPoly.length;
+                const d = dist(roomPoly[i], roomPoly[j]) / scaleRatio;
+                if (d > maxWallM) maxWallM = d;
+            }
+
+            // Rules: Max Wall <= 15m OR Vertex Count > 7 (Jagged)
+            if (maxWallM <= 15 || vertexCount > 7) {
+                const center = getPolygonCentroid(roomPoly);
+                addCandidate(center, 'critical');
+                console.log(`[AutoPlacement] Force Single Anchor (Rule): V=${vertexCount}, MaxW=${maxWallM.toFixed(1)}`);
+                return; // Stop processing this room
+            }
+        }
 
         // --- COMPLEX SMALL ROOM LOGIC ---
         // Check for Complex Topology even in Small Rooms
@@ -1024,114 +1063,6 @@ export const generateAutoAnchors = (walls: Wall[], options: PlacementOptions, ex
     }));
 };
 
-// --- DENSITY OPTIMIZATION (Button Logic) ---
-export const densityOptimization = (
-    anchors: Anchor[],
-    thresholdN: number, // Overlap Threshold (Remove if overlaps >= N)
-    scaleRatio: number,
-    globalRadius: number,
-    walls: Wall[] = [],
-    targetScope: 'small' | 'large' | 'all' = 'all',
-    placementArea: Point[] | undefined = undefined // NEW: Optional Area Constraint
-): Anchor[] => {
-    // 1. Identify Scope
-    let scopePolygons: Point[][] = [];
-    if (walls.length > 0 && targetScope !== 'all') {
-        const rooms = detectRooms(walls);
-
-        rooms.forEach((poly) => {
-            const rawArea = Math.abs(calculatePolygonArea(poly));
-            const area = rawArea / (scaleRatio * scaleRatio);
-            const isSmall = area <= 110;
-
-            if (targetScope === 'small' && isSmall) scopePolygons.push(poly);
-            else if (targetScope === 'large' && !isSmall) scopePolygons.push(poly);
-        });
-    }
-
-    // 2. Filter Candidates
-    const candidates: Anchor[] = [];
-    const others: Anchor[] = [];
-
-    anchors.forEach(a => {
-        if (!a.isAuto || a.locked) {
-            others.push(a);
-            return;
-        }
-
-        // Check Placement Area Constraint
-        if (placementArea && placementArea.length >= 3) {
-            if (!isPointInPolygon(a, placementArea)) {
-                others.push(a); // Outside area -> Protect it
-                return;
-            }
-        }
-
-        // Scope Check
-        if (scopePolygons.length > 0) {
-            let inScope = false;
-            for (const poly of scopePolygons) {
-                if (isPointInPolygon(a, poly)) {
-                    inScope = true;
-                    break;
-                }
-            }
-            if (!inScope) {
-                others.push(a);
-                return;
-            }
-        }
-
-        candidates.push(a);
-    });
-
-    // 3. Sort Candidates: Strictly by ID (User Request)
-    let activeCandidates = [...candidates];
-    let restart = true;
-    let ops = 0;
-    const MAX_OPS = candidates.length * candidates.length + 1000;
-
-    while (restart) {
-        restart = false;
-        const currentPool = [...activeCandidates, ...others];
-
-        for (let i = 0; i < activeCandidates.length; i++) {
-            if (ops++ > MAX_OPS) {
-                console.warn("[Density] Max Ops limit reached.");
-                break;
-            }
-
-            const candidate = activeCandidates[i];
-
-            // Count Overlaps
-            let overlapCount = 0;
-            const factor = 1.0;
-            const rPx = ((candidate.radius || globalRadius) * scaleRatio) * factor;
-
-            for (const other of currentPool) {
-                if (candidate.id === other.id) continue;
-
-                // Overlap Check
-                const rOther = ((other.radius || globalRadius) * scaleRatio) * factor;
-                const intersectDist = rPx + rOther;
-                const d = Math.sqrt((candidate.x - other.x) ** 2 + (candidate.y - other.y) ** 2);
-
-                if (d <= intersectDist * 1.01) {
-                    overlapCount++;
-                }
-            }
-
-            if (overlapCount >= thresholdN) {
-                console.log(`[Density] Removing Anchor ${candidate.id}`);
-                activeCandidates.splice(i, 1);
-                restart = true;
-                break;
-            }
-        }
-    }
-    const finalAnchors = [...activeCandidates, ...others];
+// --- DENSITY OPTIMIZATION REMOVED ---
 
 
-
-    return finalAnchors;
-};

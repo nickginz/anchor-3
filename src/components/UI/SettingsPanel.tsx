@@ -7,17 +7,20 @@ export const SettingsPanel: React.FC = () => {
         isSettingsOpen, setIsSettingsOpen,
         heatmapColorMode, setHeatmapColorMode,
         heatmapThresholds, setHeatmapThresholds,
-        theme, setTheme
+        theme, setTheme,
+        toolbarSize // Added for reactivity
     } = useProjectStore();
 
     if (!isSettingsOpen) return null;
+
+    const topClass = toolbarSize === 'small' ? 'top-[46px]' : 'top-16';
 
     const handleThresholdChange = (key: keyof typeof heatmapThresholds, value: number) => {
         setHeatmapThresholds({ ...heatmapThresholds, [key]: value });
     };
 
     return (
-        <div className="fixed top-16 right-0 bottom-0 w-80 panel-bg panel-border border-l shadow-2xl z-40 flex flex-col animate-in slide-in-from-right duration-200">
+        <div className={`fixed ${topClass} right-0 bottom-0 w-80 panel-bg panel-border border-l shadow-2xl z-40 flex flex-col animate-in slide-in-from-right duration-200 transition-all`}>
             {/* Header */}
             <div className="h-12 border-b panel-border flex items-center justify-between px-4 hover-bg">
                 <div className="flex items-center space-x-2 text-primary">
@@ -49,6 +52,26 @@ export const SettingsPanel: React.FC = () => {
                                 className={`px-3 py-1 text-[10px] rounded ${theme === 'light' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}
                             >
                                 Light
+                            </button>
+
+                        </div>
+                    </div>
+
+                    {/* Toolbar Size */}
+                    <div className="flex items-center justify-between pl-2">
+                        <span className="text-xs text-secondary">Toolbar Size</span>
+                        <div className="flex bg-[var(--bg-input)] rounded p-0.5 border panel-border">
+                            <button
+                                onClick={() => useProjectStore.getState().setToolbarSize('small')}
+                                className={`px-3 py-1 text-[10px] rounded ${useProjectStore.getState().toolbarSize === 'small' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}
+                            >
+                                Small
+                            </button>
+                            <button
+                                onClick={() => useProjectStore.getState().setToolbarSize('big')}
+                                className={`px-3 py-1 text-[10px] rounded ${useProjectStore.getState().toolbarSize === 'big' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}
+                            >
+                                Big
                             </button>
                         </div>
                     </div>
@@ -130,7 +153,7 @@ export const SettingsPanel: React.FC = () => {
                 </div>
 
             </div>
-        </div>
+        </div >
     );
 };
 

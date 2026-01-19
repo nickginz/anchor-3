@@ -52,6 +52,7 @@ export interface Hub {
     y: number;
     capacity: 2 | 6 | 12 | 24;
     name: string;
+    color?: string; // Hub specific color for cables
 }
 
 export interface Cable {
@@ -61,6 +62,11 @@ export interface Cable {
     points: Point[]; // Orthogonal path
     length: number; // Meters
     color?: string; // Hex color override
+    // Advanced Routing Props
+    type?: 'cat6' | 'fiber' | 'power';
+    verticalDrop?: number; // meters
+    serviceLoop?: number; // meters
+    topology?: 'star' | 'daisy';
 }
 
 export interface ProjectLayers {

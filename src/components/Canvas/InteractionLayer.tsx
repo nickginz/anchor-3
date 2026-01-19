@@ -136,7 +136,7 @@ const THEME_COLORS = {
 };
 
 export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpenMenu, onOpenScaleModal }) => {
-    const { activeTool, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setTool, walls, anchors, hubs, cables, addCable, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme, setExportRegion, exportRegion, updateCable } = useProjectStore();
+    const { activeTool, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setTool, walls, anchors, hubs, cables, addCable, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme, setExportRegion, exportRegion, updateCable, wallsLocked } = useProjectStore();
 
     const colors = THEME_COLORS[theme || 'dark'] || THEME_COLORS.dark;
 
@@ -250,12 +250,16 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             // Tool Shortcuts
             if (activeTool !== 'scale') { // Don't interrupt scale calib if typing? (though no typing there)
                 const key = e.key.toLowerCase();
+                const state = useProjectStore.getState();
+                const wallsLocked = state.wallsLocked;
 
                 // Advanced Wall Tool Shortcut (Shift+R)
                 if (key === 'r' && e.shiftKey) {
-                    if (activeTool === 'select' || activeTool.startsWith('wall') || activeTool.startsWith('anchor')) {
-                        setTool('wall_rect_edge');
-                        return;
+                    if (!wallsLocked) {
+                        if (activeTool === 'select' || activeTool.startsWith('wall') || activeTool.startsWith('anchor')) {
+                            setTool('wall_rect_edge');
+                            return;
+                        }
                     }
                 }
 
@@ -268,7 +272,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                         // Custom Undo for Wall Tool Chain
                         if (activeTool === 'wall' && points.length > 0) {
                             // Capture the wall that is about to be undone (the last one)
-                            const wallsBefore = useProjectStore.getState().walls;
+                            const wallsBefore = state.walls;
                             const wallToUndo = wallsBefore.length > 0 ? wallsBefore[wallsBefore.length - 1] : null;
 
                             useProjectStore.temporal.getState().undo();
@@ -299,25 +303,27 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     e.preventDefault();
                     if (e.shiftKey) {
                         // Ungroup
-                        const selectedIds = useProjectStore.getState().selectedIds;
-                        useProjectStore.getState().ungroupAnchors(selectedIds);
+                        const selectedIds = state.selectedIds;
+                        state.ungroupAnchors(selectedIds);
                     } else {
                         // Group
-                        const selectedIds = useProjectStore.getState().selectedIds;
-                        useProjectStore.getState().groupAnchors(selectedIds);
+                        const selectedIds = state.selectedIds;
+                        state.groupAnchors(selectedIds);
                     }
                     return;
                 }
 
                 // Delete / Backspace
                 if (key === 'delete' || key === 'backspace') {
-                    const state = useProjectStore.getState();
-
                     // Remove Selected Items
                     if (state.selectedIds.length > 0) {
                         state.selectedIds.forEach(id => {
                             const anchor = state.anchors.find(a => a.id === id);
                             if (anchor && anchor.locked) return;
+
+                            // Check Lock for Walls too? Assuming YES for consistency
+                            const wall = state.walls.find(w => w.id === id);
+                            if (wall && wallsLocked) return;
 
                             state.removeWall(id);
                             state.removeAnchor(id);
@@ -334,15 +340,32 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 }
 
                 if (key === 'v') setTool('select');
-                if (key === 'w') setTool('wall');
-                if (key === 'r') setTool('wall_rect');
+                if (key === 'w') {
+                    if (e.shiftKey) {
+                        e.preventDefault();
+                        state.setWallsLocked(!wallsLocked);
+                    } else if (!wallsLocked) {
+                        setTool('wall');
+                    }
+                }
+                if (key === 'r' && !wallsLocked) {
+                    if (activeTool === 'wall_rect') {
+                        setTool('wall_rect_edge');
+                    } else if (activeTool === 'wall_rect_edge') {
+                        setTool('wall_rect');
+                    } else {
+                        setTool('wall_rect');
+                    }
+                }
                 if (key === 'd') setTool('dimension');
                 if (key === 's') setTool('scale');
 
                 if (key === 'a') {
                     if (e.shiftKey) {
+                        e.preventDefault();
                         setTool('anchor_auto');
                         setAnchorMode('auto');
+                        state.setIsAutoPlacementOpen(true);
                     } else {
                         setTool('anchor');
                         setAnchorMode('manual');
@@ -604,8 +627,8 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             const state = useProjectStore.getState();
             const hitWall = getHitWall(pos, state.walls, 10 / (stage?.scaleX() || 1));
 
-            // If we clicked a wall
-            if (hitWall) {
+            // If we clicked a wall AND walls are NOT locked
+            if (hitWall && !wallsLocked) {
                 const isSelected = state.selectedIds.includes(hitWall.id);
                 let targetIds = isSelected ? state.selectedIds : [hitWall.id];
 
@@ -749,6 +772,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             }
             // Wall Tool
         } else if (activeTool === 'wall') {
+            if (wallsLocked) return; // Prevent drawing if locked
             if (e.evt.button === 0) {
                 let finalPos = pos;
                 // Check if snapping allowed (hidden layer = no snap)
@@ -789,6 +813,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
             // Rect Tool
         } else if (activeTool === 'wall_rect') {
+            if (wallsLocked) return; // Prevent drawing if locked
             if (e.evt.button === 0) {
                 let finalPos = pos;
                 const state = useProjectStore.getState();
@@ -843,6 +868,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
             // Wall Rect Edge Tool
         } else if (activeTool === 'wall_rect_edge') {
+            if (wallsLocked) return; // Prevent drawing if locked
             if (e.evt.button === 0) {
                 let finalPos = pos;
                 const state = useProjectStore.getState();
@@ -1258,6 +1284,27 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     };
 
     const handleMouseUp = (e: Konva.KonvaEventObject<MouseEvent>) => {
+        // Export Area Logic
+        if (activeTool === 'export_area' && selectionStart) {
+            const pos = getStagePoint();
+            if (pos) {
+                const x = Math.min(selectionStart.x, pos.x);
+                const y = Math.min(selectionStart.y, pos.y);
+                const width = Math.abs(pos.x - selectionStart.x);
+                const height = Math.abs(pos.y - selectionStart.y);
+
+                if (width > 0 && height > 0) {
+                    setExportRegion([
+                        { x, y },
+                        { x: x + width, y },
+                        { x: x + width, y: y + height },
+                        { x, y: y + height }
+                    ]);
+                    setTool('select');
+                }
+            }
+        }
+
         // Cable Drawing Finalize
         if (isDrawingCable.current) {
             const startId = cableStartId.current; // Capture before reset
@@ -1533,7 +1580,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     const state = useProjectStore.getState();
                     const { walls, anchors, hubs, dimensions } = state;
 
-                    if (state.layers.walls) {
+                    if (state.layers.walls && !wallsLocked) {
                         walls.forEach(w => {
                             const wx1 = w.points[0]; const wy1 = w.points[1];
                             const wx2 = w.points[2]; const wy2 = w.points[3];
@@ -1654,7 +1701,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                             }
                         }
 
-                        if (idsToSelect.length === 0 && useProjectStore.getState().layers.walls) {
+                        if (idsToSelect.length === 0 && useProjectStore.getState().layers.walls && !wallsLocked) {
                             for (const w of walls) {
                                 if (isPointNearWall(clickPos, w, tol)) {
                                     if (e.evt.ctrlKey) {

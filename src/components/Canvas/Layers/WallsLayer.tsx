@@ -6,7 +6,7 @@ import type { Wall } from '../../../types';
 import { getWallPattern } from '../../../utils/wall-patterns';
 
 export const WallsLayer: React.FC = () => {
-    const { walls, scaleRatio, layers, selectedIds, theme } = useProjectStore();
+    const { walls, scaleRatio, layers, selectedIds, theme, wallsLocked } = useProjectStore();
 
     // Group walls by thickness AND material to render them with different styles
     const groupedWalls = useMemo(() => {
@@ -127,7 +127,7 @@ export const WallsLayer: React.FC = () => {
     if (!layers.walls) return null;
 
     return (
-        <Group>
+        <Group listening={!wallsLocked}>
             {/* Render Merged Geometry Groups */}
             {/* Render Merged Geometry Groups */}
             {renderFills}

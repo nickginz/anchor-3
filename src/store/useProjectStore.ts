@@ -2,9 +2,10 @@ import { create } from 'zustand';
 import { temporal } from 'zundo';
 import { v4 as uuidv4 } from 'uuid';
 import type { Wall, Anchor, Dimension, ProjectLayers, ToolType, ImportedObject, ImageObject, DXFObject, Point, Hub, Cable } from '../types';
-import { getOrthogonalPath, calculateLength } from '../utils/routing';
+import { getOrthogonalPath, calculateLength, generateDaisyChain, getHubColor, distance } from '../utils/routing';
+import { reduceAnchors } from '../utils/optimizer-reduction';
 
-interface ProjectState {
+export interface ProjectState {
     scaleRatio: number; // px per meter
     walls: Wall[];
     anchors: Anchor[];
@@ -25,6 +26,8 @@ interface ProjectState {
 
     lastLoaded: number; // Timestamp of last project load
     wallPreset: 'default' | 'thick' | 'wide';
+    wallsLocked: boolean; // NEW: Lock walls from editing/selection
+    toolbarSize: 'small' | 'big'; // NEW: Global Toolbar Size
 
     // Anchor Settings
     anchorRadius: number;
@@ -34,6 +37,19 @@ interface ProjectState {
     // Hub Settings
     activeHubCapacity: 2 | 6 | 12 | 24;
     activeTopology: 'star' | 'daisy';
+
+    // Global Cable Settings
+    cableSettings: {
+        ceilingHeight: number;
+        serviceLoop: number;
+        defaultCableType: 'cat6' | 'fiber' | 'power';
+        avoidObstacles: boolean;
+        topology: 'star' | 'daisy';
+        showParallel: boolean; // Electrical View
+    };
+    setCableSettings: (settings: Partial<ProjectState['cableSettings']>) => void;
+    isCableSidebarOpen: boolean;
+    setIsCableSidebarOpen: (v: boolean) => void;
 
     // Geometry Tools
     showOffsets: boolean;
@@ -70,8 +86,10 @@ interface ProjectState {
     // Export Tool State
     isExportSidebarOpen: boolean;
     setIsExportSidebarOpen: (v: boolean) => void;
-    isBOMOpen: boolean; // NEW
-    setIsBOMOpen: (v: boolean) => void; // NEW
+    isBOMOpen: boolean;
+    setIsBOMOpen: (v: boolean) => void;
+    isHelpOpen: boolean; // NEW: Help/About Sidebar
+    setIsHelpOpen: (v: boolean) => void;
     exportRegion: Point[] | null;
     setExportRegion: (region: Point[] | null) => void;
 
@@ -92,10 +110,13 @@ interface ProjectState {
     setThickWallThickness: (thickness: number) => void;
     setWideWallThickness: (thickness: number) => void;
     setAnchorMode: (mode: 'manual' | 'auto') => void;
+    regenerateCables: () => void;
 
     setAnchorRadius: (r: number) => void;
     setAnchorShape: (s: 'circle' | 'square') => void;
     setShowAnchorRadius: (v: boolean) => void;
+    setWallsLocked: (v: boolean) => void;
+    setToolbarSize: (size: 'small' | 'big') => void;
     setHubCapacity: (c: 2 | 6 | 12 | 24) => void;
     setTopology: (t: 'star' | 'daisy') => void;
 
@@ -145,6 +166,9 @@ interface ProjectState {
     setCables: (cables: Cable[]) => void;
     addCable: (cable: Cable) => void;
     removeCable: (id: string) => void;
+
+    // Optimization Actions
+    optimizeAnchorCount: (percentage: number, scope?: 'small' | 'large' | 'all') => void;
 
     // Import State (Multi-Object)
     importedObjects: ImportedObject[];
@@ -221,12 +245,27 @@ export const useProjectStore = create<ProjectState>()(
         (set) => ({
             scaleRatio: 50, // Default 50px = 1m
             walls: [],
+            wallsLocked: false, // Default unlocked
+            toolbarSize: 'small',
             anchors: [],
             hubs: [],
             cables: [],
             importedObjects: [], // Initialize empty array
             activeHubCapacity: 12, // Default
             activeTopology: 'star',
+
+            // Default Cable Settings
+            cableSettings: {
+                ceilingHeight: 3.0,
+                serviceLoop: 1.0,
+                defaultCableType: 'cat6',
+                avoidObstacles: true,
+                topology: 'star',
+                showParallel: false,
+            },
+            setCableSettings: (settings) => set((state) => ({ cableSettings: { ...state.cableSettings, ...settings } })),
+            isCableSidebarOpen: false,
+            setIsCableSidebarOpen: (v) => set({ isCableSidebarOpen: v }),
 
             dimensions: [],
             layers: {
@@ -258,6 +297,7 @@ export const useProjectStore = create<ProjectState>()(
             setPlacementArea: (area) => set({ placementArea: area }),
             placementAreaEnabled: false,
             setPlacementAreaEnabled: (enabled) => set({ placementAreaEnabled: enabled }),
+            setToolbarSize: (size) => set({ toolbarSize: size }),
             lastLoaded: 0, // Timestamp of last project load
 
             // Anchor Settings Defaults
@@ -277,7 +317,7 @@ export const useProjectStore = create<ProjectState>()(
 
             // Heatmap Defaults
             showHeatmap: false,
-            heatmapResolution: 50, // 50cm grid by default
+            heatmapResolution: 200, // Low resolution by default
             heatmapColorMode: 'standard',
             heatmapThresholds: {
                 red: 3,    // < 3m
@@ -297,7 +337,7 @@ export const useProjectStore = create<ProjectState>()(
                 targetScope: 'all',
             },
             theme: 'dark', // Default
-            allowOutsideConnections: false, // Default to strict routing
+            allowOutsideConnections: true, // Default to allowing pass-through
 
             // Actions
             setAllowOutsideConnections: (v) => set({ allowOutsideConnections: v }),
@@ -307,7 +347,9 @@ export const useProjectStore = create<ProjectState>()(
             setTool: (tool) => set({ activeTool: tool }),
             setSelection: (ids) => set({ selectedIds: ids }),
             setWallPreset: (preset) => set({ wallPreset: preset }),
-            setStandardWallThickness: (thickness) => set({ standardWallThickness: thickness }),
+            setWallsLocked: (locked: boolean) => set({ wallsLocked: locked }),
+
+            setStandardWallThickness: (val) => set({ standardWallThickness: val }),
             setThickWallThickness: (t) => set({ thickWallThickness: t }),
             setWideWallThickness: (t) => set({ wideWallThickness: t }),
             setAnchorMode: (mode) => set({ anchorMode: mode }),
@@ -358,6 +400,8 @@ export const useProjectStore = create<ProjectState>()(
             setIsExportSidebarOpen: (v) => set({ isExportSidebarOpen: v }),
             isBOMOpen: false,
             setIsBOMOpen: (v) => set({ isBOMOpen: v }),
+            isHelpOpen: false,
+            setIsHelpOpen: (v) => set({ isHelpOpen: v }),
             exportRegion: null,
             setExportRegion: (region) => set({ exportRegion: region }),
 
@@ -695,6 +739,112 @@ export const useProjectStore = create<ProjectState>()(
                 cables: (state.cables || []).filter((c) => c.id !== id)
             })),
 
+            regenerateCables: () => set((state) => {
+                const { hubs, anchors, walls, cableSettings, scaleRatio } = state;
+                if (!hubs.length || !anchors.length) return state;
+
+                const newCables: Cable[] = [];
+                const updatedHubs = [...hubs];
+
+                // 1. Assign Anchors to Nearest Hub
+                const hubGroups = new Map<string, Anchor[]>();
+                hubs.forEach(h => hubGroups.set(h.id, []));
+
+                anchors.forEach(a => {
+                    let nearestHubId = hubs[0].id;
+                    let minD = Infinity;
+                    hubs.forEach(h => {
+                        const d = distance({ x: a.x, y: a.y }, { x: h.x, y: h.y });
+                        if (d < minD) {
+                            minD = d;
+                            nearestHubId = h.id;
+                        }
+                    });
+                    hubGroups.get(nearestHubId)?.push(a);
+                });
+
+                // 2. Generate Cables per Hub
+                updatedHubs.forEach((hub, index) => {
+                    const groupAnchors = hubGroups.get(hub.id) || [];
+                    if (groupAnchors.length === 0) return;
+
+                    // Assign Hub Color if not set
+                    if (!hub.color) {
+                        hub.color = getHubColor(index);
+                    }
+                    const groupColor = hub.color!;
+
+                    if (cableSettings.topology === 'daisy') {
+                        // Daisy Chain
+                        const paths = generateDaisyChain(
+                            { x: hub.x, y: hub.y },
+                            groupAnchors.map(a => ({ x: a.x, y: a.y })),
+                            state.allowOutsideConnections ? [] : walls
+                        );
+
+                        // Map paths back to IDs... This is tricky because generateDaisyChain returns points.
+                        // We need to know WHICH anchor corresponds to WHICH point to set IDs correctly.
+                        // Actually generateDaisyChain logic (Nearest Neighbor) sorts the points.
+                        // We need to re-match the sorted points to the anchors.
+                        // OR, better: `generateDaisyChain` should handle objects?
+                        // Let's assume for now we just create cables between the points and try to find the anchor at that point to get ID.
+
+                        let prevId = hub.id;
+                        paths.forEach((pointsPath) => {
+                            // The end of this path is likely an anchor.
+                            const endPoint = pointsPath[pointsPath.length - 1];
+                            // Find anchor at endPoint
+                            const targetAnchor = groupAnchors.find(a => Math.abs(a.x - endPoint.x) < 1 && Math.abs(a.y - endPoint.y) < 1);
+
+                            if (targetAnchor) {
+                                newCables.push({
+                                    id: uuidv4(),
+                                    fromId: prevId,
+                                    toId: targetAnchor.id,
+                                    points: pointsPath,
+                                    length: calculateLength(pointsPath, scaleRatio, cableSettings),
+                                    color: groupColor,
+                                    type: cableSettings.defaultCableType,
+                                    topology: 'daisy',
+                                    verticalDrop: cableSettings.ceilingHeight ? (cableSettings.ceilingHeight - 1.0) * 2 : 0,
+                                    serviceLoop: cableSettings.serviceLoop
+                                });
+                                prevId = targetAnchor.id;
+                            }
+                        });
+
+
+                    } else {
+                        // Star Topology
+                        groupAnchors.forEach(anchor => {
+                            const path = getOrthogonalPath(
+                                { x: hub.x, y: hub.y },
+                                { x: anchor.x, y: anchor.y },
+                                state.allowOutsideConnections ? [] : walls
+                            );
+
+                            newCables.push({
+                                id: uuidv4(),
+                                fromId: hub.id,
+                                toId: anchor.id,
+                                points: path,
+                                length: calculateLength(path, scaleRatio, cableSettings),
+                                color: groupColor,
+                                type: cableSettings.defaultCableType,
+                                topology: 'star',
+                                verticalDrop: cableSettings.ceilingHeight ? (cableSettings.ceilingHeight - 1.0) * 2 : 0,
+                                serviceLoop: cableSettings.serviceLoop
+                            });
+                        });
+                    }
+                });
+
+                return {
+                    hubs: updatedHubs,
+                    cables: newCables
+                };
+            }),
+
             toggleLayer: (layer) => set((state) => {
                 const newValue = !state.layers[layer];
                 const newLayers = { ...state.layers, [layer]: newValue };
@@ -884,6 +1034,22 @@ export const useProjectStore = create<ProjectState>()(
 
             // Clipboard Implementation
             clipboard: null,
+
+            optimizeAnchorCount: (percentage, scope = 'all') => set((state) => {
+                const { anchors, removedCount } = reduceAnchors(
+                    state.anchors,
+                    state.walls,
+                    percentage,
+                    state.scaleRatio,
+                    scope
+                );
+
+                if (removedCount > 0) {
+                    console.log(`[Optimization] Removed ${removedCount} anchors. Scope: ${scope}`);
+                }
+
+                return { anchors };
+            }),
 
             copySelection: () => set((state) => {
                 const walls = state.walls.filter(w => state.selectedIds.includes(w.id));
