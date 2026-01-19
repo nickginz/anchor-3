@@ -101,7 +101,7 @@ export const Ribbon: React.FC = () => {
     const activeImport = activeImportId ? importedObjects.find(o => o.id === activeImportId) : null;
 
     return (
-        <div className={`${toolbarSize === 'small' ? 'h-[46px]' : 'h-16'} panel-bg border-b panel-border flex items-stretch px-4 shadow-xl z-20 relative select-none transition-all duration-300`}>
+        <div className={`${toolbarSize === 'small' ? 'h-[54px]' : 'h-[64px]'} panel-bg border-b panel-border flex items-stretch px-4 shadow-xl z-20 relative select-none transition-all duration-300`}>
 
             {/* Slot Manager Popup */}
             {isSlotsOpen && <SlotManager onClose={() => setIsSlotsOpen(false)} />}
@@ -186,12 +186,12 @@ export const Ribbon: React.FC = () => {
                 <span className="text-[10px] text-secondary uppercase tracking-widest">Planner 3.0</span>
             </div>
 
-            <div className={`${toolbarSize === 'small' ? 'h-full py-1' : 'h-10'} w-px bg-[var(--border-color)] mx-1`}></div>
+            <div className={`${toolbarSize === 'small' ? 'h-6' : 'h-10'} self-center w-px bg-[var(--border-color)] mx-1`}></div>
 
             {/* Edit Group */}
-            <div className="flex flex-col items-center px-1 pt-1">
+            <div className="flex flex-col items-center px-1 justify-center">
                 {toolbarSize !== 'small' && <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Edit</span>}
-                <div className="flex space-x-0.5">
+                <div className="flex space-x-0.5 items-center">
                     <ToolbarButton icon={MousePointer2} label="Select" active={activeTool === 'select'} onClick={() => setTool('select')} tooltip="Select (V / Esc)" iconSize={iconSize} className="p-1.5" />
                     <div className="w-px h-6 bg-[var(--border-color)] mx-1"></div>
                     {toolbarSize === 'small' ? (
@@ -220,10 +220,10 @@ export const Ribbon: React.FC = () => {
                 </div>
             </div>
 
-            <div className={`${toolbarSize === 'small' ? 'h-full py-1' : 'h-10'} w-px bg-[var(--border-color)] mx-1`}></div>
+            <div className={`${toolbarSize === 'small' ? 'h-6' : 'h-10'} self-center w-px bg-[var(--border-color)] mx-1`}></div>
 
             {/* Draw Group */}
-            <div className="flex flex-col items-center px-1 pt-1">
+            <div className="flex flex-col items-center px-1 justify-center">
                 {toolbarSize !== 'small' && <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Draw</span>}
                 <div className="flex items-center space-x-2">
                     {toolbarSize === 'small' ? (
@@ -256,6 +256,7 @@ export const Ribbon: React.FC = () => {
                             >
                                 <RectWallIcon size={14} />
                             </button>
+
                         </div>
                     ) : (
                         <div className="flex space-x-0.5">
@@ -301,10 +302,10 @@ export const Ribbon: React.FC = () => {
                 </div>
             </div>
 
-            <div className={`${toolbarSize === 'small' ? 'h-full py-1' : 'h-10'} w-px bg-[var(--border-color)] mx-1`}></div>
+            <div className={`${toolbarSize === 'small' ? 'h-6' : 'h-10'} self-center w-px bg-[var(--border-color)] mx-1`}></div>
 
             {/* Measure Group */}
-            <div className="flex flex-col items-center px-1 pt-1">
+            <div className="flex flex-col items-center px-1 justify-center">
                 {toolbarSize !== 'small' && <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Measure</span>}
                 {toolbarSize === 'small' ? (
                     <div className="flex flex-col gap-0.5">
@@ -333,10 +334,10 @@ export const Ribbon: React.FC = () => {
 
 
 
-            <div className={`${toolbarSize === 'small' ? 'h-full py-1' : 'h-10'} w-px bg-[var(--border-color)] mx-1`}></div>
+            <div className={`${toolbarSize === 'small' ? 'h-6' : 'h-10'} self-center w-px bg-[var(--border-color)] mx-1`}></div>
 
             {/* Project Group */}
-            <div className="flex flex-col items-center px-1 pt-1">
+            <div className="flex flex-col items-center px-1 justify-center">
                 {toolbarSize !== 'small' && <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Project</span>}
                 <div className="flex items-center space-x-1">
                     {toolbarSize === 'small' ? (
@@ -440,10 +441,10 @@ export const Ribbon: React.FC = () => {
                 </div>
             </div>
 
-            <div className={`${toolbarSize === 'small' ? 'h-full py-1' : 'h-10'} w-px bg-[var(--border-color)] mx-1`}></div>
+            <div className={`${toolbarSize === 'small' ? 'h-6' : 'h-10'} self-center w-px bg-[var(--border-color)] mx-1`}></div>
 
             {/* Add Devices Group */}
-            <div className="flex flex-col items-center px-1 pt-1">
+            <div className="flex flex-col items-center px-1 justify-center">
                 {toolbarSize !== 'small' && <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Add Devices</span>}
                 <div className="flex space-x-0.5 relative items-center h-full">
                     {toolbarSize === 'small' ? (
@@ -533,10 +534,10 @@ export const Ribbon: React.FC = () => {
                 </div>
             </div>
 
-            <div className={`${toolbarSize === 'small' ? 'h-full py-1' : 'h-10'} w-px bg-[var(--border-color)] mx-1`}></div>
+            <div className={`${toolbarSize === 'small' ? 'h-6' : 'h-10'} self-center w-px bg-[var(--border-color)] mx-1`}></div>
 
             {/* Layers Group */}
-            <div className="flex flex-col items-center px-1 pt-1">
+            <div className="flex flex-col items-center px-1 justify-center">
                 {toolbarSize !== 'small' && <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Layers</span>}
                 <div className="grid grid-rows-2 grid-flow-col gap-0.5">
                     <button onClick={() => toggleLayer('floorplan')} title="Show/Hide Floorplan" className={`p-0.5 rounded hover: bg-[#333] ${layers.floorplan ? 'text-blue-400' : 'text-secondary'} `}> <Upload size={14} /> </button>
@@ -551,14 +552,14 @@ export const Ribbon: React.FC = () => {
                 </div>
             </div>
 
-            <div className={`${toolbarSize === 'small' ? 'h-full py-1' : 'h-10'} w-px bg-[var(--border-color)] mx-1`}></div>
+            <div className={`${toolbarSize === 'small' ? 'h-6' : 'h-10'} self-center w-px bg-[var(--border-color)] mx-1`}></div>
 
             {/* Anchors View Group */}
-            <div className="flex flex-col items-center px-1 pt-1">
+            <div className="flex flex-col items-center px-1 justify-center">
                 {toolbarSize !== 'small' && <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Anchors</span>}
-                <div className="flex space-x-1 items-center h-full pb-1">
+                <div className="flex space-x-1 items-center">
                     {/* Stacked Toggles */}
-                    <div className="flex flex-col space-y-1 justify-center border-r panel-border pr-2 mr-1 h-full py-1">
+                    <div className="flex flex-col space-y-1 justify-center border-r panel-border pr-2 mr-1">
                         <button
                             onClick={() => toggleLayer('anchors')}
                             title="Toggle Anchors Visibility"
@@ -585,17 +586,17 @@ export const Ribbon: React.FC = () => {
                     </button>
 
                     {/* Heatmap Resolution Stack */}
-                    <div className="flex flex-col space-y-1 justify-center border-l panel-border pl-2 h-full py-1">
+                    <div className="flex flex-col space-y-1 justify-center border-l panel-border pl-2">
                         <button onClick={() => useProjectStore.getState().setHeatmapResolution(200)} className={`text-[10px] px-2 py-0.5 rounded leading-none transition-colors ${useProjectStore.getState().heatmapResolution === 200 ? 'bg-[#0078d4] text-white' : 'hover:bg-[#333] text-secondary'} `}>Low</button>
                         <button onClick={() => useProjectStore.getState().setHeatmapResolution(20)} className={`text-[10px] px-2 py-0.5 rounded leading-none transition-colors ${useProjectStore.getState().heatmapResolution === 20 ? 'bg-[#0078d4] text-white' : 'hover:bg-[#333] text-secondary'} `}>High</button>
                     </div>
                 </div>
             </div>
 
-            <div className={`${toolbarSize === 'small' ? 'h-full py-1' : 'h-10'} w-px bg-[var(--border-color)] mx-1`}></div>
+            <div className={`${toolbarSize === 'small' ? 'h-6' : 'h-10'} self-center w-px bg-[var(--border-color)] mx-1`}></div>
 
             {/* Network Group */}
-            <div className="flex flex-col items-center px-1 pt-1">
+            <div className="flex flex-col items-center px-1 justify-center">
                 {toolbarSize !== 'small' && <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Network</span>}
                 <div className="flex items-center space-x-2">
                     {toolbarSize === 'small' ? (
@@ -617,7 +618,7 @@ export const Ribbon: React.FC = () => {
                                 </button>
                             </div>
 
-                            <div className="flex flex-col space-y-1 justify-center border-l border-r panel-border px-2 h-full py-1">
+                            <div className="flex flex-col space-y-1 justify-center border-l border-r panel-border px-2">
                                 <select
                                     value={useProjectStore.getState().activeHubCapacity}
                                     onChange={(e) => useProjectStore.getState().setHubCapacity(parseInt(e.target.value) as any)}
@@ -640,7 +641,7 @@ export const Ribbon: React.FC = () => {
                                 </select>
                             </div>
 
-                            <div className="grid grid-rows-2 gap-0.5 pl-1 h-full">
+                            <div className="flex flex-col justify-center pl-1">
 
 
                                 <button
@@ -663,7 +664,7 @@ export const Ribbon: React.FC = () => {
                         <>
                             <ToolbarButton icon={Router} label="Hub" active={activeTool === 'hub'} onClick={() => setTool('hub')} tooltip="Place Connection Hub (H)" iconSize={16} className="p-1.5" />
 
-                            <div className="flex flex-col space-y-1 justify-center border-l border-r panel-border px-2 h-full py-1">
+                            <div className="flex flex-col space-y-1 justify-center border-l border-r panel-border px-2">
                                 <select
                                     value={useProjectStore.getState().activeHubCapacity}
                                     onChange={(e) => useProjectStore.getState().setHubCapacity(parseInt(e.target.value) as any)}

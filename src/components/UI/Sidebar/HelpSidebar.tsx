@@ -171,7 +171,7 @@ export const HelpSidebar: React.FC = () => {
     if (!isHelpOpen) return null;
 
     // Dynamic Top based on Toolbar Size
-    const topClass = toolbarSize === 'small' ? 'top-[46px]' : 'top-16';
+    const topClass = toolbarSize === 'small' ? 'top-[54px]' : 'top-[64px]';
 
     return (
         <div

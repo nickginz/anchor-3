@@ -140,7 +140,7 @@ export const ExportSidebar: React.FC = () => {
     };
 
     return (
-        <div className={`fixed left-0 ${toolbarSize === 'small' ? 'top-[46px]' : 'top-16'} bottom-8 w-64 ${bgClass} border-r z-20 flex flex-col shadow-lg transition-all duration-300`}>
+        <div className={`fixed left-0 ${toolbarSize === 'small' ? 'top-[54px]' : 'top-[64px]'} bottom-8 w-64 ${bgClass} border-r z-20 flex flex-col shadow-lg transition-all duration-300`}>
             {/* Header */}
             <div className={`p-3 border-b ${isDark ? 'border-[#333]' : 'border-gray-200'} flex justify-between items-center`}>
                 <h3 className={`font-semibold text-sm ${textClass} flex items-center gap-2`}>

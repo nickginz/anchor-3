@@ -215,7 +215,7 @@ export const AutoPlacementSidebar: React.FC = () => {
     if (!isAutoPlacementOpen) return null;
 
     return (
-        <div className={`fixed left-0 ${toolbarSize === 'small' ? 'top-[46px]' : 'top-16'} bottom-0 w-64 ${bgClass} shadow-lg z-40 flex flex-col font-sans transition-all duration-300`}>
+        <div className={`fixed left-0 ${toolbarSize === 'small' ? 'top-[54px]' : 'top-[64px]'} bottom-0 w-64 ${bgClass} shadow-lg z-40 flex flex-col font-sans transition-all duration-300`}>
             {/* Header */}
             <div className={`px-4 py-3 border-b ${isDark ? 'border-[#333]' : 'border-gray-200'} flex justify-between items-center`}>
                 <div className="flex items-center space-x-2">

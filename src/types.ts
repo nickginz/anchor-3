@@ -20,6 +20,18 @@ export interface Wall {
     attenuation?: number; // dB (Optional override)
 }
 
+export interface Door {
+    id: string;
+    wallId: string;
+    distance: number; // Distance from Wall Start Point (P1) in meters
+    width: number; // Meters
+    height?: number; // Meters (2.1 default)
+    type: 'single' | 'double' | 'slide';
+    opentype: 'left' | 'right'; // Hinge position relative to looking from P1 to P2?
+    isOpenOut: boolean; // Swing direction
+    angle?: number; // Opening angle (visual)
+}
+
 export interface Anchor {
     id: string;
     x: number;
@@ -44,7 +56,7 @@ export interface Dimension {
     textOffset?: { x: number; y: number }; // Offset from default position
 }
 
-export type ToolType = 'select' | 'wall' | 'wall_rect' | 'wall_rect_edge' | 'anchor' | 'anchor_auto' | 'hub' | 'scale' | 'dimension' | 'trim' | 'extend' | 'mirror' | 'placement_area' | 'export_area' | 'cable_edit';
+export type ToolType = 'select' | 'wall' | 'wall_rect' | 'wall_rect_edge' | 'door' | 'anchor' | 'anchor_auto' | 'hub' | 'scale' | 'dimension' | 'trim' | 'extend' | 'mirror' | 'placement_area' | 'export_area' | 'cable_edit';
 
 export interface Hub {
     id: string;

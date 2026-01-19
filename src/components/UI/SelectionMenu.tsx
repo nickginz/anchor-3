@@ -38,6 +38,7 @@ export const SelectionMenu: React.FC = () => {
     const selectedHubs = hubs.filter(h => selectedIds.includes(h.id));
     const selectedCables = cables.filter(c => selectedIds.includes(c.id));
 
+
     const hasSelection = selectedWalls.length > 0 || selectedAnchors.length > 0 || selectedHubs.length > 0 || selectedCables.length > 0;
     if (!hasSelection) return null;
 
@@ -347,6 +348,7 @@ export const SelectionMenu: React.FC = () => {
                     </div>
                 </div>
             )}
+
         </div>
     );
 };

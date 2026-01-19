@@ -38,6 +38,7 @@ export interface ProjectState {
     activeHubCapacity: 2 | 6 | 12 | 24;
     activeTopology: 'star' | 'daisy';
 
+
     // Global Cable Settings
     cableSettings: {
         ceilingHeight: number;
@@ -304,6 +305,9 @@ export const useProjectStore = create<ProjectState>()(
             anchorRadius: 5,
             anchorShape: 'circle',
             showAnchorRadius: true,
+
+            // Door Settings Removed
+
 
             // Hub Defaults
 

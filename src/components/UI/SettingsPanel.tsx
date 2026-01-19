@@ -8,12 +8,13 @@ export const SettingsPanel: React.FC = () => {
         heatmapColorMode, setHeatmapColorMode,
         heatmapThresholds, setHeatmapThresholds,
         theme, setTheme,
-        toolbarSize // Added for reactivity
+        toolbarSize,
+
     } = useProjectStore();
 
     if (!isSettingsOpen) return null;
 
-    const topClass = toolbarSize === 'small' ? 'top-[46px]' : 'top-16';
+    const topClass = toolbarSize === 'small' ? 'top-[54px]' : 'top-[64px]';
 
     const handleThresholdChange = (key: keyof typeof heatmapThresholds, value: number) => {
         setHeatmapThresholds({ ...heatmapThresholds, [key]: value });
@@ -76,6 +77,9 @@ export const SettingsPanel: React.FC = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* Category: Door Settings (Global Defaults) */}
+
 
                 {/* Category: Anchor Settings */}
                 <div className="space-y-3">

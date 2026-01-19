@@ -158,6 +158,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     // Selection State
     const [selectionStart, setSelectionStart] = useState<Point | null>(null);
     const [selectionRect, setSelectionRect] = useState<{ x: number, y: number, width: number, height: number } | null>(null);
+    const [draggingDoorId, setDraggingDoorId] = useState<string | null>(null);
 
     // Panning State
     const [isPanning, setIsPanning] = useState(false);
@@ -590,6 +591,32 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             lastDragPos.current = pos;
             useProjectStore.temporal.getState().pause();
             return;
+        }
+
+
+        // Door Interaction Check (Drag Start)
+        // Check if we hit a door group
+        const doorGroup = e.target.name() === 'door' ? e.target : e.target.findAncestor('.door');
+        if (doorGroup) {
+            // Respect Wall Lock
+            if (wallsLocked) return;
+
+            const doorId = doorGroup.id();
+            // Door Placement Logic Removed
+
+            if (activeTool === 'select') {
+                setDraggingDoorId(doorId);
+                // Selection Logic
+                if (!e.evt.shiftKey) {
+                    if (!useProjectStore.getState().selectedIds.includes(doorId)) {
+                        setSelection([doorId]);
+                    }
+                } else {
+                    // Toggle selection... simplified for now
+                }
+                useProjectStore.temporal.getState().pause();
+                return;
+            }
         }
 
         if (name === 'dim-text-handle' || name === 'dim-text') {
@@ -1093,6 +1120,11 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             }
         }
 
+        if (e.target.name() === 'dim-text-handle' || e.target.name() === 'dim-text') {
+            document.body.style.cursor = 'move';
+            return;
+        }
+
         // ALT + Left Drag (Move Active Import)
         if (e.evt.altKey && isMouseDown.current && useProjectStore.getState().activeImportId) {
             if (lastDragPos.current) {
@@ -1284,6 +1316,15 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     };
 
     const handleMouseUp = (e: Konva.KonvaEventObject<MouseEvent>) => {
+        isMouseDown.current = false;
+
+        // Door Drag End
+        if (draggingDoorId) {
+            setDraggingDoorId(null);
+            useProjectStore.temporal.getState().resume();
+            return;
+        }
+
         // Export Area Logic
         if (activeTool === 'export_area' && selectionStart) {
             const pos = getStagePoint();
@@ -1357,7 +1398,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         }
 
         try {
-            isMouseDown.current = false;
+
             setIsPanning(false);
 
             // Resume History if we were dragging
