@@ -377,7 +377,7 @@ export class WallDetector {
 
         for (let i = 0; i < sorted.length; i++) {
             if (used.has(i)) continue;
-            let current = sorted[i];
+            const current = sorted[i];
             const bundle = [current];
             used.add(i);
 

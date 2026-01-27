@@ -224,8 +224,8 @@ export function generateMedialAxis(polygon: Point[], stepPixels: number): Point[
 
 // Helper: Point to Line Segment Distance
 function perpendicularDistance(point: Point, lineStart: Point, lineEnd: Point): number {
-    let dx = lineEnd.x - lineStart.x;
-    let dy = lineEnd.y - lineStart.y;
+    const dx = lineEnd.x - lineStart.x;
+    const dy = lineEnd.y - lineStart.y;
 
     if (dx === 0 && dy === 0) {
         return Math.hypot(point.x - lineStart.x, point.y - lineStart.y);

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Wall Pro - Architecture Map</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #network {
+            flex-grow: 1;
+            height: 100%;
+            background: #f3f4f6;
+        }
+
+        #sidebar {
+            width: 300px;
+            padding: 20px;
+            background: white;
+            border-right: 1px solid #ddd;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            overflow-y: auto;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #1f2937;
+        }
+
+        .node-info {
+            margin-top: 20px;
+            padding: 10px;
+            background: #e5e7eb;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="sidebar">
+        <h2>App Architecture</h2>
+        <p>Interactive map of functions and components.</p>
+        <p><small>Scroll to zoom, Drag to pan, Click to select.</small></p>
+
+        <div id="details" class="node-info">
+            <h3 id="label">Node</h3>
+            <p id="desc">Select a node...</p>
+        </div>
+
+        <h3>Legend</h3>
+        <div class="legend-item">
+            <div class="dot" style="background:#ff7675;"></div>State (Zustand)
+        </div>
+        <div class="legend-item">
+            <div class="dot" style="background:#74b9ff;"></div>UI Component
+        </div>
+        <div class="legend-item">
+            <div class="dot" style="background:#55efc4;"></div>Canvas Layer
+        </div>
+        <div class="legend-item">
+            <div class="dot" style="background:#ffeaa7;"></div>Logic / Util
+        </div>
+    </div>
+    <div id="network"></div>
+
+    <script type="text/javascript">
+        // Data Definition
+        const nodes = new vis.DataSet([
+            // STORE
+            { id: 1, label: 'useProjectStore', group: 'state', title: 'Central State Management (Walls, Anchors, Settings)' },
+            { id: 11, label: 'Temporal (Undo/Redo)', group: 'state', title: 'Middleware for History Tracking' },
+
+            // CORE UI
+            { id: 2, label: 'App.tsx', group: 'ui', title: 'Root Component' },
+            { id: 3, label: 'MainLayout', group: 'ui', title: 'Layout Shell' },
+            { id: 4, label: 'Ribbon', group: 'ui', title: 'Top Toolbar (Tools, Settings)' },
+            { id: 5, label: 'Sidebar', group: 'ui', title: 'Context Sidebars (Export, Cable)' },
+
+            // CANVAS
+            { id: 6, label: 'MainStage', group: 'canvas', title: 'Konva Stage Root' },
+            { id: 7, label: 'InteractionLayer', group: 'canvas', title: 'Input Handling (Clicks, Drags, Tools)' },
+            { id: 8, label: 'WallsLayer', group: 'canvas', title: 'Renders Walls & Types' },
+            { id: 9, label: 'HubsLayer', group: 'canvas', title: 'Renders Hubs & Connections' },
+            { id: 10, label: 'HeatmapLayer', group: 'canvas', title: 'Signal Visualization' },
+
+            // UTILS / LOGIC
+            { id: 20, label: 'routing.ts', group: 'logic', title: 'Cable Routing System (A*)' },
+            { id: 21, label: 'geometry.ts', group: 'logic', title: 'Geometric Snapping & Math' },
+            { id: 22, label: 'heatmap.ts', group: 'logic', title: 'Signal Propagation Physics' },
+            { id: 23, label: 'export.ts', group: 'logic', title: 'PDF/Image Generation' },
+            { id: 24, label: 'auto-placement', group: 'logic', title: 'Auto-Anchor Algorithms' },
+
+            // FEATURES
+            { id: 30, label: 'Tool: Wall', group: 'feature', shape: 'box', color: '#fab1a0' },
+            { id: 31, label: 'Tool: Cable', group: 'feature', shape: 'box', color: '#fab1a0' },
+            { id: 32, label: 'Feature: Export', group: 'feature', shape: 'box', color: '#fab1a0' }
+        ]);
+
+        const edges = new vis.DataSet([
+            // State Connections
+            { from: 1, to: 11, label: 'middleware' },
+            { from: 2, to: 1, arrows: 'to' },
+
+            // UI Hierarchy
+            { from: 2, to: 3 },
+            { from: 3, to: 4 },
+            { from: 3, to: 5 },
+            { from: 3, to: 6 },
+
+            // Stage Composition
+            { from: 6, to: 7 },
+            { from: 6, to: 8 },
+            { from: 6, to: 9 },
+            { from: 6, to: 10 },
+
+            // Logic Dependencies
+            { from: 7, to: 1, label: 'reads/writes' },
+            { from: 7, to: 21, label: 'snapping' },
+            { from: 9, to: 20, label: 'routes' },
+            { from: 10, to: 22, label: 'calculates' },
+
+            // Features
+            { from: 30, to: 7, label: 'implemented in' },
+            { from: 31, to: 9, label: 'rendered in' },
+            { from: 31, to: 5, label: 'settings' },
+            { from: 32, to: 23, label: 'uses' },
+            { from: 24, to: 1, label: 'updates' }
+        ]);
+
+        // Configuration
+        const container = document.getElementById('network');
+        const data = { nodes: nodes, edges: edges };
+        const options = {
+            nodes: {
+                shape: 'dot',
+                size: 20,
+                font: { size: 14, color: '#333' },
+                borderWidth: 2
+            },
+            groups: {
+                state: { color: { background: '#ff7675', border: '#d63031' } },
+                ui: { color: { background: '#74b9ff', border: '#0984e3' } },
+                canvas: { color: { background: '#55efc4', border: '#00b894' } },
+                logic: { color: { background: '#ffeaa7', border: '#fdcb6e' } }
+            },
+            edges: {
+                width: 1,
+                color: { color: '#b2bec3' },
+                smooth: { type: 'continuous' }
+            },
+            physics: {
+                stabilization: true,
+                barnesHut: { gravitationalConstant: -2000, springLength: 150 }
+            }
+        };
+
+        const network = new vis.Network(container, data, options);
+
+        // Interaction
+        network.on("click", function (params) {
+            if (params.nodes.length > 0) {
+                const nodeId = params.nodes[0];
+                const node = nodes.get(nodeId);
+                const infoBox = document.getElementById('details');
+                document.getElementById('label').innerText = node.label;
+                document.getElementById('desc').innerText = node.title || 'No details.';
+                infoBox.style.display = 'block';
+            } else {
+                document.getElementById('details').style.display = 'none';
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -263,6 +263,8 @@ export const useProjectStore = create<ProjectState>()(
                 avoidObstacles: true,
                 topology: 'star',
                 showParallel: false,
+                ceilingHeight: 3,
+                serviceLoop: 5,
             },
             setCableSettings: (settings) => set((state) => ({ cableSettings: { ...state.cableSettings, ...settings } })),
             isCableSidebarOpen: false,
@@ -499,7 +501,7 @@ export const useProjectStore = create<ProjectState>()(
             updateWallPoint: (oldX, oldY, newX, newY) => set((state) => ({
                 walls: state.walls.map(w => {
                     const tol = 0.001; // 1mm tolerance
-                    let p = [...w.points] as [number, number, number, number];
+                    const p = [...w.points] as [number, number, number, number];
                     let changed = false;
 
                     // Check Start Point
@@ -540,8 +542,8 @@ export const useProjectStore = create<ProjectState>()(
                     const angle2 = Math.atan2(w2.points[3] - w2.points[1], w2.points[2] - w2.points[0]);
 
                     // Normalize angles 0-PI (since wall direction doesn't matter for collinearity)
-                    let a1 = angle1 < 0 ? angle1 + Math.PI : angle1;
-                    let a2 = angle2 < 0 ? angle2 + Math.PI : angle2;
+                    const a1 = angle1 < 0 ? angle1 + Math.PI : angle1;
+                    const a2 = angle2 < 0 ? angle2 + Math.PI : angle2;
 
                     // Check if close (or close to PI diff which is same line) - handled by normalization? 
                     // Actually atan2 returns -PI to PI. wall direction (p1->p2) vs (p2->p1) flips angle by PI.
@@ -826,12 +828,12 @@ export const useProjectStore = create<ProjectState>()(
                         const anchorsWithAngles = groupAnchors.map(anchor => {
                             const dx = anchor.x - hub.x;
                             const dy = anchor.y - hub.y;
-                            let angle = Math.atan2(dy, dx); // -PI to PI
+                            const angle = Math.atan2(dy, dx); // -PI to PI
                             return { anchor, angle };
                         });
 
                         // 2. Track available ports
-                        let availablePorts = Array.from({ length: hub.capacity }, (_, i) => i);
+                        const availablePorts = Array.from({ length: hub.capacity }, (_, i) => i);
 
                         // 3. Greedy Assignment: Find nearest port for each anchor
                         // Optimization: Process anchors that have "obvious" choices first? 

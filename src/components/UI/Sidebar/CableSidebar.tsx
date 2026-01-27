@@ -1,6 +1,6 @@
 import React from 'react';
 import { useProjectStore } from '../../../store/useProjectStore';
-import { Cable, Network, GitCommit, AlignJustify, RefreshCw, X } from 'lucide-react';
+import { Cable, Network, AlignJustify, RefreshCw, X } from 'lucide-react';
 
 export const CableSidebar: React.FC = () => {
     const {
@@ -18,7 +18,7 @@ export const CableSidebar: React.FC = () => {
     const isDark = theme === 'dark';
     const bgClass = isDark ? 'bg-[#1e1e1e]' : 'bg-white border-r border-gray-200';
     const textHeader = isDark ? 'text-gray-400' : 'text-gray-600';
-    const inputBg = isDark ? 'bg-[#333] border-[#444] text-white' : 'bg-gray-100 border-gray-300 text-gray-800';
+
 
     return (
         <div className={`fixed left-0 ${toolbarSize === 'small' ? 'top-[54px]' : 'top-[64px]'} bottom-0 w-64 ${bgClass} shadow-lg z-40 flex flex-col font-sans transition-all duration-300`}>

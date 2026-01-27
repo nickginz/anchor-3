@@ -78,6 +78,21 @@ export const SettingsPanel: React.FC = () => {
                     </div>
                 </div>
 
+                {/* Category: Documentation */}
+                <div className="space-y-3">
+                    <h3 className="text-sm font-bold uppercase text-primary border-b panel-border pb-2">Docs</h3>
+                    <div className="pl-2">
+                        <button
+                            onClick={() => window.open('/app_map.html', '_blank')}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-4 rounded flex items-center justify-center space-x-2 transition-colors"
+                        >
+                            <Settings size={14} className="mr-2" />
+                            <span>Open App Architecture Map</span>
+                        </button>
+                        <p className="text-[10px] text-secondary mt-2 text-center">Interactive map of system functions.</p>
+                    </div>
+                </div>
+
                 {/* Category: Door Settings (Global Defaults) */}
 
 

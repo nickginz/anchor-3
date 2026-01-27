@@ -4,7 +4,7 @@ import { useProjectStore } from '../../../store/useProjectStore';
 import { getHubPortCoordinates } from '../../../utils/routing';
 
 export const HubsLayer: React.FC = () => {
-    const { hubs, cables, selectedIds, theme, layers, allowOutsideConnections, setSelection, cableSettings } = useProjectStore();
+    const { hubs, cables, selectedIds, theme, layers, setSelection, cableSettings } = useProjectStore();
 
     const colors = theme === 'light' ? {
         hubFill: '#9333ea', // Purple
@@ -21,7 +21,6 @@ export const HubsLayer: React.FC = () => {
     };
 
     const hubSize = 24; // Px
-    const halfSize = hubSize / 2;
 
     // Calculate usage
     const hubUsage: Record<string, number> = {};

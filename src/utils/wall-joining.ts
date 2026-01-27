@@ -106,9 +106,9 @@ export const generateJoinedWalls = (walls: Wall[], scaleRatio: number, allWalls:
         if (path.length === 0) continue;
 
         const points: { X: number, Y: number }[] = [];
-        let curr = path[0];
-        let p1 = { x: curr.points[0], y: curr.points[1] };
-        let p2 = { x: curr.points[2], y: curr.points[3] };
+        const curr = path[0];
+        const p1 = { x: curr.points[0], y: curr.points[1] };
+        const p2 = { x: curr.points[2], y: curr.points[3] };
 
         if (path.length === 1) {
             points.push({ X: p1.x * SCALE, Y: p1.y * SCALE });

@@ -153,7 +153,7 @@ export const generateDaisyChain = (start: Point, points: Point[], walls: Wall[])
 export const calculateLength = (
     points: Point[],
     scaleRatio: number,
-    settings?: { ceilingHeight?: number, serviceLoop?: number, deviceHeight?: number }
+    _settings?: { ceilingHeight?: number, serviceLoop?: number, deviceHeight?: number }
 ): number => {
     let lengthPx = 0;
     for (let i = 0; i < points.length - 1; i++) {
@@ -163,7 +163,7 @@ export const calculateLength = (
     }
 
     // Horizontal Length (m)
-    let lengthMeters = lengthPx / scaleRatio;
+    const lengthMeters = lengthPx / scaleRatio;
 
     return lengthMeters;
 }

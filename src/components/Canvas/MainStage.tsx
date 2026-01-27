@@ -66,7 +66,7 @@ export const MainStage: React.FC = () => {
     // Combined memo for all geometry lines to avoid redundant 'detectRooms' calls
     const { geometryLines, medialAxisLines } = useMemo(() => {
         const lines: Point[][] = [];
-        let maLines: Point[][] = [];
+        const maLines: Point[][] = [];
 
         try {
             if (!showOffsets && !showSkeleton && skeletonMode === 'none' && !showMedialAxis) return { geometryLines: [], medialAxisLines: [] };

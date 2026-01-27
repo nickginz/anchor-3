@@ -23,7 +23,7 @@ const getWallParams = (preset: string, standard: number, thick: number, wide: nu
 };
 
 // Helper: Improved Point in Polygon / Near Segment check
-const isPointNearWall = (p: Point, w: any, tolerance: number) => {
+const isPointNearWall = (p: Point, w: Wall, tolerance: number) => {
     // Simple distance to segment check
     const x1 = w.points[0], y1 = w.points[1], x2 = w.points[2], y2 = w.points[3];
     const A = p.x - x1;
@@ -360,6 +360,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                         setAnchorMode('manual');
                     }
                 }
+                if (code === 'KeyH') setTool('hub');
             }
         };
         const handleKeyUp = (e: KeyboardEvent) => {
@@ -695,7 +696,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             // If we clicked a wall AND walls are NOT locked
             if (hitWall && !wallsLocked) {
                 const isSelected = state.selectedIds.includes(hitWall.id);
-                let targetIds = isSelected ? state.selectedIds : [hitWall.id];
+                const targetIds = isSelected ? state.selectedIds : [hitWall.id];
 
                 if (!isSelected) {
                     setSelection([hitWall.id]); // Auto-select on RMB
@@ -1047,7 +1048,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         } else if (activeTool === 'placement_area') {
             if (e.evt.button === 0) {
                 const state = useProjectStore.getState();
-                let currentPoints = state.placementArea?.points || [];
+                const currentPoints = state.placementArea?.points || [];
 
                 // If no points, start new
                 if (currentPoints.length === 0) {
@@ -2504,13 +2505,13 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 // Check if Wall Layer is visible
                 if (!state.layers.walls) return null;
 
-                const selectedWallIds = state.selectedIds.filter(id => state.walls.some(w => w.id === id));
+                // const selectedWallIds = state.selectedIds.filter(id => state.walls.some(w => w.id === id));
 
                 const handles: React.ReactElement[] = [];
                 const handleRadius = 6 / (stage?.scaleX() || 1);
 
                 // Helper to find connected walls
-                const findConnectedWalls = (p: { x: number, y: number }, ignoreWallId: string, walls: Wall[], scaleRatio: number) => {
+                const findConnectedWalls = (p: { x: number, y: number }, ignoreWallId: string, walls: Wall[]) => {
                     const connected: { wallId: string, pointIndex: number }[] = [];
                     // const tolerance = 0.1 * scaleRatio; // 10cm tolerance in pixels // This line is removed as per instruction
 
@@ -2583,7 +2584,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                                     // Find others
                                     const state = useProjectStore.getState();
                                     const p = { x: wall.points[0], y: wall.points[1] };
-                                    const others = findConnectedWalls(p, wall.id, state.walls, state.scaleRatio);
+                                    const others = findConnectedWalls(p, wall.id, state.walls);
                                     draggedWallNodeMap.current = [...connected, ...others];
                                 }}
                                 onDragEnd={(e) => {
@@ -2654,7 +2655,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                                     // Find others
                                     const state = useProjectStore.getState();
                                     const p = { x: wall.points[2], y: wall.points[3] };
-                                    const others = findConnectedWalls(p, wall.id, state.walls, state.scaleRatio);
+                                    const others = findConnectedWalls(p, wall.id, state.walls);
                                     draggedWallNodeMap.current = [...connected, ...others];
                                 }}
                                 onDragEnd={(e) => {
