@@ -16,14 +16,14 @@ export const CableSidebar: React.FC = () => {
     if (!isCableSidebarOpen) return null;
 
     const isDark = theme === 'dark';
-    const bgClass = isDark ? 'bg-[#1e1e1e]' : 'bg-white border-r border-gray-200';
+    const bgClass = isDark ? 'bg-[#1e1e1e] border-[#333]' : 'bg-white border-gray-200';
     const textHeader = isDark ? 'text-gray-400' : 'text-gray-600';
 
 
     return (
         <div className={`fixed left-0 ${toolbarSize === 'small' ? 'top-[54px]' : 'top-[64px]'} bottom-0 w-64 ${bgClass} shadow-lg z-40 flex flex-col font-sans transition-all duration-300`}>
             {/* Header */}
-            <div className={`px-4 py-3 border-b ${isDark ? 'border-[#333]' : 'border-gray-200'} flex justify-between items-center`}>
+            <div className={`px-4 py-3 border-b border-gray-200 dark:border-[#333] flex justify-between items-center`}>
                 <div className="flex items-center space-x-2">
                     <Cable size={16} className="text-orange-500" />
                     <h3 className={`font-bold text-xs uppercase tracking-wider ${textHeader}`}>Cable Routing</h3>

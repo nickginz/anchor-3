@@ -110,17 +110,17 @@ export const SlotManager: React.FC<SlotManagerProps> = ({ onClose }) => {
     };
 
     return (
-        <div className="absolute top-16 left-0 w-72 bg-[#333] border border-[#555] p-3 shadow-2xl rounded-b-lg z-50 text-white animate-in slide-in-from-top-2">
-            <div className="flex justify-between items-center mb-3 pb-2 border-b border-[#444]">
-                <h3 className="text-xs font-bold uppercase text-gray-400">Quick Save Slots</h3>
-                <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={14} /></button>
+        <div className="absolute top-16 left-0 w-72 panel-bg border panel-border p-3 shadow-2xl rounded-b-lg z-50 text-primary animate-in slide-in-from-top-2">
+            <div className="flex justify-between items-center mb-3 pb-2 border-b panel-border">
+                <h3 className="text-xs font-bold uppercase text-secondary">Quick Save Slots</h3>
+                <button onClick={onClose} className="text-secondary hover:text-primary"><X size={14} /></button>
             </div>
 
             <div className="flex flex-col space-y-2">
                 {slots.map((slot, i) => (
-                    <div key={i} className="flex items-center justify-between p-2 rounded bg-[#222] border border-[#444]">
+                    <div key={i} className="flex items-center justify-between p-2 rounded input-bg border panel-border">
                         <div className="flex flex-col">
-                            <span className="text-xs font-semibold text-gray-300">Slot {i + 1}</span>
+                            <span className="text-xs font-semibold text-primary">Slot {i + 1}</span>
                             <span className="text-[10px] text-gray-500">
                                 {slot ? new Date(slot.timestamp).toLocaleString() : 'Empty'}
                             </span>
@@ -128,7 +128,7 @@ export const SlotManager: React.FC<SlotManagerProps> = ({ onClose }) => {
                         <div className="flex space-x-1">
                             <button
                                 onClick={() => handleSave(i)}
-                                className="p-1.5 rounded hover:bg-[#333] text-blue-400"
+                                className="p-1.5 rounded hover-bg text-accent"
                                 title="Overwirte / Save"
                             >
                                 <Save size={14} />
@@ -136,7 +136,7 @@ export const SlotManager: React.FC<SlotManagerProps> = ({ onClose }) => {
                             <button
                                 onClick={() => handleLoad(i)}
                                 disabled={!slot}
-                                className={`p-1.5 rounded hover:bg-[#333] ${!slot ? 'text-gray-600 cursor-not-allowed' : 'text-green-400'}`}
+                                className={`p-1.5 rounded hover-bg ${!slot ? 'text-secondary cursor-not-allowed' : 'text-green-400'} `}
                                 title="Load"
                             >
                                 <FolderOpen size={14} />
@@ -144,7 +144,7 @@ export const SlotManager: React.FC<SlotManagerProps> = ({ onClose }) => {
                             {slot && (
                                 <button
                                     onClick={() => handleClear(i)}
-                                    className="p-1.5 rounded hover:bg-[#333] text-red-400"
+                                    className="p-1.5 rounded hover-bg text-red-500"
                                     title="Clear Slot"
                                 >
                                     <Trash2 size={14} />

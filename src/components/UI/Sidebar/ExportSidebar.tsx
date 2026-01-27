@@ -164,7 +164,7 @@ export const ExportSidebar: React.FC = () => {
                         <button
                             onClick={() => setFormat('png')}
                             className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${format === 'png'
-                                ? 'bg-blue-900/30 border-blue-500/50 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.15)]'
+                                ? 'bg-blue-900/30 border-blue-500/50 text-accent shadow-[0_0_10px_rgba(59,130,246,0.15)]'
                                 : `${isDark ? 'bg-[#252526] border-[#333] hover:bg-[#2d2d2d]' : 'bg-gray-50 border-gray-200'} ${textClass} hover:opacity-80`
                                 }`}
                         >
@@ -174,7 +174,7 @@ export const ExportSidebar: React.FC = () => {
                         <button
                             onClick={() => setFormat('pdf')}
                             className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${format === 'pdf'
-                                ? 'bg-blue-900/30 border-blue-500/50 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.15)]'
+                                ? 'bg-blue-900/30 border-blue-500/50 text-accent shadow-[0_0_10px_rgba(59,130,246,0.15)]'
                                 : `${isDark ? 'bg-[#252526] border-[#333] hover:bg-[#2d2d2d]' : 'bg-gray-50 border-gray-200'} ${textClass} hover:opacity-80`
                                 }`}
                         >
@@ -184,7 +184,7 @@ export const ExportSidebar: React.FC = () => {
                         <button
                             onClick={() => setFormat('html')}
                             className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${format === 'html'
-                                ? 'bg-blue-900/30 border-blue-500/50 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.15)]'
+                                ? 'bg-blue-900/30 border-blue-500/50 text-accent shadow-[0_0_10px_rgba(59,130,246,0.15)]'
                                 : `${isDark ? 'bg-[#252526] border-[#333] hover:bg-[#2d2d2d]' : 'bg-gray-50 border-gray-200'} ${textClass} hover:opacity-80`
                                 }`}
                         >
@@ -208,7 +208,7 @@ export const ExportSidebar: React.FC = () => {
                                             key={s}
                                             onClick={() => setPdfSize(s as any)}
                                             className={`text-[10px] py-1 rounded border uppercase transition-all ${pdfSize === s
-                                                ? 'bg-blue-900/30 border-blue-500/50 text-blue-400 font-bold'
+                                                ? 'bg-blue-900/30 border-blue-500/50 text-accent font-bold'
                                                 : `${isDark ? 'bg-[#252526] border-[#333] text-gray-400 hover:bg-[#2d2d2d]' : 'bg-gray-50 border-gray-200 text-gray-600'}`
                                                 }`}
                                         >
@@ -292,6 +292,6 @@ export const ExportSidebar: React.FC = () => {
                     Export {format.toUpperCase()}
                 </button>
             </div>
-        </div>
+        </div >
     );
 };

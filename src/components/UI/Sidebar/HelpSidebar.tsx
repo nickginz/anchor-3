@@ -18,7 +18,7 @@ const DOCUMENTATION: HelpSection[] = [
         title: 'Introduction',
         content: (
             <div className="space-y-2">
-                <p className="font-semibold text-blue-400">AnchorCAD Planner 3.0</p>
+                <p className="font-semibold text-accent">AnchorCAD Planner 3.0</p>
                 <p>A professional web-based CAD tool for planning wireless anchor deployments, designing floor plans, and optimizing signal coverage with automated wall detection and cable routing.</p>
             </div>
         ),
@@ -66,25 +66,25 @@ const DOCUMENTATION: HelpSection[] = [
         id: 'shortcuts',
         title: 'Keyboard Shortcuts',
         content: (
-            <div className="overflow-hidden rounded border border-[#444]">
+            <div className="overflow-hidden rounded border panel-border">
                 <table className="w-full text-left text-xs">
-                    <thead className="bg-[#333] text-gray-300">
+                    <thead className="bg-gray-100 dark:bg-[#333] text-gray-500 dark:text-gray-300">
                         <tr>
-                            <th className="p-2 border-r border-[#444]">Key</th>
+                            <th className="p-2 border-r panel-border">Key</th>
                             <th className="p-2">Action</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#444] text-gray-400">
-                        <tr><td className="p-2 border-r border-[#444] font-mono text-blue-300">W</td><td className="p-2">Draw Wall</td></tr>
-                        <tr><td className="p-2 border-r border-[#444] font-mono text-blue-300">Shift + W</td><td className="p-2">Lock / Unlock Walls</td></tr>
-                        <tr><td className="p-2 border-r border-[#444] font-mono text-blue-300">R</td><td className="p-2">Cycle Rect / 3-Pt Rect</td></tr>
-                        <tr><td className="p-2 border-r border-[#444] font-mono text-blue-300">Shift + A</td><td className="p-2">Open Auto-Placement</td></tr>
-                        <tr><td className="p-2 border-r border-[#444] font-mono text-blue-300">D</td><td className="p-2">Measure</td></tr>
-                        <tr><td className="p-2 border-r border-[#444] font-mono text-blue-300">S</td><td className="p-2">Set Scale</td></tr>
-                        <tr><td className="p-2 border-r border-[#444] font-mono text-blue-300">A</td><td className="p-2">Place Anchor</td></tr>
-                        <tr><td className="p-2 border-r border-[#444] font-mono text-blue-300">H</td><td className="p-2">Place Hub</td></tr>
-                        <tr><td className="p-2 border-r border-[#444] font-mono text-blue-300">V / Esc</td><td className="p-2">Select Mode</td></tr>
-                        <tr><td className="p-2 border-r border-[#444] font-mono text-blue-300">Ctrl + Z</td><td className="p-2">Undo</td></tr>
+                    <tbody className="divide-y panel-border text-secondary">
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">W</td><td className="p-2">Draw Wall</td></tr>
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">Shift + W</td><td className="p-2">Lock / Unlock Walls</td></tr>
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">R</td><td className="p-2">Cycle Rect / 3-Pt Rect</td></tr>
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">Shift + A</td><td className="p-2">Open Auto-Placement</td></tr>
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">D</td><td className="p-2">Measure</td></tr>
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">S</td><td className="p-2">Set Scale</td></tr>
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">A</td><td className="p-2">Place Anchor</td></tr>
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">H</td><td className="p-2">Place Hub</td></tr>
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">V / Esc</td><td className="p-2">Select Mode</td></tr>
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">Ctrl + Z</td><td className="p-2">Undo</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -187,7 +187,7 @@ export const HelpSidebar: React.FC = () => {
             {/* Header */}
             <div className="p-4 border-b panel-border flex items-center justify-between shrink-0">
                 <div className="flex items-center space-x-2">
-                    <Info size={18} className="text-blue-400" />
+                    <Info size={18} className="text-accent" />
                     <h2 className="text-sm font-bold text-white uppercase tracking-wider">Help & Guide</h2>
                 </div>
                 <button onClick={() => setIsHelpOpen(false)} className="text-gray-400 hover:text-white transition-colors">
@@ -198,12 +198,12 @@ export const HelpSidebar: React.FC = () => {
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                 {DOCUMENTATION.map(section => (
-                    <div key={section.id} id={`doc-section-${section.id}`} className="border border-[#444] rounded-lg overflow-hidden bg-[#252525]">
+                    <div key={section.id} id={`doc-section-${section.id}`} className="border panel-border rounded-lg overflow-hidden bg-white dark:bg-[#252525]">
                         <button
                             onClick={() => toggleSection(section.id)}
-                            className="w-full flex items-center justify-between p-3 bg-[#333] hover:bg-[#3a3a3a] transition-colors text-left"
+                            className="w-full flex items-center justify-between p-3 bg-gray-100 dark:bg-[#333] hover:bg-gray-200 dark:hover:bg-[#3a3a3a] transition-colors text-left"
                         >
-                            <span className="text-xs font-bold text-gray-200 uppercase">
+                            <span className="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase">
                                 {section.title}
                             </span>
                             {expandedSections[section.id] ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
@@ -220,7 +220,7 @@ export const HelpSidebar: React.FC = () => {
             </div>
 
             {/* Footer */}
-            <div className="p-3 border-t panel-border text-[10px] text-center text-gray-600 bg-[#222] shrink-0">
+            <div className="p-3 border-t panel-border text-[10px] text-center text-gray-500 dark:text-gray-600 bg-gray-100 dark:bg-[#222] shrink-0">
                 AnchorCAD Planner v3.0 Documentation
             </div>
         </div>

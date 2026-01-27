@@ -56,7 +56,7 @@ export const AutoPlacementModal: React.FC<AutoPlacementModalProps> = ({ onClose 
         <div className="absolute top-16 left-1/2 transform -translate-x-1/2 panel-bg border panel-border p-4 shadow-2xl rounded-lg z-50 w-80 animate-in slide-in-from-top-4 fade-in">
             <div className="flex justify-between items-center mb-4 border-b panel-border pb-2">
                 <div className="flex items-center space-x-2">
-                    <Wand2 size={18} className="text-blue-400" />
+                    <Wand2 size={18} className="text-accent" />
                     <h3 className="font-bold text-sm uppercase tracking-wide text-primary">Auto Placement</h3>
                 </div>
                 <button onClick={onClose} className="text-secondary hover:text-primary transition-colors">
@@ -68,7 +68,7 @@ export const AutoPlacementModal: React.FC<AutoPlacementModalProps> = ({ onClose 
                 <div className="space-y-1">
                     <div className="flex justify-between text-xs text-secondary">
                         <span>Detection Radius (m)</span>
-                        <span className="font-mono text-blue-400">{radius}m</span>
+                        <span className="font-mono text-accent">{radius}m</span>
                     </div>
                     <input
                         type="range"
@@ -90,7 +90,7 @@ export const AutoPlacementModal: React.FC<AutoPlacementModalProps> = ({ onClose 
                 <div className="space-y-1">
                     <div className="flex justify-between text-xs text-secondary">
                         <span>Spacing Factor</span>
-                        <span className="font-mono text-blue-400">{spacingFactor}x</span>
+                        <span className="font-mono text-accent">{spacingFactor}x</span>
                     </div>
                     <input
                         type="range"

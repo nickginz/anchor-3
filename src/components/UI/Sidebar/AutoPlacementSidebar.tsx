@@ -119,7 +119,7 @@ const ToggleButton: React.FC<ToggleButtonProps> = ({ active, onClick, icon, titl
         onClick={onClick}
         title={title}
         className={`w-8 h-8 flex items-center justify-center rounded border transition-all ${active
-            ? 'bg-blue-900/30 border-blue-500/50 text-blue-400'
+            ? 'bg-blue-900/30 border-blue-500/50 text-accent'
             : isDark
                 ? 'bg-[#252526] border-[#333] text-gray-400 hover:bg-[#2d2d2d]'
                 : 'bg-gray-100 border-gray-300 text-gray-500 hover:bg-gray-200'
@@ -169,10 +169,10 @@ export const AutoPlacementSidebar: React.FC = () => {
 
     // Theme Colors
     const isDark = theme === 'dark';
-    const bgClass = isDark ? 'bg-[#1e1e1e]' : 'bg-white border-r border-gray-200';
+    const bgClass = isDark ? 'bg-[#1e1e1e] border-[#333]' : 'bg-white border-gray-200';
     const textHeader = isDark ? 'text-gray-400' : 'text-gray-600';
 
-    const inputBg = isDark ? 'bg-[#333] border-[#444] text-white' : 'bg-gray-100 border-gray-300 text-gray-800';
+    const inputBg = isDark ? 'input-bg border-[#444] text-white' : 'input-bg border-gray-300 text-gray-800';
 
     // --- Handlers ---
     const handleOptimize = useCallback((scope: 'small' | 'large' | 'all', mode: 'append' | 'replace' = 'replace') => {
@@ -217,7 +217,7 @@ export const AutoPlacementSidebar: React.FC = () => {
     return (
         <div className={`fixed left-0 ${toolbarSize === 'small' ? 'top-[54px]' : 'top-[64px]'} bottom-0 w-64 ${bgClass} shadow-lg z-40 flex flex-col font-sans transition-all duration-300`}>
             {/* Header */}
-            <div className={`px-4 py-3 border-b ${isDark ? 'border-[#333]' : 'border-gray-200'} flex justify-between items-center`}>
+            <div className={`px-4 py-3 border-b border-gray-200 dark:border-[#333] flex justify-between items-center`}>
                 <div className="flex items-center space-x-2">
                     <Wand2 size={16} className="text-blue-500" />
                     <h3 className={`font-bold text-xs uppercase tracking-wider ${textHeader}`}>Anchor Placement</h3>

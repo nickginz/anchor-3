@@ -22,8 +22,8 @@ export const SelectionMenu: React.FC = () => {
     };
 
     const inputClass = isDark
-        ? "bg-[#222] border border-[#444] text-white"
-        : "bg-gray-50 border-gray-300 text-gray-900";
+        ? "input-bg border-[#444] text-white"
+        : "input-bg border-gray-300 text-gray-900";
 
     const dividerClass = isDark ? "border-[#555]" : "border-gray-200";
     const headerTextClass = isDark ? "text-gray-400" : "text-gray-500";
