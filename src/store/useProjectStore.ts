@@ -2,8 +2,10 @@ import { create } from 'zustand';
 import { temporal } from 'zundo';
 import { v4 as uuidv4 } from 'uuid';
 import type { Wall, Anchor, Dimension, ProjectLayers, ToolType, ImportedObject, ImageObject, DXFObject, Point, Hub, Cable } from '../types';
-import { getOrthogonalPath, calculateLength, generateDaisyChain, getHubColor, distance } from '../utils/routing';
+import { getOrthogonalPath, calculateLength, generateDaisyChain, getHubColor, distance, getHubPortCoordinates } from '../utils/routing';
 import { reduceAnchors } from '../utils/optimizer-reduction';
+
+
 
 export interface ProjectState {
     scaleRatio: number; // px per meter
@@ -257,8 +259,6 @@ export const useProjectStore = create<ProjectState>()(
 
             // Default Cable Settings
             cableSettings: {
-                ceilingHeight: 3.0,
-                serviceLoop: 1.0,
                 defaultCableType: 'cat6',
                 avoidObstacles: true,
                 topology: 'star',
@@ -820,26 +820,83 @@ export const useProjectStore = create<ProjectState>()(
 
                     } else {
                         // Star Topology
-                        groupAnchors.forEach(anchor => {
-                            const path = getOrthogonalPath(
-                                { x: hub.x, y: hub.y },
-                                { x: anchor.x, y: anchor.y },
-                                state.allowOutsideConnections ? [] : walls
-                            );
+                        // Star Topology - Smart Port Assignment
 
-                            newCables.push({
-                                id: uuidv4(),
-                                fromId: hub.id,
-                                toId: anchor.id,
-                                points: path,
-                                length: calculateLength(path, scaleRatio, cableSettings),
-                                color: groupColor,
-                                type: cableSettings.defaultCableType,
-                                topology: 'star',
-                                verticalDrop: cableSettings.ceilingHeight ? (cableSettings.ceilingHeight - 1.0) * 2 : 0,
-                                serviceLoop: cableSettings.serviceLoop
-                            });
+                        // 1. Calculate angle for each anchor relative to Hub
+                        const anchorsWithAngles = groupAnchors.map(anchor => {
+                            const dx = anchor.x - hub.x;
+                            const dy = anchor.y - hub.y;
+                            let angle = Math.atan2(dy, dx); // -PI to PI
+                            return { anchor, angle };
                         });
+
+                        // 2. Track available ports
+                        let availablePorts = Array.from({ length: hub.capacity }, (_, i) => i);
+
+                        // 3. Greedy Assignment: Find nearest port for each anchor
+                        // Optimization: Process anchors that have "obvious" choices first? 
+                        // Or just process arbitrary order? Let's process arbitrary for now.
+                        // Better: Sort anchors by angle? No, specific order doesn't guarantee global optimum without complexity.
+                        // Simple greedy is usually sufficient for visual clarity.
+
+                        anchorsWithAngles.forEach(({ anchor, angle }) => {
+                            if (availablePorts.length === 0) return; // Should not happen if capacity >= anchors
+
+                            let bestPortIdx = -1;
+                            let minDiff = Infinity;
+                            let bestIndexInAvailable = -1;
+
+                            availablePorts.forEach((pIdx, arrIdx) => {
+                                // Calculate Port Angle (matching getHubPortCoordinates logic)
+                                // deg = (i * 360) / cap
+                                // rad = (deg - 90) * PI/180
+                                const portAngleRad = ((pIdx * 360) / hub.capacity - 90) * (Math.PI / 180);
+
+                                // Angular difference (normalized to 0..PI)
+                                let diff = Math.abs(angle - portAngleRad);
+                                // Handle Wrap-around (e.g. PI vs -PI is distance 0)
+                                if (diff > Math.PI) diff = 2 * Math.PI - diff;
+
+                                if (diff < minDiff) {
+                                    minDiff = diff;
+                                    bestPortIdx = pIdx;
+                                    bestIndexInAvailable = arrIdx;
+                                }
+                            });
+
+                            // Assign best port
+                            if (bestIndexInAvailable !== -1) {
+                                availablePorts.splice(bestIndexInAvailable, 1);
+
+                                // Generate Cable
+                                const targetPort = getHubPortCoordinates(
+                                    { x: hub.x, y: hub.y },
+                                    hub.capacity,
+                                    bestPortIdx
+                                );
+
+                                const path = getOrthogonalPath(
+                                    targetPort, // START from Hub Port
+                                    { x: anchor.x, y: anchor.y },
+                                    state.allowOutsideConnections ? [] : walls
+                                );
+
+                                newCables.push({
+                                    id: uuidv4(),
+                                    fromId: hub.id,
+                                    toId: anchor.id,
+                                    points: path,
+                                    length: calculateLength(path, scaleRatio, cableSettings),
+                                    color: groupColor,
+                                    type: cableSettings.defaultCableType,
+                                    topology: 'star',
+                                    verticalDrop: cableSettings.ceilingHeight ? (cableSettings.ceilingHeight - 1.0) * 2 : 0,
+                                    serviceLoop: cableSettings.serviceLoop
+                                });
+                            }
+                        });
+
+
                     }
                 });
 

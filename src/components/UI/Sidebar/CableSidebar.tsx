@@ -63,42 +63,11 @@ export const CableSidebar: React.FC = () => {
                         >
                             Daisy Chain
                         </button>
+
                     </div>
                 </div>
 
-                {/* 2. Physical Properties */}
-                <div>
-                    <h4 className={`text-[10px] font-bold uppercase ${textHeader} mb-2 flex items-center gap-2`}>
-                        <GitCommit size={12} />
-                        <span>Physical Properties</span>
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3">
-                        {/* Ceiling Height */}
-                        <div>
-                            <label className="text-[10px] text-gray-500 mb-1 block">Ceiling Height (m)</label>
-                            <input
-                                type="number"
-                                value={cableSettings.ceilingHeight}
-                                onChange={(e) => setCableSettings({ ceilingHeight: Number(e.target.value) })}
-                                className={`w-full ${inputBg} rounded px-2 py-1.5 text-xs focus:border-blue-500 outline-none`}
-                                step={0.1}
-                                min={0}
-                            />
-                        </div>
-                        {/* Service Loop */}
-                        <div>
-                            <label className="text-[10px] text-gray-500 mb-1 block">Service Loop (m)</label>
-                            <input
-                                type="number"
-                                value={cableSettings.serviceLoop}
-                                onChange={(e) => setCableSettings({ serviceLoop: Number(e.target.value) })}
-                                className={`w-full ${inputBg} rounded px-2 py-1.5 text-xs focus:border-blue-500 outline-none`}
-                                step={0.5}
-                                min={0}
-                            />
-                        </div>
-                    </div>
-                </div>
+
 
                 {/* 3. Visualization */}
                 <div>

@@ -165,20 +165,48 @@ export const calculateLength = (
     // Horizontal Length (m)
     let lengthMeters = lengthPx / scaleRatio;
 
-    // Vertical Drops (Optional)
-    if (settings && settings.ceilingHeight) {
-        const deviceH = settings.deviceHeight || 1.0; // Default device height (e.g., desk/wall)
-        const drop = Math.max(0, settings.ceilingHeight - deviceH);
-        lengthMeters += (drop * 2); // Up to ceiling + Down to device (or along ceiling)
-        // Note: Logic assumes cable goes UP from Hub, along ceiling, DOWN to Anchor.
-        // Or Up from Hub -> Ceiling -> Across -> Down to Anchor. 
-        // Simple approximation: Add 2x Drop.
-    }
-
-    // Service Loop
-    if (settings && settings.serviceLoop) {
-        lengthMeters += settings.serviceLoop;
-    }
-
     return lengthMeters;
 }
+
+export const getHubPortCoordinates = (
+    hubCenter: Point,
+    capacity: number,
+    portIndex: number,
+    hubSize: number = 24,
+    tickLen: number = 3
+): Point => {
+    // Match visual logic from HubsLayer
+    const halfSize = hubSize / 2;
+    const baseDist = halfSize + 4;
+
+    // Start from -90 (Top) and go Clockwise
+    const angleDeg = (portIndex * 360) / capacity;
+    const angleRad = (angleDeg - 90) * (Math.PI / 180);
+
+    const cos = Math.cos(angleRad);
+    const sin = Math.sin(angleRad);
+
+    const maxComp = Math.max(Math.abs(cos), Math.abs(sin));
+    const rStart = baseDist / maxComp;
+
+    const x1 = cos * rStart;
+    const y1 = sin * rStart;
+
+    // Determine orientation based on dominant axis
+    let x2, y2;
+    if (Math.abs(y1) > Math.abs(x1)) {
+        // Vertical Tick
+        x2 = x1;
+        y2 = y1 + (Math.sign(y1) * tickLen);
+    } else {
+        // Horizontal Tick
+        x2 = x1 + (Math.sign(x1) * tickLen);
+        y2 = y1;
+    }
+
+    // Absolute Coordinates
+    return {
+        x: hubCenter.x + x2,
+        y: hubCenter.y + y2
+    };
+};

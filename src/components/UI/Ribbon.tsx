@@ -540,15 +540,15 @@ export const Ribbon: React.FC = () => {
             <div className="flex flex-col items-center px-1 justify-center">
                 {toolbarSize !== 'small' && <span className="text-[10px] text-secondary mb-1 uppercase scale-90">Layers</span>}
                 <div className="grid grid-rows-2 grid-flow-col gap-0.5">
-                    <button onClick={() => toggleLayer('floorplan')} title="Show/Hide Floorplan" className={`p-0.5 rounded hover: bg-[#333] ${layers.floorplan ? 'text-blue-400' : 'text-secondary'} `}> <Upload size={14} /> </button>
-                    <button onClick={() => toggleLayer('dimensions')} title="Show/Hide Dimensions" className={`p-0.5 rounded hover: bg-[#333] ${layers.dimensions ? 'text-blue-400' : 'text-secondary'} `}> <Ruler size={14} /> </button>
-                    <button onClick={() => toggleLayer('walls')} title="Show/Hide Walls" className={`p-0.5 rounded hover: bg-[#333] ${layers.walls ? 'text-blue-400' : 'text-secondary'} `}> <Square size={14} /> </button>
+                    <button onClick={() => toggleLayer('floorplan')} title="Show/Hide Floorplan" className={`p-0.5 rounded hover:bg-[#333] ${layers.floorplan ? 'text-blue-400' : 'text-secondary'} `}> <Upload size={14} /> </button>
+                    <button onClick={() => toggleLayer('dimensions')} title="Show/Hide Dimensions" className={`p-0.5 rounded hover:bg-[#333] ${layers.dimensions ? 'text-blue-400' : 'text-secondary'} `}> <Ruler size={14} /> </button>
+                    <button onClick={() => toggleLayer('walls')} title="Show/Hide Walls" className={`p-0.5 rounded hover:bg-[#333] ${layers.walls ? 'text-blue-400' : 'text-secondary'} `}> <Square size={14} /> </button>
 
                     <div className="w-4 h-4"></div>
-                    <button onClick={() => toggleLayer('roomLabels')} title="Show/Hide Room Labels" className={`p-0.5 rounded hover: bg-[#333] ${layers.roomLabels ? 'text-blue-400' : 'text-secondary'} `}> <Type size={14} /> </button>
-                    <button onClick={() => toggleLayer('rooms')} title="Show/Hide Rooms" className={`p-0.5 rounded hover: bg-[#333] ${layers.rooms ? 'text-blue-400' : 'text-secondary'} `}> <Grid size={14} /> </button>
-                    <button onClick={() => toggleLayer('hubs')} title="Show/Hide Hubs" className={`p-0.5 rounded hover: bg-[#333] ${layers.hubs ? 'text-blue-400' : 'text-secondary'} `}> <Share2 size={14} /> </button>
-                    <button onClick={() => toggleLayer('cables')} title="Show/Hide Cables" className={`p-0.5 rounded hover: bg-[#333] ${layers.cables ? 'text-blue-400' : 'text-secondary'} `}> <Activity size={14} /> </button>
+                    <button onClick={() => toggleLayer('roomLabels')} title="Show/Hide Room Labels" className={`p-0.5 rounded hover:bg-[#333] ${layers.roomLabels ? 'text-blue-400' : 'text-secondary'} `}> <Type size={14} /> </button>
+                    <button onClick={() => toggleLayer('rooms')} title="Show/Hide Rooms" className={`p-0.5 rounded hover:bg-[#333] ${layers.rooms ? 'text-blue-400' : 'text-secondary'} `}> <Grid size={14} /> </button>
+                    <button onClick={() => toggleLayer('hubs')} title="Show/Hide Hubs" className={`p-0.5 rounded hover:bg-[#333] ${layers.hubs ? 'text-blue-400' : 'text-secondary'} `}> <Share2 size={14} /> </button>
+                    <button onClick={() => toggleLayer('cables')} title="Show/Hide Cables" className={`p-0.5 rounded hover:bg-[#333] ${layers.cables ? 'text-blue-400' : 'text-secondary'} `}> <Activity size={14} /> </button>
                 </div>
             </div>
 

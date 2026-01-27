@@ -1,0 +1,51 @@
+AUTO-PLACEMENT LOGIC DOCUMENTATION
+====================================
+Last Updated: 2026-01-18
+Version: 2.0 (Strict Logic)
+
+1. ROOM DETECTION
+-----------------
+- The system identifies closed rooms based on the visible wall layout.
+- Tolerance matches the visual "Rooms Layer" exactly.
+- If you see a room on the screen, the auto-placement sees it too.
+
+2. CLASSIFICATION RULES
+-----------------------
+Rooms are classified strictly by **AREA** to ensure predictable behavior.
+
+A. COMPACT ROOMS (Small)
+   - Condition: Area < 110 m²
+   - Logic: These are treated as standard offices, bedrooms, or storage rooms.
+   - Behavior: strictly single anchor.
+
+B. LARGE ROOMS (Open Plan)
+   - Condition: Area >= 110 m²
+   - Logic: These are treated as large open spaces (halls, warehouses, open offices).
+   - Behavior: Grid coverage.
+
+3. PLACEMENT STRATEGIES
+-----------------------
+
+[A] COMPACT PLACEMENT (for < 110 m²)
+   - **Position**: Geometric Centroid (Center of gravity of the room polygon).
+   - **Quantity**: Exactly 1 Anchor.
+     - These anchors are assigned **CRITICAL PRIORITY**.
+
+
+[B] LARGE ROOM PLACEMENT (for >= 110 m²)
+   - **Method**: Offset Grid.
+   - **Spacing**: Based on Anchor Radius (Default ~10m).
+   - **Alignment**: Grid is centered within the room's bounding box to ensure equal margins.
+   - **Priority**: Normal. These anchors can be removed if they are redundant (too close to others).
+
+4. OPTIMIZATION PHASE
+---------------------
+After initial placement, the system runs a "Density Optimization" pass:
+1. It checks for anchors that are too close to each other (< Radius).
+2. It prioritizes keeping anchors that are locked or manual.
+3. **CRITICAL RULE**: It explicitly ignores (preserves) any anchor marked "Critical Priority" (i.e., the Small Room Centroids).
+
+SUMMARY CHECKLIST
+-----------------
+1. Is the room < 110m²? -> ONE CENTER ANCHOR
+2. Is the room >= 110m²? -> GRID of anchors.
