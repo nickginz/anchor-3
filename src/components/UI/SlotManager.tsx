@@ -33,6 +33,13 @@ export const SlotManager: React.FC<SlotManagerProps> = ({ onClose }) => {
     }, []);
 
     const handleSave = (index: number) => {
+        const isOverwrite = !!slots[index];
+        const message = isOverwrite
+            ? `Overwrite Slot ${index + 1}? Previous data will be lost.`
+            : `Save current project to Slot ${index + 1}?`;
+
+        if (!confirm(message)) return;
+
         const state = useProjectStore.getState();
         const data = {
             version: 1,
@@ -77,6 +84,8 @@ export const SlotManager: React.FC<SlotManagerProps> = ({ onClose }) => {
     };
 
     const handleLoad = (index: number) => {
+        if (!confirm(`Load Slot ${index + 1}? Any unsaved changes on the canvas will be lost.`)) return;
+
         const key = `anchor_project_slot_${index + 1}`;
         const stored = localStorage.getItem(key);
         if (!stored) return;
@@ -92,7 +101,7 @@ export const SlotManager: React.FC<SlotManagerProps> = ({ onClose }) => {
     };
 
     const handleClear = (index: number) => {
-        if (!confirm(`Clear Slot ${index + 1}?`)) return;
+        if (!confirm(`Are you sure you want to DELETE Slot ${index + 1}? This action cannot be undone.`)) return;
         const key = `anchor_project_slot_${index + 1}`;
         localStorage.removeItem(key);
         const newSlots = [...slots];

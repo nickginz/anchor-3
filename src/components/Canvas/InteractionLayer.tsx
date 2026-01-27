@@ -2553,145 +2553,150 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     // No, line 2391 defines selectedWallIds.
                     // I will change it to iterate `state.walls` to ensure all handles are dragable.
 
-                    // Start Point
-                    handles.push(
-                        <Circle
-                            key={`${id}-start`}
-                            name="wall-handle"
-                            x={wall.points[0]}
-                            y={wall.points[1]}
-                            radius={handleRadius}
-                            fill="#00aaff"
-                            stroke="white"
-                            strokeWidth={2 / ((stage?.scaleX() || 1))}
-                            draggable
-                            onDragStart={(e) => {
-                                e.cancelBubble = true;
-                                draggedWallNodeMap.current = []; // Clear safety
-                                useProjectStore.temporal.getState().pause();
+                    // IMPORTANT: Only show handles if the wall is selected (User Request)
+                    if (isSelected) {
+                        // Start Point
+                        handles.push(
+                            <Circle
+                                key={`${id}-start`}
+                                name="wall-handle"
+                                x={wall.points[0]}
+                                y={wall.points[1]}
+                                radius={handleRadius}
+                                fill="#00aaff"
+                                stroke="white"
+                                strokeWidth={2 / ((stage?.scaleX() || 1))}
+                                draggable={!wallsLocked}
+                                onMouseDown={(e) => {
+                                    e.cancelBubble = true;
+                                }}
+                                onDragStart={(e) => {
+                                    e.cancelBubble = true;
+                                    draggedWallNodeMap.current = []; // Clear safety
+                                    useProjectStore.temporal.getState().pause();
 
-                                // Explicitly add THIS wall
-                                const connected: { wallId: string, pointIndex: number }[] = [
-                                    { wallId: wall.id, pointIndex: 0 }
-                                ];
+                                    // Explicitly add THIS wall
+                                    const connected: { wallId: string, pointIndex: number }[] = [
+                                        { wallId: wall.id, pointIndex: 0 }
+                                    ];
 
-                                // Find others
-                                const state = useProjectStore.getState();
-                                const p = { x: wall.points[0], y: wall.points[1] };
-                                const others = findConnectedWalls(p, wall.id, state.walls, state.scaleRatio);
-                                draggedWallNodeMap.current = [...connected, ...others];
-                            }}
-                            onDragEnd={(e) => {
-                                e.cancelBubble = true;
-                                draggedWallNodeMap.current = [];
-                                useProjectStore.temporal.getState().resume();
-                            }}
-                            onDragMove={(e) => {
-                                e.cancelBubble = true;
-                                let newPos = { x: e.target.x(), y: e.target.y() };
-                                const state = useProjectStore.getState();
-                                // Snap
-                                if (state.layers.walls) {
-                                    // Filter out self-walls from snap to act cleaner? 
-                                    // Actually snap to "otherWalls" is usually what we want.
-                                    // We should exclude ALL dragged walls from snap targets to avoid jitter
-                                    const draggedIds = draggedWallNodeMap.current.map(d => d.wallId);
-                                    const otherWalls = state.walls.filter(w => !draggedIds.includes(w.id));
+                                    // Find others
+                                    const state = useProjectStore.getState();
+                                    const p = { x: wall.points[0], y: wall.points[1] };
+                                    const others = findConnectedWalls(p, wall.id, state.walls, state.scaleRatio);
+                                    draggedWallNodeMap.current = [...connected, ...others];
+                                }}
+                                onDragEnd={(e) => {
+                                    e.cancelBubble = true;
+                                    draggedWallNodeMap.current = [];
+                                    useProjectStore.temporal.getState().resume();
+                                }}
+                                onDragMove={(e) => {
+                                    e.cancelBubble = true;
+                                    let newPos = { x: e.target.x(), y: e.target.y() };
+                                    const state = useProjectStore.getState();
+                                    // Snap
+                                    if (state.layers.walls) {
+                                        const draggedIds = draggedWallNodeMap.current.map(d => d.wallId);
+                                        const otherWalls = state.walls.filter(w => !draggedIds.includes(w.id));
 
-                                    const snap = getSnapPoint(newPos, otherWalls, anchors, 20 / ((stage?.scaleX() || 1)));
-                                    if (snap) {
-                                        newPos = snap.point;
-                                        e.target.position(newPos);
-                                    }
-                                }
-
-                                // Update specific connected points
-                                draggedWallNodeMap.current.forEach(item => {
-                                    const w = state.walls.find(w => w.id === item.wallId);
-                                    if (w) {
-                                        const newPoints = [...w.points] as [number, number, number, number];
-                                        if (item.pointIndex === 0) {
-                                            newPoints[0] = newPos.x;
-                                            newPoints[1] = newPos.y;
-                                        } else {
-                                            newPoints[2] = newPos.x;
-                                            newPoints[3] = newPos.y;
+                                        const snap = getSnapPoint(newPos, otherWalls, anchors, 20 / ((stage?.scaleX() || 1)));
+                                        if (snap) {
+                                            newPos = snap.point;
+                                            e.target.position(newPos);
                                         }
-                                        state.updateWall(w.id, { points: newPoints });
                                     }
-                                });
-                            }}
-                        />
-                    );
 
-                    // End Point
-                    handles.push(
-                        <Circle
-                            key={`${id}-end`}
-                            name="wall-handle"
-                            x={wall.points[2]}
-                            y={wall.points[3]}
-                            radius={handleRadius}
-                            fill="#00aaff"
-                            stroke="white"
-                            strokeWidth={2 / ((stage?.scaleX() || 1))}
-                            draggable
-                            onDragStart={(e) => {
-                                e.cancelBubble = true;
-                                draggedWallNodeMap.current = []; // Clear safety
-                                useProjectStore.temporal.getState().pause();
-
-                                // Explicitly add THIS wall
-                                const connected: { wallId: string, pointIndex: number }[] = [
-                                    { wallId: wall.id, pointIndex: 2 }
-                                ];
-
-                                // Find others
-                                const state = useProjectStore.getState();
-                                const p = { x: wall.points[2], y: wall.points[3] };
-                                const others = findConnectedWalls(p, wall.id, state.walls, state.scaleRatio);
-                                draggedWallNodeMap.current = [...connected, ...others];
-                            }}
-
-                            onDragEnd={(e) => {
-                                e.cancelBubble = true;
-                                draggedWallNodeMap.current = [];
-                                useProjectStore.temporal.getState().resume();
-                            }}
-                            onDragMove={(e) => {
-                                e.cancelBubble = true;
-                                let newPos = { x: e.target.x(), y: e.target.y() };
-                                const state = useProjectStore.getState();
-                                // Snap
-                                if (state.layers.walls) {
-                                    const draggedIds = draggedWallNodeMap.current.map(d => d.wallId);
-                                    const otherWalls = state.walls.filter(w => !draggedIds.includes(w.id));
-
-                                    const snap = getSnapPoint(newPos, otherWalls, anchors, 20 / ((stage?.scaleX() || 1)));
-                                    if (snap) {
-                                        newPos = snap.point;
-                                        e.target.position(newPos);
-                                    }
-                                }
-
-                                // Update specific connected points
-                                draggedWallNodeMap.current.forEach(item => {
-                                    const w = state.walls.find(w => w.id === item.wallId);
-                                    if (w) {
-                                        const newPoints = [...w.points] as [number, number, number, number];
-                                        if (item.pointIndex === 0) {
-                                            newPoints[0] = newPos.x;
-                                            newPoints[1] = newPos.y;
-                                        } else {
-                                            newPoints[2] = newPos.x;
-                                            newPoints[3] = newPos.y;
+                                    // Update specific connected points
+                                    draggedWallNodeMap.current.forEach(item => {
+                                        const w = state.walls.find(w => w.id === item.wallId);
+                                        if (w) {
+                                            const newPoints = [...w.points] as [number, number, number, number];
+                                            if (item.pointIndex === 0) {
+                                                newPoints[0] = newPos.x;
+                                                newPoints[1] = newPos.y;
+                                            } else {
+                                                newPoints[2] = newPos.x;
+                                                newPoints[3] = newPos.y;
+                                            }
+                                            state.updateWall(w.id, { points: newPoints });
                                         }
-                                        state.updateWall(w.id, { points: newPoints });
+                                    });
+                                }}
+                            />
+                        );
+
+                        // End Point
+                        handles.push(
+                            <Circle
+                                key={`${id}-end`}
+                                name="wall-handle"
+                                x={wall.points[2]}
+                                y={wall.points[3]}
+                                radius={handleRadius}
+                                fill="#00aaff"
+                                stroke="white"
+                                strokeWidth={2 / ((stage?.scaleX() || 1))}
+                                draggable={!wallsLocked}
+                                onMouseDown={(e) => {
+                                    e.cancelBubble = true;
+                                }}
+                                onDragStart={(e) => {
+                                    e.cancelBubble = true;
+                                    draggedWallNodeMap.current = []; // Clear safety
+                                    useProjectStore.temporal.getState().pause();
+
+                                    // Explicitly add THIS wall
+                                    const connected: { wallId: string, pointIndex: number }[] = [
+                                        { wallId: wall.id, pointIndex: 2 }
+                                    ];
+
+                                    // Find others
+                                    const state = useProjectStore.getState();
+                                    const p = { x: wall.points[2], y: wall.points[3] };
+                                    const others = findConnectedWalls(p, wall.id, state.walls, state.scaleRatio);
+                                    draggedWallNodeMap.current = [...connected, ...others];
+                                }}
+                                onDragEnd={(e) => {
+                                    e.cancelBubble = true;
+                                    draggedWallNodeMap.current = [];
+                                    useProjectStore.temporal.getState().resume();
+                                }}
+                                onDragMove={(e) => {
+                                    e.cancelBubble = true;
+                                    let newPos = { x: e.target.x(), y: e.target.y() };
+                                    const state = useProjectStore.getState();
+                                    // Snap
+                                    if (state.layers.walls) {
+                                        const draggedIds = draggedWallNodeMap.current.map(d => d.wallId);
+                                        const otherWalls = state.walls.filter(w => !draggedIds.includes(w.id));
+
+                                        const snap = getSnapPoint(newPos, otherWalls, anchors, 20 / ((stage?.scaleX() || 1)));
+                                        if (snap) {
+                                            newPos = snap.point;
+                                            e.target.position(newPos);
+                                        }
                                     }
-                                });
-                            }}
-                        />
-                    );
+
+                                    // Update specific connected points
+                                    draggedWallNodeMap.current.forEach(item => {
+                                        const w = state.walls.find(w => w.id === item.wallId);
+                                        if (w) {
+                                            const newPoints = [...w.points] as [number, number, number, number];
+                                            if (item.pointIndex === 0) {
+                                                newPoints[0] = newPos.x;
+                                                newPoints[1] = newPos.y;
+                                            } else {
+                                                newPoints[2] = newPos.x;
+                                                newPoints[3] = newPos.y;
+                                            }
+                                            state.updateWall(w.id, { points: newPoints });
+                                        }
+                                    });
+                                }}
+                            />
+                        );
+                    }
                 });
 
                 return handles;

@@ -15,7 +15,8 @@ git reset --hard <COMMIT_HASH>
 
 | Date | Commit Hash | Description |
 | :--- | :--- | :--- |
-| **Current** | `40f5b76` | **Export System & Interaction Updates**<br>Implemented PDF/PNG Export Sidebar with region selection, page size, and orientation options. Updated Canvas interactions and refactored multiple layers (Interaction, Anchors, Dimensions, Walls). |
+| **Current** | `920bb8a` | **Wall Drag & Shortcut Fixes**<br>Fixed critical wall drag conflict (handles now separated from wall body), implemented dynamic connection tolerance (visual 10px + physical 0.5m cap), and refactored shortcuts to use `e.code` (layout-independent). |
+| Previous | `40f5b76` | **Export System & Interaction Updates**<br>Implemented PDF/PNG Export Sidebar with region selection, page size, and orientation options. Updated Canvas interactions and refactored multiple layers (Interaction, Anchors, Dimensions, Walls). |
 | Previous | `a3d0b14` | **Optimization Fixes & Gap Filling**<br>Fixed small room density optimization (geometry consistency), restored area constraints for optimization (All-Room scope), applied skeleton logic to complex small rooms (>3 joints), and implemented Big Room Gap Filling for coverage holes >8m from offsets. |
 | Previous | `04cff5c` | **Placement Area Refinement**<br>Refined Placement Area behavior: Default OFF, Strict Containment for Auto-Placement & Optimization (only affects anchors inside area). Updated UI: split Eye toggle from Tool button, icon-only tool button. Fixed drag event bubbling. |
 | Previous | `0a8a874` | **Large Room Logic V2**<br>Completely rewrote Large Room auto-placement logic. Now strictly uses offset layers (1x, 3x, 5x steps) with anchors at corners and symmetrical edge filling (max overlap 1.5m). Removed legacy skeleton logic for large rooms. |
