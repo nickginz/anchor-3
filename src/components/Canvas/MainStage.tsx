@@ -268,7 +268,7 @@ export const MainStage: React.FC = () => {
 
                     {/* Layer 2: Geometry & Validation */}
                     <Layer key="layer-geo">
-                        <WallsLayer />
+                        <WallsLayer key={theme} />
                         {/* Geometry Debug Lines (Red Offsets) */}
                         {geometryLines.length > 0 && geometryLines.map((poly, i) => (
                             <Line

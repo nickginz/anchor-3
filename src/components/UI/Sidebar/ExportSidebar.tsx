@@ -16,7 +16,7 @@ export const ExportSidebar: React.FC = () => {
         toolbarSize
     } = useProjectStore();
 
-    const [format, setFormat] = useState<'png' | 'pdf' | 'html'>('pdf');
+    const [format, setFormat] = useState<'png' | 'pdf' | 'html'>('html');
     const [pdfSize, setPdfSize] = useState<'a4' | 'a3' | 'a2' | 'a1' | 'a0'>('a4');
     const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('landscape');
     const quality = 2; // Pixel Ratio
@@ -242,6 +242,15 @@ export const ExportSidebar: React.FC = () => {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {/* Rich Text Editor for HTML - Moved to Generated HTML Sidebar */}
+                {format === 'html' && (
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                        <p className={`text-[10px] ${subTextClass} mt-1 italic`}>
+                            The exported HTML will include an interactive Notes section in its sidebar.
+                        </p>
                     </div>
                 )}
 

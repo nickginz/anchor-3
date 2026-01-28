@@ -8,8 +8,8 @@ export const createBrickPattern = (theme: 'light' | 'dark') => {
     if (!ctx) return canvas;
 
     // Colors
-    const brickColor = theme === 'light' ? '#ef4444' : '#b91c1c'; // Red-500 / Red-700
-    const mortarColor = theme === 'light' ? '#d1d5db' : '#7f1d1d'; // Gray-300 / Red-900 (Darker)
+    const brickColor = theme === 'light' ? '#b91c1c' : '#b91c1c'; // Red-700 (Darker for Light Mode too)
+    const mortarColor = theme === 'light' ? '#9ca3af' : '#7f1d1d'; // Gray-400 / Red-900
 
     // Background (Mortar)
     ctx.fillStyle = mortarColor;
@@ -35,12 +35,12 @@ export const createConcretePattern = (theme: 'light' | 'dark') => {
     if (!ctx) return canvas;
 
     // Base Color
-    const baseColor = theme === 'light' ? '#9ca3af' : '#52525b'; // Gray-400 / Zinc-600
+    const baseColor = theme === 'light' ? '#6b7280' : '#52525b'; // Gray-500 / Zinc-600 (Darker)
     ctx.fillStyle = baseColor;
     ctx.fillRect(0, 0, size, size);
 
     // Noise/Speckles
-    const grainColor = theme === 'light' ? '#6b7280' : '#3f3f46'; // Gray-500 / Zinc-700
+    const grainColor = theme === 'light' ? '#4b5563' : '#3f3f46'; // Gray-600 / Zinc-700
     ctx.fillStyle = grainColor;
     for (let i = 0; i < 40; i++) {
         const x = Math.random() * size;

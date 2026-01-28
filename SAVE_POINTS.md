@@ -15,7 +15,7 @@ git reset --hard <COMMIT_HASH>
 
 | Date | Commit Hash | Description |
 | :--- | :--- | :--- |
-| **Current** | `PENDING` | **Light Mode UI Fixes**<br>Comprehensive UI refactor for Light Mode visibility. Replaced hardcoded dark hex values with theme-aware classes (`text-accent`, `bg-white/dark:bg-[#333]`) across Ribbon, Sidebars (Help, Export, Cable, Auto-Place), and Managers (Slots, DXF). Fixed Ribbon icon backgrounds and hover states. |
+| **Current** | `7255cb9` | **Light Mode UI Fixes**<br>Comprehensive UI refactor for Light Mode visibility. Replaced hardcoded dark hex values with theme-aware classes (`text-accent`, `bg-white/dark:bg-[#333]`) across Ribbon, Sidebars (Help, Export, Cable, Auto-Place), and Managers (Slots, DXF). Fixed Ribbon icon backgrounds and hover states. |
 | Previous | `a588261` | **Full Refactor & Docs**<br>Completed Code Audit/Cleanup (Linting/Types). Added `MANUAL.md`, `FAQ.md`, `TECHNICAL_REFERENCE.md`. Fixed Hub Shortcut. Added Interactive App Map. |
 | Previous | `eddc536` | **Fixes: Shortcuts, Handles, UI Cleanup**<br>Key shortcuts now layout-agnostic (using `e.code`). Fixed Wall Dragging (separated logic, handles only visible on selection, drag fixed). Added "Are you sure?" confirmation to Quick Save slots. Moved temp files to `OLD/`. |
 | Previous | `920bb8a` | **Wall Drag & Shortcut Fixes**<br>Fixed critical wall drag conflict (handles now separated from wall body), implemented dynamic connection tolerance (visual 10px + physical 0.5m cap), and refactored shortcuts to use `e.code` (layout-independent). |

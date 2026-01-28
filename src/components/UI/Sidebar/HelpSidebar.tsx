@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useProjectStore } from '../../../store/useProjectStore';
-import { X, ChevronRight, ChevronDown, Info } from 'lucide-react';
+import {
+    X, ChevronRight, ChevronDown, Info,
+    MousePointer2, Undo2, Redo2, Upload,
+    PenTool, Lock, Square, BoxSelect,
+    Wifi, Wand2, Router, Spline, Cable, Settings,
+    FileUp, BookTemplate, Calculator, Ruler, Scaling, FilePlus
+} from 'lucide-react';
 
 const SIDEBAR_MIN_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH = 1200;
@@ -26,41 +32,171 @@ const DOCUMENTATION: HelpSection[] = [
     },
     {
         id: 'interface',
-        title: 'The Interface',
+        title: 'Toolbar & Icons',
         content: (
-            <div className="space-y-3">
-                <p>A breakdown of the main UI elements and their functions.</p>
+            <div className="space-y-4">
+                <div>
+                    <h4 className="text-sm font-bold text-gray-300 border-b panel-border pb-1 mb-2">Edit & View</h4>
+                    <div className="grid grid-cols-1 gap-3">
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><MousePointer2 size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Select (V)</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Standard cursor to select, move, or edit objects. Click background to deselect.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0 flex space-x-1">
+                                <Undo2 size={14} />
+                                <Redo2 size={14} />
+                            </div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Undo / Redo</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Revert or re-apply recent actions (Ctrl+Z / Ctrl+Shift+Z).</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Upload size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Layer Toggles</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Show or hide specific layers like Walls, Cables, or the Floorplan image.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                <h4 className="text-sm font-bold text-gray-300 mt-2">Edit Tools</h4>
-                <ul className="list-disc pl-4 space-y-1 text-xs text-gray-400">
-                    <li><strong className="text-gray-200">Select (V)</strong>: Standard cursor for selecting and moving objects.</li>
-                    <li><strong className="text-gray-200">Undo (Ctrl+Z) / Redo</strong>: Revert or re-apply changes.</li>
-                </ul>
+                <div>
+                    <h4 className="text-sm font-bold text-gray-300 border-b panel-border pb-1 mb-2">Draw Tools</h4>
+                    <div className="grid grid-cols-1 gap-3">
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><PenTool size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Wall (W)</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Draw linear walls. Click to start, click to place corners. Esc to stop.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Lock size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Lock Walls (Shift+W)</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Lock all walls to prevent accidental selection or movement while placing devices.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Square size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Rect Wall (R)</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Draw a complete rectangular room in one drag action.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><BoxSelect size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">3-Pt Rect</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Draw a rotated rectangle. Click & drag base width, then drag out height.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                <h4 className="text-sm font-bold text-gray-300 mt-2">Draw Tools</h4>
-                <ul className="list-disc pl-4 space-y-1 text-xs text-gray-400">
-                    <li><strong className="text-gray-200">Wall (W)</strong>: Draw linear walls. <strong className="text-gray-200">Shift+W</strong> to toggle Wall Lock.</li>
-                    <li><strong className="text-gray-200">Rect Wall (R)</strong>: Cycle between Standard Rectangle and 3-Point Rectangle.</li>
-                    <li><strong className="text-gray-200">3-Pt Rect</strong>: Draw rotated rectangles by defining base and height.</li>
-                    <li><strong className="text-gray-200">Lock</strong>: Prevent accidental edits to walls (Shift+W).</li>
-                </ul>
+                <div>
+                    <h4 className="text-sm font-bold text-gray-300 border-b panel-border pb-1 mb-2">Devices & Network</h4>
+                    <div className="grid grid-cols-1 gap-3">
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Wifi size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Anchor (A)</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Place a wireless anchor or access point. Shows coverage radius.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Wand2 size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Auto-Place</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Open the automated placement sidebar to fill rooms with anchors.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Router size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Hub (H)</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Place a central hub or switch for cables to connect to.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Spline size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Route Cable</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Enter Cable Edit Mode to manually draw or re-route cables between devices.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Cable size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Cable Settings</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Configure cable types and routing behaviors.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Settings size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Anchor Settings</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Adjust coverage radius and shape.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                <h4 className="text-sm font-bold text-gray-300 mt-2">Measure & Scale</h4>
-                <ul className="list-disc pl-4 space-y-1 text-xs text-gray-400">
-                    <li><strong className="text-gray-200">Ruler (D)</strong>: Measure distance between two points.</li>
-                    <li><strong className="text-gray-200">Scale (S)</strong>: Calibrate the floor plan.</li>
-                </ul>
-
-                <h4 className="text-sm font-bold text-gray-300 mt-2">Project & Network</h4>
-                <ul className="list-disc pl-4 space-y-1 text-xs text-gray-400">
-                    <li><strong className="text-gray-200">Import</strong>: Load background images or DXF files.</li>
-                    <li><strong className="text-gray-200">Export</strong>: Save view as PDF or Image.</li>
-                    <li><strong className="text-gray-200">Auto-Connect</strong>: Route cables to nearest hubs.</li>
-                    <li><strong className="text-gray-200">Shift+A</strong>: Open Auto-Placement Sidebar.</li>
-                </ul>
+                <div>
+                    <h4 className="text-sm font-bold text-gray-300 border-b panel-border pb-1 mb-2">Project & Manage</h4>
+                    <div className="grid grid-cols-1 gap-3">
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><FileUp size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Import / Export</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Import background images/DXF. Export finished plan as PDF or Image.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><BookTemplate size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Save Slots</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Quickly save and load up to 5 different versions of your project.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Calculator size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">BOM</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">View a summary of all used devices, cable lengths, and wall totals.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Ruler size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Measure (D)</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Measure distances on the plan.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Scaling size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Scale (S)</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Set the pixel-to-meter ratio.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><FilePlus size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">New Project</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Clear canvas and start over.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         ),
-        searchableText: "interface ui elements edit tools select v undo ctrl+z redo draw tools wall w shift+w lock rect wall r 3-pt rect cycle measure scale ruler d s calibration project network import export auto-connect shift+a auto-placement"
+        searchableText: "toolbar icons interface edit view select undo redo layers draw wall lock rect 3-pt devices network anchor auto-place hub route cable settings project manage import export slots bom measure scale new project"
     },
     {
         id: 'shortcuts',
@@ -105,7 +241,7 @@ const DOCUMENTATION: HelpSection[] = [
                 <div>
                     <h4 className="text-sm font-bold text-gray-300">Cable Routing</h4>
                     <p className="text-xs text-gray-400 mt-1">
-                        Cables automatically follow walls (Manhattan routing) to reach hubs. You can choose between <strong>Star</strong> (direct) or <strong>Daisy-Chain</strong> topologies in the Network toolbar.
+                        Cables automatically follow walls (Manhattan routing) to reach hubs. Select <strong>Route</strong> to draw/edit cables.
                     </p>
                 </div>
                 <div>

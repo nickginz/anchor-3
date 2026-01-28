@@ -103,6 +103,43 @@ export const Ribbon: React.FC = () => {
     return (
         <div className={`${toolbarSize === 'small' ? 'h-[54px]' : 'h-[64px]'} panel-bg border-b panel-border flex items-stretch px-4 shadow-xl z-20 relative select-none transition-all duration-300`}>
 
+            {/* Hidden Input for Import (Global) */}
+            <input
+                type="file"
+                ref={importInputRef}
+                accept=".dxf, .png, .jpg, .jpeg, .pdf"
+                className="hidden"
+                onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const ext = file.name.split('.').pop()?.toLowerCase();
+                    try {
+                        const state = useProjectStore.getState();
+                        if (ext === 'dxf') {
+                            const { importDXF } = await import('../../utils/importers/importDXF');
+                            const data = await importDXF(file);
+                            const layers: Record<string, boolean> = {};
+                            if (data && data.tables?.layer?.layers) {
+                                Object.keys(data.tables.layer.layers).forEach(name => layers[name] = true);
+                            }
+                            state.addImportedObject({ type: 'dxf', name: file.name, data, layers, width: data.extents?.width || 100, height: data.extents?.height || 100 } as any);
+                            setIsLayerManagerOpen(true);
+                        } else if (ext === 'pdf') {
+                            const { importPDF } = await import('../../utils/importers/importPDF');
+                            const img = await importPDF(file);
+                            state.addImportedObject({ type: 'image', name: file.name, src: img.src, width: img.width, height: img.height } as any);
+                        } else if (['png', 'jpg', 'jpeg'].includes(ext || '')) {
+                            const { importImage } = await import('../../utils/importers/importImage');
+                            const img = await importImage(file);
+                            state.addImportedObject({ type: 'image', name: file.name, src: img.src, width: img.width, height: img.height } as any);
+                        } else {
+                            alert('Unsupported file type: ' + ext);
+                        }
+                    } catch (err) { console.error(err); alert(`Failed to import ${ext?.toUpperCase()} file.`); }
+                    e.target.value = '';
+                }}
+            />
+
             {/* Slot Manager Popup */}
             {isSlotsOpen && <SlotManager onClose={() => setIsSlotsOpen(false)} />}
 
@@ -238,7 +275,7 @@ export const Ribbon: React.FC = () => {
                             <button
                                 onClick={() => useProjectStore.getState().setWallsLocked(!useProjectStore.getState().wallsLocked)}
                                 title={useProjectStore.getState().wallsLocked ? "Unlock Walls" : "Lock Walls"}
-                                className={`p-0.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors flex items-center justify-center ${useProjectStore.getState().wallsLocked ? 'text-red-500 bg-gray-200 dark:bg-[#333]' : 'text-secondary'} `}
+                                className={`p-0.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors flex items-center justify-center ${useProjectStore.getState().wallsLocked ? 'bg-red-600 text-white shadow-inner' : 'text-secondary'} `}
                             >
                                 <Lock size={14} />
                             </button>
@@ -291,7 +328,7 @@ export const Ribbon: React.FC = () => {
                             <button
                                 onClick={() => useProjectStore.getState().setWallsLocked(!useProjectStore.getState().wallsLocked)}
                                 title={useProjectStore.getState().wallsLocked ? "Unlock Walls" : "Lock Walls"}
-                                className={`p-1.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors ${useProjectStore.getState().wallsLocked ? 'text-red-500 bg-gray-200 dark:bg-[#333]' : 'text-secondary'} `}
+                                className={`p-1.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors ${useProjectStore.getState().wallsLocked ? 'bg-red-600 text-white shadow-inner' : 'text-secondary'} `}
                             >
                                 <Lock size={18} />
                             </button>
@@ -343,7 +380,7 @@ export const Ribbon: React.FC = () => {
                     {toolbarSize === 'small' ? (
                         <div className="grid grid-rows-2 grid-flow-col gap-0.5">
                             <button
-                                onClick={() => fileInputRef.current?.click()}
+                                onClick={() => importInputRef.current?.click()}
                                 title="Import DXF/Image"
                                 className="p-0.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors flex items-center justify-center text-secondary"
                             >
@@ -374,41 +411,7 @@ export const Ribbon: React.FC = () => {
                     ) : (
                         <>
                             {/* Hidden Input for Import */}
-                            <input
-                                type="file"
-                                ref={importInputRef}
-                                accept=".png, .jpg, .jpeg, .pdf, .dxf"
-                                className="hidden"
-                                onChange={async (e) => {
-                                    const file = e.target.files?.[0];
-                                    if (!file) return;
-                                    const ext = file.name.split('.').pop()?.toLowerCase();
-                                    try {
-                                        const state = useProjectStore.getState();
-                                        if (ext === 'dxf') {
-                                            const { importDXF } = await import('../../utils/importers/importDXF');
-                                            const data = await importDXF(file);
-                                            const layers: Record<string, boolean> = {};
-                                            if (data && data.tables?.layer?.layers) {
-                                                Object.keys(data.tables.layer.layers).forEach(name => layers[name] = true);
-                                            }
-                                            state.addImportedObject({ type: 'dxf', name: file.name, data, layers, width: data.extents?.width || 100, height: data.extents?.height || 100 } as any);
-                                            setIsLayerManagerOpen(true);
-                                        } else if (ext === 'pdf') {
-                                            const { importPDF } = await import('../../utils/importers/importPDF');
-                                            const img = await importPDF(file);
-                                            state.addImportedObject({ type: 'image', name: file.name, src: img.src, width: img.width, height: img.height } as any);
-                                        } else if (['png', 'jpg', 'jpeg'].includes(ext || '')) {
-                                            const { importImage } = await import('../../utils/importers/importImage');
-                                            const img = await importImage(file);
-                                            state.addImportedObject({ type: 'image', name: file.name, src: img.src, width: img.width, height: img.height } as any);
-                                        } else {
-                                            alert('Unsupported file type: ' + ext);
-                                        }
-                                    } catch (err) { console.error(err); alert(`Failed to import ${ext?.toUpperCase()} file.`); }
-                                    e.target.value = '';
-                                }}
-                            />
+
 
                             <ToolbarButton icon={FileUp} label="Import" onClick={() => importInputRef.current?.click()} tooltip="Import DXF/Image" />
 
@@ -466,7 +469,7 @@ export const Ribbon: React.FC = () => {
                                             useProjectStore.getState().setIsExportSidebarOpen(false);
                                         }
                                     }}
-                                    className={`p-0.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors flex items-center justify-center ${isAutoPlacementOpen ? 'bg-[#333] text-white shadow-inner' : 'text-accent'} `}
+                                    className={`p-0.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors flex items-center justify-center ${isAutoPlacementOpen ? 'bg-accent text-white shadow-inner' : 'text-secondary'} `}
                                     title="Auto-Place Sidebar"
                                 >
                                     <Wand2 size={14} />
@@ -493,7 +496,7 @@ export const Ribbon: React.FC = () => {
                                         useProjectStore.getState().setIsExportSidebarOpen(false);
                                     }
                                 }}
-                                className={`p-1.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors flex flex-col items-center ${isAutoPlacementOpen ? 'bg-[#333] text-white shadow-inner' : 'text-accent'} `}
+                                className={`p-1.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors flex flex-col items-center ${isAutoPlacementOpen ? 'bg-accent text-white shadow-inner' : 'text-secondary'} `}
                                 title="Auto-Place Sidebar"
                             >
                                 <Wand2 size={16} />
@@ -618,28 +621,7 @@ export const Ribbon: React.FC = () => {
                                 </button>
                             </div>
 
-                            <div className="flex flex-col space-y-1 justify-center border-l border-r panel-border px-2">
-                                <select
-                                    value={useProjectStore.getState().activeHubCapacity}
-                                    onChange={(e) => useProjectStore.getState().setHubCapacity(parseInt(e.target.value) as any)}
-                                    className="input-bg text-[10px] text-secondary focus:outline-none cursor-pointer border panel-border rounded px-1"
-                                    title="Hub Capacity (Ports)"
-                                >
-                                    <option value={2}>2 Port</option>
-                                    <option value={6}>6 Port</option>
-                                    <option value={12}>12 Port</option>
-                                    <option value={24}>24 Port</option>
-                                </select>
-                                <select
-                                    value={useProjectStore.getState().activeTopology || 'star'}
-                                    onChange={(e) => useProjectStore.getState().setTopology(e.target.value as any)}
-                                    className="input-bg text-[10px] text-secondary focus:outline-none cursor-pointer border panel-border rounded px-1"
-                                    title="Connection Topology"
-                                >
-                                    <option value="star">Star</option>
-                                    <option value="daisy">Daisy</option>
-                                </select>
-                            </div>
+
 
                             <div className="flex flex-col justify-center pl-1">
 
@@ -664,28 +646,7 @@ export const Ribbon: React.FC = () => {
                         <>
                             <ToolbarButton icon={Router} label="Hub" active={activeTool === 'hub'} onClick={() => setTool('hub')} tooltip="Place Connection Hub (H)" iconSize={16} className="p-1.5" />
 
-                            <div className="flex flex-col space-y-1 justify-center border-l border-r panel-border px-2">
-                                <select
-                                    value={useProjectStore.getState().activeHubCapacity}
-                                    onChange={(e) => useProjectStore.getState().setHubCapacity(parseInt(e.target.value) as any)}
-                                    className="input-bg text-[10px] text-secondary focus:outline-none cursor-pointer border panel-border rounded px-1"
-                                    title="Hub Capacity (Ports)"
-                                >
-                                    <option value={2}>2 Port</option>
-                                    <option value={6}>6 Port</option>
-                                    <option value={12}>12 Port</option>
-                                    <option value={24}>24 Port</option>
-                                </select>
-                                <select
-                                    value={useProjectStore.getState().activeTopology || 'star'}
-                                    onChange={(e) => useProjectStore.getState().setTopology(e.target.value as any)}
-                                    className="input-bg text-[10px] text-secondary focus:outline-none cursor-pointer border panel-border rounded px-1"
-                                    title="Connection Topology"
-                                >
-                                    <option value="star">Star</option>
-                                    <option value="daisy">Daisy</option>
-                                </select>
-                            </div>
+
 
                             <div className="flex items-center space-x-1 pl-1 h-full">
 
@@ -807,6 +768,7 @@ export const Ribbon: React.FC = () => {
                             hubs: state.hubs,
                             cables: state.cables,
                             allowOutsideConnections: state.allowOutsideConnections,
+                            importedObjects: state.importedObjects, // Save imported images/DXFs
                             anchorsSettings: {
                                 radius: state.anchorRadius,
                                 shape: state.anchorShape,

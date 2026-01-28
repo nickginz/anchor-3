@@ -136,7 +136,7 @@ const THEME_COLORS = {
 };
 
 export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpenMenu, onOpenScaleModal }) => {
-    const { activeTool, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setTool, walls, anchors, hubs, cables, addCable, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme, setExportRegion, exportRegion, updateCable, wallsLocked } = useProjectStore();
+    const { activeTool, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setTool, walls, anchors, hubs, cables, addCable, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme, setExportRegion, exportRegion, updateCable, wallsLocked, scaleRatio } = useProjectStore();
 
     const colors = THEME_COLORS[theme || 'dark'] || THEME_COLORS.dark;
 
@@ -144,6 +144,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     const [chainStart, setChainStart] = useState<Point | null>(null);
     const [currentMousePos, setCurrentMousePos] = useState<Point | null>(null);
     const [isShiftDown, setIsShiftDown] = useState(false);
+    const [, setTick] = useState(0); // Tick to force re-render on zoom
 
     // Rectangle Wall State
     const [rectStart, setRectStart] = useState<Point | null>(null);
@@ -2325,6 +2326,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         stage.on('mouseup', handleMouseUp);
         stage.on('dblclick', handleDblClick);
         stage.on('contextmenu', handleContextMenu);
+        stage.on('wheel', () => setTick(t => t + 1)); // Re-render on zoom to keep UI elements fixed size
 
         return () => {
             stage.off('mousedown', handleMouseDown);
@@ -2361,7 +2363,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 <Circle
                     x={currentMousePos.x}
                     y={currentMousePos.y}
-                    radius={5 / (stage?.scaleX() || 1)}
+                    // Radius = Min(5 visual pixels, 0.25m physical radius)
+                    // 0.25m physical radius = 0.5m diameter cap
+                    radius={Math.min(5 / (stage?.scaleX() || 1), (0.25 * (scaleRatio || 50)))}
                     fill="transparent"
                     stroke="#ff0000"
                     strokeWidth={2 / (stage?.scaleX() || 1)}

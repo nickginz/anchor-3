@@ -1050,7 +1050,15 @@ export const useProjectStore = create<ProjectState>()(
                     version: data.version,
                     lastLoaded: data.timestamp,
                     scaleRatio: data.scaleRatio,
-                    walls: data.walls,
+                    // Migration: Normalize materials (lowercase, valid check)
+                    walls: data.walls.map(w => {
+                        const mat = (w.material || 'concrete').toLowerCase();
+                        const validMaterials = ['concrete', 'brick', 'drywall', 'glass', 'wood', 'metal'];
+                        return {
+                            ...w,
+                            material: validMaterials.includes(mat) ? mat : 'concrete'
+                        } as Wall;
+                    }),
                     anchors: data.anchors,
                     hubs: data.hubs || [],
                     cables: data.cables || [],
@@ -1075,6 +1083,7 @@ export const useProjectStore = create<ProjectState>()(
 
                     isScaleSet: true, // Assume loaded project has scale set
                     allowOutsideConnections: data.allowOutsideConnections ?? state.allowOutsideConnections,
+                    importedObjects: data.importedObjects || [], // Restore imported images/DXFs
                 };
             }),
 

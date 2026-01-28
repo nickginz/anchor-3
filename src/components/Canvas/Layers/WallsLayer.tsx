@@ -56,12 +56,12 @@ export const WallsLayer: React.FC = () => {
                 if (theme === 'light') {
                     // Light Theme Colors
                     switch (material) {
-                        case 'brick': fillColor = '#ef4444'; break; // Fallback
-                        case 'wood': fillColor = '#d97706'; break; // Amber-600
-                        case 'glass': fillColor = '#93c5fd'; opacity = 0.5; break; // Blue-300 + Opacity
-                        case 'metal': fillColor = '#cbd5e1'; break; // Slate-300 (Shiny-ish)
-                        case 'drywall': fillColor = '#e5e7eb'; break; // Gray-200 (Very Light)
-                        case 'concrete': default: fillColor = '#9ca3af'; break; // Gray-400
+                        case 'brick': fillColor = '#b91c1c'; break; // Red-700 (Darker)
+                        case 'wood': fillColor = '#b45309'; break; // Amber-700
+                        case 'glass': fillColor = '#3b82f6'; opacity = 0.5; break; // Blue-500 (Darker)
+                        case 'metal': fillColor = '#64748b'; break; // Slate-500 (Darker)
+                        case 'drywall': fillColor = '#9ca3af'; break; // Gray-400 (Darker for visibility)
+                        case 'concrete': default: fillColor = '#6b7280'; break; // Gray-500
                     }
                 } else {
                     // Dark Theme Colors
@@ -75,14 +75,12 @@ export const WallsLayer: React.FC = () => {
                     }
                 }
 
-                if (theme === 'light') {
-                    // Export Style: Transparent Fill to show clean blueprint
-                    fillColor = 'transparent';
-                }
+                // Removed transparent override for light mode to ensure walls are visible
+
 
                 return (
                     <Path
-                        key={`group-${key}`}
+                        key={`group-${key}-${theme}`}
                         name="wall-fill"
                         data={pathData}
                         fill={patternImage ? undefined : fillColor}
@@ -114,8 +112,9 @@ export const WallsLayer: React.FC = () => {
                 key="wall-boundary"
                 name="wall-boundary"
                 data={pathData}
-                stroke={theme === 'light' ? '#000000' : '#ffffff'}
-                strokeWidth={theme === 'light' ? 1 : 2}
+                stroke={theme === 'light' ? '#333333' : '#ffffff'}
+                strokeWidth={2} // Consistent 2px width on screen
+                strokeScaleEnabled={false} // Prevents stroke from zooming with stage
                 hitStrokeWidth={10} // Hit detection on the stroke
                 fillEnabled={false}
                 listening={false} // Let clicks pass to the Fills underneath (if they tracked IDs, but they don't here. Selection is overlay.)
@@ -127,7 +126,7 @@ export const WallsLayer: React.FC = () => {
     if (!layers.walls) return null;
 
     return (
-        <Group listening={!wallsLocked}>
+        <Group key={theme} listening={!wallsLocked}>
             {/* Render Merged Geometry Groups */}
             {/* Render Merged Geometry Groups */}
             {renderFills}
