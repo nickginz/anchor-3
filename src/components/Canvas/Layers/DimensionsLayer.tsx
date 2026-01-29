@@ -1,9 +1,18 @@
 import React from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Group, Line, Text, Circle } from 'react-konva';
 import { useProjectStore } from '../../../store/useProjectStore';
+import type { ProjectState } from '../../../store/useProjectStore';
 
 export const DimensionsLayer: React.FC = () => {
-    const { dimensions, scaleRatio, layers, theme } = useProjectStore();
+    const { dimensions, scaleRatio, layers, theme } = useProjectStore(
+        useShallow((state: ProjectState) => ({
+            dimensions: state.dimensions,
+            scaleRatio: state.scaleRatio,
+            layers: state.layers,
+            theme: state.theme
+        }))
+    );
 
     if (!layers.dimensions) return null;
 

@@ -1,12 +1,23 @@
 import React, { useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Group, Path, Line } from 'react-konva';
 import { useProjectStore } from '../../../store/useProjectStore';
+import type { ProjectState } from '../../../store/useProjectStore';
 import { generateJoinedWalls, generateUnionBoundary } from '../../../utils/wall-joining';
 import type { Wall } from '../../../types';
 import { getWallPattern } from '../../../utils/wall-patterns';
 
 export const WallsLayer: React.FC = () => {
-    const { walls, scaleRatio, layers, selectedIds, theme, wallsLocked } = useProjectStore();
+    const { walls, scaleRatio, layers, selectedIds, theme, wallsLocked } = useProjectStore(
+        useShallow((state: ProjectState) => ({
+            walls: state.walls,
+            scaleRatio: state.scaleRatio,
+            layers: state.layers,
+            selectedIds: state.selectedIds,
+            theme: state.theme,
+            wallsLocked: state.wallsLocked
+        }))
+    );
 
     // Group walls by thickness AND material to render them with different styles
     const groupedWalls = useMemo(() => {

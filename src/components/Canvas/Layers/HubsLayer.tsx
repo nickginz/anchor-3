@@ -1,10 +1,24 @@
 import React from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Group, Rect, Text, Path, Line } from 'react-konva';
 import { useProjectStore } from '../../../store/useProjectStore';
+import type { ProjectState } from '../../../store/useProjectStore';
 import { getHubPortCoordinates } from '../../../utils/routing';
 
+
+
 export const HubsLayer: React.FC = () => {
-    const { hubs, cables, selectedIds, theme, layers, setSelection, cableSettings } = useProjectStore();
+    const { hubs, cables, selectedIds, theme, layers, setSelection, cableSettings } = useProjectStore(
+        useShallow((state: ProjectState) => ({
+            hubs: state.hubs,
+            cables: state.cables,
+            selectedIds: state.selectedIds,
+            theme: state.theme,
+            layers: state.layers,
+            setSelection: state.setSelection,
+            cableSettings: state.cableSettings
+        }))
+    );
 
     const colors = theme === 'light' ? {
         hubFill: '#9333ea', // Purple

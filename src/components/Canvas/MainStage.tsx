@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { Stage, Layer, Line, Group } from 'react-konva';
+import { Stage, Layer, Line, Group, Shape } from 'react-konva';
 import Konva from 'konva';
 import { WallsLayer } from './Layers/WallsLayer';
 import { FloorplanImageLayer } from './Layers/FloorplanImageLayer';
@@ -148,28 +148,52 @@ export const MainStage: React.FC = () => {
         stage.position(newPos);
     };
 
-    // Grid rendering (simple visual aid)
-    const gridSize = scaleRatio; // 1 meter = scaleRatio pixels
-    const gridLines = [];
-
     // Theme Colors
     const axisColor = theme === 'light' ? '#6b7280' : '#666';
 
-    // Render grid for +/- 500 meters (Functionally "everywhere" for most floorplans)
-    const gridSizeMeters = 1; // 1 meter grid
-    const gridRange = 500;
+    // Optimized Grid Rendering using a single Shape
+    // This avoids creating thousands of Konva nodes which kills performance on zoom
+    const GridShape = useMemo(() => {
+        return (
+            <Shape
+                key="optimized-grid"
+                listening={false}
+                stroke={theme === 'light' ? '#e5e7eb' : '#333'}
+                strokeWidth={1}
+                sceneFunc={(context: Konva.Context, shape: Konva.Shape) => {
+                    const stage = shape.getStage();
+                    if (!stage) return;
 
-    // Theme Colors
-    const gridColor = theme === 'light' ? '#e5e7eb' : '#333'; // Light mode: gray-200 (very light)
+                    const width = stage.width();
+                    const height = stage.height();
+                    const transform = stage.getAbsoluteTransform().copy();
+                    transform.invert();
 
-    for (let i = -gridRange; i <= gridRange; i += gridSizeMeters) {
-        const pos = i * gridSize; // gridSize is px per meter
+                    const viewTopLeft = transform.point({ x: 0, y: 0 });
+                    const viewBottomRight = transform.point({ x: width, y: height });
 
-        // Vertical
-        gridLines.push(<Line key={`v${i}`} points={[pos, -gridRange * gridSize, pos, gridRange * gridSize]} stroke={gridColor} strokeWidth={1} listening={false} />);
-        // Horizontal
-        gridLines.push(<Line key={`h${i}`} points={[-gridRange * gridSize, pos, gridRange * gridSize, pos]} stroke={gridColor} strokeWidth={1} listening={false} />);
-    }
+                    const step = scaleRatio; // pixels per meter
+
+                    // Start from a multiple of step just before the view
+                    const startX = Math.floor(viewTopLeft.x / step) * step;
+                    const endX = Math.ceil(viewBottomRight.x / step) * step;
+                    const startY = Math.floor(viewTopLeft.y / step) * step;
+                    const endY = Math.ceil(viewBottomRight.y / step) * step;
+
+                    context.beginPath();
+                    for (let x = startX; x < endX; x += step) {
+                        context.moveTo(x, startY);
+                        context.lineTo(x, endY);
+                    }
+                    for (let y = startY; y < endY; y += step) {
+                        context.moveTo(startX, y);
+                        context.lineTo(endX, y);
+                    }
+                    context.strokeShape(shape);
+                }}
+            />
+        );
+    }, [scaleRatio, theme]);
 
     // Grid rendering (simple visual aid)
     // ... (existing grid code logic handled dynamically or statically)
@@ -255,7 +279,7 @@ export const MainStage: React.FC = () => {
                     {/* Layer 1: Background & Heavy Renders */}
                     <Layer key="layer-bg" name="background-layer">
                         <Group name="grid-lines">
-                            {gridLines}
+                            {GridShape}
                             <Line points={[-20, 0, 20, 0]} stroke={axisColor} strokeWidth={2} />
                             <Line points={[0, -20, 0, 20]} stroke={axisColor} strokeWidth={2} />
                         </Group>

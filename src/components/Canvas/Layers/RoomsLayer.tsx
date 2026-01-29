@@ -1,11 +1,19 @@
 import React, { useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Line, Text, Group, Circle } from 'react-konva';
 import { useProjectStore } from '../../../store/useProjectStore';
+import type { ProjectState } from '../../../store/useProjectStore';
 import { detectRooms, calculatePolygonArea } from '../../../utils/room-detection';
 import { getPolygonCentroid } from '../../../utils/geometry';
 
 export const RoomsLayer: React.FC = () => {
-    const { walls, layers, scaleRatio } = useProjectStore();
+    const { walls, layers, scaleRatio } = useProjectStore(
+        useShallow((state: ProjectState) => ({
+            walls: state.walls,
+            layers: state.layers,
+            scaleRatio: state.scaleRatio
+        }))
+    );
 
     const rooms = useMemo(() => {
         // Run detection if either Rooms OR Labels are enabled

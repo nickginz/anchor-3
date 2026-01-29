@@ -1,9 +1,26 @@
 import React from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Group, Circle, Rect, Text } from 'react-konva';
 import { useProjectStore } from '../../../store/useProjectStore';
+import type { ProjectState } from '../../../store/useProjectStore';
 
 export const AnchorsLayer: React.FC = () => {
-    const { anchors, cables, scaleRatio, selectedIds, anchorRadius, anchorShape, showAnchorRadius, layers, theme, showOverlapCounts, updateAnchor, setSelection } = useProjectStore();
+    const { anchors, cables, scaleRatio, selectedIds, anchorRadius, anchorShape, showAnchorRadius, layers, theme, showOverlapCounts, updateAnchor, setSelection } = useProjectStore(
+        useShallow((state: ProjectState) => ({
+            anchors: state.anchors,
+            cables: state.cables,
+            scaleRatio: state.scaleRatio,
+            selectedIds: state.selectedIds,
+            anchorRadius: state.anchorRadius,
+            anchorShape: state.anchorShape,
+            showAnchorRadius: state.showAnchorRadius,
+            layers: state.layers,
+            theme: state.theme,
+            showOverlapCounts: state.showOverlapCounts,
+            updateAnchor: state.updateAnchor,
+            setSelection: state.setSelection
+        }))
+    );
 
     // console.log('Rendering AnchorsLayer. Count:', anchors.length, 'Visible:', layers.anchors);
     if (!layers.anchors || anchors.length === 0) return null;

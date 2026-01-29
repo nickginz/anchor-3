@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Wall, Anchor, Dimension, ProjectLayers, ToolType, ImportedObject, ImageObject, DXFObject, Point, Hub, Cable } from '../types';
 import { getOrthogonalPath, calculateLength, generateDaisyChain, getHubColor, distance, getHubPortCoordinates } from '../utils/routing';
 import { reduceAnchors } from '../utils/optimizer-reduction';
+import equals from 'fast-deep-equal';
 
 
 
@@ -75,6 +76,9 @@ export interface ProjectState {
         blue: number;
     };
 
+    // QA / Debug Settings
+    showQAMonitor: boolean;
+
     // Auto Placement UI & Optimization
     isAutoPlacementOpen: boolean;
     optimizationSettings: {
@@ -141,6 +145,7 @@ export interface ProjectState {
     setHeatmapResolution: (res: number) => void;
     setHeatmapColorMode: (mode: 'test' | 'standard' | 'manual') => void;
     setHeatmapThresholds: (t: { red: number, orange: number, yellow: number, green: number, blue: number }) => void;
+    setShowQAMonitor: (v: boolean) => void;
 
     setTheme: (theme: 'dark' | 'light') => void;
     setIsSettingsOpen: (v: boolean) => void;
@@ -165,6 +170,7 @@ export interface ProjectState {
     updateHub: (id: string, updates: Partial<Hub>) => void;
     removeHub: (id: string) => void;
     updateCable: (id: string, updates: Partial<Cable>) => void;
+    updateCables: (updates: { id: string; updates: Partial<Cable> }[]) => void;
 
     setCables: (cables: Cable[]) => void;
     addCable: (cable: Cable) => void;
@@ -332,6 +338,10 @@ export const useProjectStore = create<ProjectState>()(
                 green: 12, // < 12m
                 blue: 15,  // < 15m
             },
+
+            // QA Monitor
+            showQAMonitor: true, // Default ON
+            setShowQAMonitor: (v) => set({ showQAMonitor: v }),
 
             // Global UI
             isSettingsOpen: false,
@@ -741,6 +751,15 @@ export const useProjectStore = create<ProjectState>()(
             updateCable: (id: string, updates: Partial<Cable>) => set((state) => ({
                 cables: (state.cables || []).map((c) => c.id === id ? { ...c, ...updates } : c)
             })),
+            updateCables: (updatesBatch: { id: string; updates: Partial<Cable> }[]) => set((state) => {
+                const updateMap = new Map(updatesBatch.map(u => [u.id, u.updates]));
+                return {
+                    cables: (state.cables || []).map(c => {
+                        const updates = updateMap.get(c.id);
+                        return updates ? { ...c, ...updates } : c;
+                    })
+                };
+            }),
             removeCable: (id: string) => set((state) => ({
                 cables: (state.cables || []).filter((c) => c.id !== id)
             })),
@@ -1183,10 +1202,24 @@ export const useProjectStore = create<ProjectState>()(
             }),
         }),
         {
-            limit: 100,
+            limit: 50,
+            equality: equals, // Deep equality check to prevent identical states from being saved
             partialize: (state) => {
-                const { activeTool, ...rest } = state;
-                return rest;
+                // Whitelist only Model State (Visual changes)
+                // Exclude: activeTool, selectedIds, UI flags, settings that don't change model
+                return {
+                    walls: state.walls,
+                    anchors: state.anchors,
+                    hubs: state.hubs,
+                    cables: state.cables,
+                    dimensions: state.dimensions,
+                    layers: state.layers,
+                    scaleRatio: state.scaleRatio,
+                    placementArea: state.placementArea,
+                    exportRegion: state.exportRegion,
+                    // Optionally include defaults if they affect future drawing? 
+                    // Usually preferences are not undoable.
+                };
             },
         }
     )

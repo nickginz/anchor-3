@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Image as KonvaImage } from 'react-konva';
 import { useProjectStore } from '../../../store/useProjectStore';
+import type { ProjectState } from '../../../store/useProjectStore';
+
 import { calculateFreeSpaceRSSI, calculateTotalPowerAtPixel, generateVirtualAnchors } from '../../../utils/signal-physics';
 
 // Interpolate between two colors
@@ -69,7 +72,18 @@ const getHeatmapColor = (
 };
 
 export const HeatmapLayer: React.FC<{ stage: any }> = ({ stage }) => {
-    const { walls, anchors, scaleRatio, layers, heatmapResolution, showHeatmap, heatmapColorMode, heatmapThresholds } = useProjectStore();
+    const { walls, anchors, scaleRatio, layers, heatmapResolution, showHeatmap, heatmapColorMode, heatmapThresholds } = useProjectStore(
+        useShallow((state: ProjectState) => ({
+            walls: state.walls,
+            anchors: state.anchors,
+            scaleRatio: state.scaleRatio,
+            layers: state.layers,
+            heatmapResolution: state.heatmapResolution,
+            showHeatmap: state.showHeatmap,
+            heatmapColorMode: state.heatmapColorMode,
+            heatmapThresholds: state.heatmapThresholds
+        }))
+    );
     const [image, setImage] = useState<HTMLImageElement | null>(null);
 
     useEffect(() => {

@@ -11,6 +11,16 @@ import {
 const SIDEBAR_MIN_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH = 1200;
 
+const QAToggle = () => {
+    const { showQAMonitor, setShowQAMonitor } = useProjectStore();
+    return (
+        <label className="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" checked={showQAMonitor} onChange={(e) => setShowQAMonitor(e.target.checked)} className="sr-only peer" />
+            <div className="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
+        </label>
+    );
+};
+
 interface HelpSection {
     id: string;
     title: string;
@@ -170,6 +180,14 @@ const DOCUMENTATION: HelpSection[] = [
                                 <p className="font-bold text-gray-200 text-xs">BOM</p>
                                 <p className="text-[10px] text-gray-400 text-pretty">View a summary of all used devices, cable lengths, and wall totals.</p>
                             </div>
+                        </div>
+                        <div className="flex items-center space-x-3 mt-2 border-t panel-border pt-2">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><BoxSelect size={14} className="text-green-400" /></div>
+                            <div className="flex-1">
+                                <p className="font-bold text-gray-200 text-xs">QA Monitor</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Show performance metrics (FPS, Mem).</p>
+                            </div>
+                            <QAToggle />
                         </div>
                         <div className="flex items-start space-x-3">
                             <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Ruler size={14} /></div>

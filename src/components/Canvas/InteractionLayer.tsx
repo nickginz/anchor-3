@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import Konva from 'konva';
 import { v4 as uuidv4 } from 'uuid';
 import { Line, Circle, Rect } from 'react-konva';
 import { useProjectStore } from '../../store/useProjectStore';
+import type { ProjectState } from '../../store/useProjectStore';
 import type { Wall } from '../../types';
 import { applyOrthogonal, getSnapPoint, dist } from '../../utils/geometry';
 import { getOrthogonalPath, calculateLength } from '../../utils/routing';
@@ -136,7 +138,40 @@ const THEME_COLORS = {
 };
 
 export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpenMenu, onOpenScaleModal }) => {
-    const { activeTool, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setTool, walls, anchors, hubs, cables, addCable, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme, setExportRegion, exportRegion, updateCable, wallsLocked, scaleRatio } = useProjectStore();
+    const { activeTool, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setTool, walls, anchors, hubs, cables, addCable, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme, setExportRegion, exportRegion, updateCable, wallsLocked, scaleRatio } = useProjectStore(
+        useShallow((state: ProjectState) => ({
+            activeTool: state.activeTool,
+            addWall: state.addWall,
+            addWalls: state.addWalls,
+            addAnchor: state.addAnchor,
+            addHub: state.addHub,
+            activeHubCapacity: state.activeHubCapacity,
+            setTool: state.setTool,
+            walls: state.walls,
+            anchors: state.anchors,
+            hubs: state.hubs,
+            cables: state.cables,
+            addCable: state.addCable,
+            setSelection: state.setSelection,
+            wallPreset: state.wallPreset,
+            standardWallThickness: state.standardWallThickness,
+            thickWallThickness: state.thickWallThickness,
+            wideWallThickness: state.wideWallThickness,
+            setAnchorMode: state.setAnchorMode,
+            removeWall: state.removeWall,
+            removeAnchor: state.removeAnchor,
+            updateAnchors: state.updateAnchors,
+            removeDimension: state.removeDimension,
+            dimensions: state.dimensions,
+            anchorRadius: state.anchorRadius,
+            theme: state.theme,
+            setExportRegion: state.setExportRegion,
+            exportRegion: state.exportRegion,
+            updateCable: state.updateCable,
+            wallsLocked: state.wallsLocked,
+            scaleRatio: state.scaleRatio
+        }))
+    );
 
     const colors = THEME_COLORS[theme || 'dark'] || THEME_COLORS.dark;
 
@@ -167,6 +202,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     const panStartTime = useRef<number>(0);
     const lastDragPos = useRef<Point | null>(null);
     const isMouseDown = useRef(false);
+    const hasDragged = useRef(false); // NEW: Track if actual drag occurred to prevent history spam
 
     // Cable Management State
     // Cable Management State
@@ -397,6 +433,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         if (!pos) return;
 
         isMouseDown.current = true;
+        hasDragged.current = false;
 
         // ALT + Left Click (Import Selection)
         if (e.evt.altKey && e.evt.button === 0) {
@@ -808,6 +845,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 if (hitInfo.type === 'segment') {
                     setDragCableHandle({ id: hitCableId, handle: { type: 'segment', index: hitInfo.index }, startPoint: pos });
                     lastDragPos.current = pos;
+                    useProjectStore.temporal.getState().pause();
                 }
             }
             return;
@@ -1245,6 +1283,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         if (dragAnchorId.current && lastDragPos.current && useProjectStore.getState().layers.anchors) {
             const dx = pos.x - lastDragPos.current.x;
             const dy = pos.y - lastDragPos.current.y;
+
+            if (Math.abs(dx) > 0 || Math.abs(dy) > 0) hasDragged.current = true;
+
             const state = useProjectStore.getState();
 
             const isDragSelected = state.selectedIds.includes(dragAnchorId.current);
@@ -1273,6 +1314,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         if (dragHubId.current && lastDragPos.current) {
             const dx = pos.x - lastDragPos.current.x;
             const dy = pos.y - lastDragPos.current.y;
+
+            if (Math.abs(dx) > 0 || Math.abs(dy) > 0) hasDragged.current = true;
+
             const state = useProjectStore.getState();
 
             const isDragSelected = state.selectedIds.includes(dragHubId.current);
@@ -1287,38 +1331,46 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 if (hub) state.updateHub(hub.id, { x: hub.x + dx, y: hub.y + dy });
             }
 
-            // Auto Update Cables if "Connect" was active?
-            // For now, cables are static until "Connect" is pressed again OR we update them live.
-            // Requirement: "Dragging Hubs ... updates connected cables dynamically".
-            // Implementation: We need to re-route cables connected to this hub.
-            // Since we use orthogonal routing, we just need to update the points.
-
-            // Allow batch update of cables
+            // Batch Update Cables
             const cablesToUpdate = state.cables.filter(c =>
                 c.fromId === dragHubId.current ||
                 (isDragSelected && state.selectedIds.includes(c.fromId))
             );
 
             if (cablesToUpdate.length > 0) {
-                // Import the smart router logic dynamically or duplicate simply but with walls
-                // Since we need valid walls, getting them from state is easy.
                 const walls = state.walls;
+                const batchUpdates: { id: string, updates: Partial<typeof cablesToUpdate[0]> }[] = [];
 
-                const newCables = cablesToUpdate.map(c => {
+                cablesToUpdate.forEach(c => {
+                    // Recalculate start point (Hub)
+                    // Note: The Hub in 'state' has already been updated above for this frame?
+                    // React state updates are scheduled. calling state.updateHub triggers a set().
+                    // useProjectStore.getState() might return the OLD state if set() is async/batched by Zustand/React?
+                    // Zustand 'set' is usually synchronous but subscribers run ...
+                    // Wait: We updated the store. If we read it back immediately, we should get the new values in vanilla Zustand.
+                    // But to be safe and performant, we should calculate the NEW position ourselves.
+
+                    // Actually, for this frame, we know the dx, dy.
+                    // Let's rely on the fact that we moved the hub.
+                    // We need to find the Hub(s) and their NEW positions.
+
                     const hub = state.hubs.find(h => h.id === c.fromId);
                     const anchor = state.anchors.find(a => a.id === c.toId);
+
                     if (hub && anchor) {
+                        // We must apply the DELTA to the hub position we just read, 
+                        // because the store update above might not have propagated to 'state.hubs' yet if we just called it.
+                        // Actually, looking at source, Zustand set updates state immediately. 
+                        // So state.hubs should have the new values? 
+                        // Let's assume yes. 
                         const points = getOrthogonalPath({ x: hub.x, y: hub.y }, { x: anchor.x, y: anchor.y }, walls);
-                        return { ...c, points };
+                        batchUpdates.push({ id: c.id, updates: { points } });
                     }
-                    return c;
                 });
 
-                // Batch update cables not supported by default actions, but we can set specific cable
-                // Better: create a partial update capability or just loop
-                newCables.forEach(c => {
-                    state.updateCable(c.id, { points: c.points });
-                });
+                if (batchUpdates.length > 0) {
+                    state.updateCables(batchUpdates as any);
+                }
             }
 
             lastDragPos.current = pos;
@@ -1329,6 +1381,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         if (dragWallId.current && lastDragPos.current && !wallsLocked) {
             const dx = pos.x - lastDragPos.current.x;
             const dy = pos.y - lastDragPos.current.y;
+
+            if (Math.abs(dx) > 0 || Math.abs(dy) > 0) hasDragged.current = true;
+
             const state = useProjectStore.getState();
 
             // If we want to support multi-selection dragging for walls, we can iterate selection.
@@ -1424,6 +1479,8 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
     };
 
+
+
     const handleMouseUp = (e: Konva.KonvaEventObject<MouseEvent>) => {
         isMouseDown.current = false;
 
@@ -1511,26 +1568,28 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             setIsPanning(false);
 
             // Resume History if we were dragging
-            if (dragTextId.current || dragAnchorId.current || dragDimLineId.current || dragWallId.current) {
+            if (dragTextId.current || dragAnchorId.current || dragDimLineId.current || dragWallId.current || dragHubId.current || dragCableHandle) {
                 useProjectStore.temporal.getState().resume();
 
                 // FORCE COMMIT: Trigger a state update to save the "End" position in history
-                if (dragAnchorId.current) {
-                    const state = useProjectStore.getState();
-                    const updates = state.anchors
-                        .filter(a => state.selectedIds.includes(a.id))
-                        .map(a => ({ id: a.id, updates: { x: a.x, y: a.y } }));
-                    updateAnchors(updates);
-                }
+                if (hasDragged.current) {
+                    if (dragAnchorId.current) {
+                        const state = useProjectStore.getState();
+                        const updates = state.anchors
+                            .filter(a => state.selectedIds.includes(a.id))
+                            .map(a => ({ id: a.id, updates: { x: a.x, y: a.y } }));
+                        updateAnchors(updates);
+                    }
 
-                if (dragDimLineId.current) {
-                    const d = useProjectStore.getState().dimensions.find(x => x.id === dragDimLineId.current);
-                    if (d) useProjectStore.getState().updateDimension(d.id, { points: [...d.points] });
-                }
+                    if (dragDimLineId.current) {
+                        const d = useProjectStore.getState().dimensions.find(x => x.id === dragDimLineId.current);
+                        if (d) useProjectStore.getState().updateDimension(d.id, { points: [...d.points] });
+                    }
 
-                if (dragTextId.current) {
-                    const d = useProjectStore.getState().dimensions.find(x => x.id === dragTextId.current);
-                    if (d) useProjectStore.getState().updateDimension(d.id, { textOffset: { x: d.textOffset?.x || 0, y: d.textOffset?.y || 0 } });
+                    if (dragTextId.current) {
+                        const d = useProjectStore.getState().dimensions.find(x => x.id === dragTextId.current);
+                        if (d) useProjectStore.getState().updateDimension(d.id, { textOffset: { x: d.textOffset?.x || 0, y: d.textOffset?.y || 0 } });
+                    }
                 }
             }
 
@@ -2326,7 +2385,18 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         stage.on('mouseup', handleMouseUp);
         stage.on('dblclick', handleDblClick);
         stage.on('contextmenu', handleContextMenu);
-        stage.on('wheel', () => setTick(t => t + 1)); // Re-render on zoom to keep UI elements fixed size
+        // Optimize Zoom Performance: Debounce re-renders
+        let zoomTimeout: any;
+        const handleWheel = () => {
+            // Clear existing timeout
+            if (zoomTimeout) clearTimeout(zoomTimeout);
+            // Set new timeout to trigger re-render after zoom stops (e.g., 100ms)
+            zoomTimeout = setTimeout(() => {
+                setTick(t => t + 1);
+            }, 100);
+        };
+
+        stage.on('wheel', handleWheel);
 
         return () => {
             stage.off('mousedown', handleMouseDown);
