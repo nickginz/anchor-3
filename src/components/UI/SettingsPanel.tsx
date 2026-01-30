@@ -78,6 +78,28 @@ export const SettingsPanel: React.FC = () => {
                     </div>
                 </div>
 
+                {/* Categories: Debug / QA */}
+                <div className="space-y-3">
+                    <h3 className="text-sm font-bold uppercase text-primary border-b panel-border pb-2">Debug</h3>
+                    <div className="flex items-center justify-between pl-2">
+                        <span className="text-xs text-secondary">QA Monitor</span>
+                        <div className="flex bg-[var(--bg-input)] rounded p-0.5 border panel-border">
+                            <button
+                                onClick={() => useProjectStore.getState().setShowQAMonitor(true)}
+                                className={`px-3 py-1 text-[10px] rounded ${useProjectStore.getState().showQAMonitor ? 'bg-blue-600 text-white' : 'text-gray-400'}`}
+                            >
+                                On
+                            </button>
+                            <button
+                                onClick={() => useProjectStore.getState().setShowQAMonitor(false)}
+                                className={`px-3 py-1 text-[10px] rounded ${!useProjectStore.getState().showQAMonitor ? 'bg-blue-600 text-white' : 'text-gray-400'}`}
+                            >
+                                Off
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Category: Documentation */}
                 <div className="space-y-3">
                     <h3 className="text-sm font-bold uppercase text-primary border-b panel-border pb-2">Docs</h3>

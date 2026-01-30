@@ -249,15 +249,16 @@ export const HubsLayer: React.FC = () => {
                 connectedCables.forEach(c => {
                     const pStart = c.points[0];
                     const pEnd = c.points[c.points.length - 1];
-                    const TOLERANCE_SQ = 10 * 10; // 10px tolerance (very generous)
+                    const TOLERANCE_SQ = 15 * 15; // Increased slightly to ensure capture, but we pick BEST match.
+
+                    let bestPortIndex = -1;
+                    let minDistanceSq = Infinity;
 
                     for (let i = 0; i < hub.capacity; i++) {
                         // Calculate Tip (Standard)
                         const tip = getHubPortCoordinates({ x: hub.x, y: hub.y }, hub.capacity, i, hubSize, tickLen);
 
                         // Calculate Base (Manual)
-                        // Base is simply Tip minus the tick length vector? Or calculated from angle.
-                        // Let's use the Angle logic to strictly match rendering.
                         const angleDeg = (i * 360) / hub.capacity;
                         const angleRad = (angleDeg - 90) * (Math.PI / 180);
                         const cos = Math.cos(angleRad);
@@ -269,21 +270,25 @@ export const HubsLayer: React.FC = () => {
                             y: hub.y + (sin * rBase)
                         };
 
-                        // Check Start vs Tip OR Base
+                        // Check Start vs Tip/Base
                         const dStartTip = Math.pow(tip.x - pStart.x, 2) + Math.pow(tip.y - pStart.y, 2);
                         const dStartBase = Math.pow(base.x - pStart.x, 2) + Math.pow(base.y - pStart.y, 2);
 
-                        // Check End vs Tip OR Base
+                        // Check End vs Tip/Base
                         const dEndTip = Math.pow(tip.x - pEnd.x, 2) + Math.pow(tip.y - pEnd.y, 2);
                         const dEndBase = Math.pow(base.x - pEnd.x, 2) + Math.pow(base.y - pEnd.y, 2);
 
-                        if (dStartTip < TOLERANCE_SQ || dStartBase < TOLERANCE_SQ ||
-                            dEndTip < TOLERANCE_SQ || dEndBase < TOLERANCE_SQ) {
-                            portColorMap.set(i, c.color || colors.cable);
-                            // Don't break immediately if multiple cables map to same port (collision), 
-                            // but usually only one.
-                            // break; 
+                        // Find min for this port
+                        const distForPort = Math.min(dStartTip, dStartBase, dEndTip, dEndBase);
+
+                        if (distForPort < minDistanceSq) {
+                            minDistanceSq = distForPort;
+                            bestPortIndex = i;
                         }
+                    }
+
+                    if (bestPortIndex !== -1 && minDistanceSq < TOLERANCE_SQ) {
+                        portColorMap.set(bestPortIndex, c.color || colors.cable);
                     }
                 });
 

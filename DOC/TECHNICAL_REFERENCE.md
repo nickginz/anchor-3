@@ -52,4 +52,4 @@ The root Canvas component. It composes the layers:
     -   `/store`: Zustand store definition.
     -   `/utils`: Math, Geometry, and Export logic.
     -   `/hooks`: React hooks.
--   `/DOC`: Additional documentation (Legacy).
+-   `/DOC`: Additional documentation.

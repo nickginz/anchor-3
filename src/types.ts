@@ -79,6 +79,7 @@ export interface Cable {
     verticalDrop?: number; // meters
     serviceLoop?: number; // meters
     topology?: 'star' | 'daisy';
+    locked?: boolean;
 }
 
 export interface ProjectLayers {

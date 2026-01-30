@@ -26,6 +26,8 @@ export const HUB_COLORS = [
 
 export const getHubColor = (index: number) => HUB_COLORS[index % HUB_COLORS.length];
 
+
+
 // Count wall intersections for a path
 export const countIntersections = (path: Point[], walls: Wall[]): number => {
     let count = 0;
@@ -36,10 +38,29 @@ export const countIntersections = (path: Point[], walls: Wall[]): number => {
         // Skip tiny segments
         if (Math.abs(p1.x - p2.x) < 0.1 && Math.abs(p1.y - p2.y) < 0.1) continue;
 
+        // Pre-calculate segment bounding box for speed
+        const segMinX = Math.min(p1.x, p2.x);
+        const segMaxX = Math.max(p1.x, p2.x);
+        const segMinY = Math.min(p1.y, p2.y);
+        const segMaxY = Math.max(p1.y, p2.y);
+
         for (const wall of walls) {
-            // Wall geometry
-            const w1 = { x: wall.points[0], y: wall.points[1] };
-            const w2 = { x: wall.points[2], y: wall.points[3] };
+            // Fast Bounding Box Check
+            // Wall points: [x1, y1, x2, y2, ...]
+            // Assuming linear walls have 4 points [x1, y1, x2, y2]
+            const wx1 = wall.points[0];
+            const wy1 = wall.points[1];
+            const wx2 = wall.points[2];
+            const wy2 = wall.points[3];
+
+            if (Math.max(wx1, wx2) < segMinX || Math.min(wx1, wx2) > segMaxX ||
+                Math.max(wy1, wy2) < segMinY || Math.min(wy1, wy2) > segMaxY) {
+                continue;
+            }
+
+            // Detailed Intersection Check
+            const w1 = { x: wx1, y: wy1 };
+            const w2 = { x: wx2, y: wy2 };
             if (linesIntersect(p1, p2, w1, w2)) {
                 count++;
             }
@@ -61,58 +82,43 @@ export const getOrthogonalPath = (start: Point, end: Point, walls: Wall[] = []):
     const evaluate = (path: Point[], bends: number) => {
         const intersections = countIntersections(path, walls);
         candidates.push({ path, intersections, bends });
+        return intersections;
     };
 
     // 1. L-Shapes (1 Bend)
     // Option 1A: Horiz -> Vert
-    evaluate([start, { x: end.x, y: start.y }, end], 1);
+    if (evaluate([start, { x: end.x, y: start.y }, end], 1) === 0) return candidates[candidates.length - 1].path;
     // Option 1B: Vert -> Horiz
-    evaluate([start, { x: start.x, y: end.y }, end], 1);
-
-    // Optimization: If any L-path has 0 intersections, pick it immediately (shortest bends)
-    // Note: If both have 0, we can pick either.
-    const cleanLPath = candidates.find(c => c.intersections === 0 && c.bends === 1);
-    if (cleanLPath) return cleanLPath.path;
+    if (evaluate([start, { x: start.x, y: end.y }, end], 1) === 0) return candidates[candidates.length - 1].path;
 
     // 2. Z-Shapes (2 Bends)
     // We scan intermediate positions to find a "gap"
     // Type A: Horiz -> Vert -> Horiz (Scan x_mid)
     // Type B: Vert -> Horiz -> Vert (Scan y_mid)
 
-    // We can try a few split ratios.
-    // Denser scan to find gaps (doors) that might be missed by sparse steps
-    const steps: number[] = [];
-    for (let t = 0.05; t < 1.0; t += 0.05) {
-        steps.push(t);
+    // Optimization: Coarser scan (0.1 instead of 0.05) and Early Exit
+    const stepSize = 0.1;
+
+    // Type A: Split X
+    const dx = end.x - start.x;
+    for (let t = stepSize; t < 1.0; t += stepSize) {
+        const x_mid = start.x + dx * t;
+        const path = [start, { x: x_mid, y: start.y }, { x: x_mid, y: end.y }, end];
+        if (evaluate(path, 2) === 0) return path; // Early exit on first clean path
     }
 
-    steps.forEach(t => {
-        // Type A: Split X
-        const x_mid = start.x + (end.x - start.x) * t;
-        evaluate([
-            start,
-            { x: x_mid, y: start.y },
-            { x: x_mid, y: end.y },
-            end
-        ], 2);
+    // Type B: Split Y
+    const dy = end.y - start.y;
+    for (let t = stepSize; t < 1.0; t += stepSize) {
+        const y_mid = start.y + dy * t;
+        const path = [start, { x: start.x, y: y_mid }, { x: end.x, y: y_mid }, end];
+        if (evaluate(path, 2) === 0) return path; // Early exit on first clean path
+    }
 
-        // Type B: Split Y
-        const y_mid = start.y + (end.y - start.y) * t;
-        evaluate([
-            start,
-            { x: start.x, y: y_mid },
-            { x: end.x, y: y_mid },
-            end
-        ], 2);
-    });
-
-
-    // 3. Selection
+    // 3. Selection (Fallback if no clean path found)
     // Sort by: 
     // 1. Intersections (Ascending)
     // 2. Bends (Ascending) - Prefer simpler paths
-    // 3. Length? (Manhattan is constant for these monotonic paths, so ignored)
-
     candidates.sort((a, b) => {
         if (a.intersections !== b.intersections) return a.intersections - b.intersections;
         return a.bends - b.bends;

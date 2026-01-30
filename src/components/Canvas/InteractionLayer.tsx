@@ -1171,7 +1171,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     newPoints[dragCableHandle.handle.index] = { x: p1.x + moveX, y: p1.y + moveY };
                     newPoints[dragCableHandle.handle.index + 1] = { x: p2.x + moveX, y: p2.y + moveY };
 
-                    updateCable(dragCableHandle.id, { points: newPoints });
+                    updateCable(dragCableHandle.id, { points: newPoints, locked: true });
                     lastDragPos.current = pos;
                     return;
                 }
@@ -1333,38 +1333,62 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
             // Batch Update Cables
             const cablesToUpdate = state.cables.filter(c =>
-                c.fromId === dragHubId.current ||
-                (isDragSelected && state.selectedIds.includes(c.fromId))
+                c.fromId === dragHubId.current || c.toId === dragHubId.current ||
+                (isDragSelected && (state.selectedIds.includes(c.fromId) || state.selectedIds.includes(c.toId)))
             );
 
             if (cablesToUpdate.length > 0) {
-                const walls = state.walls;
                 const batchUpdates: { id: string, updates: Partial<typeof cablesToUpdate[0]> }[] = [];
 
+                // We need the *original* position of the dragged hub to apply dx/dy correctly.
+                // The 'state' here is the snapshot before the update (lines 1324/1331 updated it, but 'state' var is stable).
+                // Let's find the specific hub we are dragging to get its X/Y.
+                // Note: If multiple selected, this logic applies to all? 
+                // The loop below handles each cable. We must find the HUB that this cable connects to.
+
                 cablesToUpdate.forEach(c => {
-                    // Recalculate start point (Hub)
-                    // Note: The Hub in 'state' has already been updated above for this frame?
-                    // React state updates are scheduled. calling state.updateHub triggers a set().
-                    // useProjectStore.getState() might return the OLD state if set() is async/batched by Zustand/React?
-                    // Zustand 'set' is usually synchronous but subscribers run ...
-                    // Wait: We updated the store. If we read it back immediately, we should get the new values in vanilla Zustand.
-                    // But to be safe and performant, we should calculate the NEW position ourselves.
+                    const newPoints = [...c.points];
+                    let modified = false;
 
-                    // Actually, for this frame, we know the dx, dy.
-                    // Let's rely on the fact that we moved the hub.
-                    // We need to find the Hub(s) and their NEW positions.
+                    // Check Start (From)
+                    if (c.fromId === dragHubId.current || (isDragSelected && state.selectedIds.includes(c.fromId))) {
+                        const h = state.hubs.find(x => x.id === c.fromId);
+                        if (h) {
+                            // 1. Move Endpoint (Relative to current to preserve Port)
+                            newPoints[0] = { x: newPoints[0].x + dx, y: newPoints[0].y + dy };
 
-                    const hub = state.hubs.find(h => h.id === c.fromId);
-                    const anchor = state.anchors.find(a => a.id === c.toId);
+                            // 2. Move Neighbor (Translate Segment)
+                            if (newPoints.length > 2) {
+                                newPoints[1] = { x: newPoints[1].x + dx, y: newPoints[1].y + dy };
+                            }
+                            modified = true;
+                        }
+                    }
 
-                    if (hub && anchor) {
-                        // We must apply the DELTA to the hub position we just read, 
-                        // because the store update above might not have propagated to 'state.hubs' yet if we just called it.
-                        // Actually, looking at source, Zustand set updates state immediately. 
-                        // So state.hubs should have the new values? 
-                        // Let's assume yes. 
-                        const points = getOrthogonalPath({ x: hub.x, y: hub.y }, { x: anchor.x, y: anchor.y }, walls);
-                        batchUpdates.push({ id: c.id, updates: { points } });
+                    // Check End (To)
+                    if (c.toId === dragHubId.current || (isDragSelected && state.selectedIds.includes(c.toId))) {
+                        const h = state.hubs.find(x => x.id === c.toId);
+                        if (h) {
+                            // 1. Move Endpoint
+                            newPoints[newPoints.length - 1] = {
+                                x: newPoints[newPoints.length - 1].x + dx,
+                                y: newPoints[newPoints.length - 1].y + dy
+                            };
+
+                            // 2. Move Neighbor (Translate Segment)
+                            if (newPoints.length > 2) {
+                                const neighborIdx = newPoints.length - 2;
+                                newPoints[neighborIdx] = {
+                                    x: newPoints[neighborIdx].x + dx,
+                                    y: newPoints[neighborIdx].y + dy
+                                };
+                            }
+                            modified = true;
+                        }
+                    }
+
+                    if (modified) {
+                        batchUpdates.push({ id: c.id, updates: { points: newPoints } });
                     }
                 });
 
@@ -1968,7 +1992,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         const walls = state.walls;
         const anchors = state.anchors;
 
-        if (walls.length === 0 && anchors.length === 0) return;
+        if (walls.length === 0) return;
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
         walls.forEach(w => {

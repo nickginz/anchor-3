@@ -45,6 +45,10 @@ export const AnchorsLayer: React.FC = () => {
                         x={anchor.x}
                         y={anchor.y}
                         draggable
+                        onDragMove={(e) => {
+                            // Real-time update for "Move With" cable behavior
+                            updateAnchor(anchor.id, { x: e.target.x(), y: e.target.y() });
+                        }}
                         onDragEnd={(e) => {
                             updateAnchor(anchor.id, { x: e.target.x(), y: e.target.y() });
                         }}

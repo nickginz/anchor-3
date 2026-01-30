@@ -668,9 +668,132 @@ export const useProjectStore = create<ProjectState>()(
 
             setAnchors: (anchors) => set({ anchors }),
 
-            updateAnchor: (id, updates) => set((state) => ({
-                anchors: state.anchors.map((a) => (a.id === id ? { ...a, ...updates } : a)),
-            })),
+            updateAnchor: (id, updates) => set((state) => {
+                // 1. Update the Anchor
+                const updatedAnchors = state.anchors.map((a) => (a.id === id ? { ...a, ...updates } : a));
+                const anchor = updatedAnchors.find(a => a.id === id);
+
+                // 2. Re-route connected cables (Fix Drag Connectivity)
+                // If position changed, we must re-calculate paths for connected cables
+                let updatedCables = state.cables;
+
+                if (anchor && (updates.x !== undefined || updates.y !== undefined)) {
+                    // Start of Drag/Move logic
+                    updatedCables = state.cables.map(c => {
+                        if (c.toId === id || c.fromId === id) {
+                            // Find the other end
+                            let start: Point | undefined;
+                            let end: Point | undefined;
+
+                            if (c.fromId === id) {
+                                start = { x: anchor.x, y: anchor.y };
+                                // Find target
+                                const targetAnchor = updatedAnchors.find(a => a.id === c.toId);
+                                const targetHub = state.hubs.find(h => h.id === c.toId);
+                                if (targetAnchor) end = { x: targetAnchor.x, y: targetAnchor.y };
+                                else if (targetHub) end = { x: targetHub.x, y: targetHub.y }; // Should be port?
+                            } else {
+                                end = { x: anchor.x, y: anchor.y };
+                                // Find Source
+                                const sourceAnchor = updatedAnchors.find(a => a.id === c.fromId);
+                                const sourceHub = state.hubs.find(h => h.id === c.fromId);
+                                if (sourceAnchor) start = { x: sourceAnchor.x, y: sourceAnchor.y };
+                                else if (sourceHub) {
+                                    // Complex: If connected to Hub, we need the specific Port.
+                                    // Re-calculating *best* port might be expensive or jumpy?
+                                    // For now, let's just use Hub Center -> getOrthogonalPath will snap or valid?
+                                    // Ideally we want to keep the SAME port.
+                                    // But we don't store Port Index in Cable.
+                                    // So we default to Hub Center -> getOrthogonalPath logic?
+                                    // Actually, getOrthogonalPath doesn't know about ports. 
+                                    // It takes start/end.
+                                    // If we use Hub Center, the cable visually connects to center.
+                                    // We need to re-run the "Find Best Port" logic if we want perfection.
+                                    // But "Find Best Port" is in regenerateCables or InteractionLayer manual logic.
+                                    // Let's use the Hub Position for now, similar to how removeAnchor did it?
+                                    // Wait, removeAnchor logic used Hub Center.
+                                    // Let's improve this: If dragging anchor connected to Hub, 
+                                    // re-evaluating the port IS desirable because the angle changes!
+                                    // So finding the NEW best port is actually correct for standard behavior.
+
+                                    // Re-use logic:
+                                    const bestPort = getHubPortCoordinates(
+                                        { x: sourceHub.x, y: sourceHub.y },
+                                        sourceHub.capacity,
+                                        // We need to FIND the best port index again.
+                                        // Simplified: Just use Hub Center for routing start, 
+                                        // and let visual layer handle connection? 
+                                        // No, the points[] determine the drawing.
+                                        // We must calculate the port.
+
+                                        // Let's run a mini-selector:
+                                        0 // Placeholder, see logic below
+                                    );
+                                    // Actually, let's copy the port selection logic inline or make a helper?
+                                    // Too much code duplication. 
+                                    // Let's do a simplified approach: 
+                                    // Use getOrthogonalPath from Hub Center, then unshift the first point to be the port?
+                                    // No, pathfinding needs to know obstacle avoidance from the start.
+
+                                    // For now, let's iterate ports to find closest to the NEW anchor position.
+                                    let bestPIdx = 0;
+                                    let minD = Infinity;
+                                    for (let i = 0; i < sourceHub.capacity; i++) {
+                                        const p = getHubPortCoordinates({ x: sourceHub.x, y: sourceHub.y }, sourceHub.capacity, i);
+                                        const d = Math.pow(p.x - anchor.x, 2) + Math.pow(p.y - anchor.y, 2);
+                                        if (d < minD) { minD = d; bestPIdx = i; }
+                                    }
+                                    start = getHubPortCoordinates({ x: sourceHub.x, y: sourceHub.y }, sourceHub.capacity, bestPIdx);
+                                }
+                            }
+
+                            // Simplified Drag Logic: Stretch the segment (Diagonal is OK)
+                            // "Move With" Logic: If cable has >2 points, move the neighbor point too.
+                            // This translates the entire segment bonded to the anchor.
+
+                            const accPoints = [...c.points]; // Shallow copy points array
+
+                            if (start) {
+                                // Logic for Start (Index 0)
+                                if (accPoints.length > 2) {
+                                    // Calculate Delta: Target - Current
+                                    const dx = start.x - accPoints[0].x;
+                                    const dy = start.y - accPoints[0].y;
+                                    // Move Neighbor
+                                    accPoints[1] = { x: accPoints[1].x + dx, y: accPoints[1].y + dy };
+                                }
+                                // Update Start Point
+                                accPoints[0] = { x: start.x, y: start.y };
+                            }
+
+                            if (end) {
+                                // Logic for End (Index Last)
+                                if (accPoints.length > 2) {
+                                    const lastIdx = accPoints.length - 1;
+                                    const neighborIdx = accPoints.length - 2;
+                                    // Calculate Delta: Target - Current
+                                    const dx = end.x - accPoints[lastIdx].x;
+                                    const dy = end.y - accPoints[lastIdx].y;
+                                    // Move Neighbor
+                                    accPoints[neighborIdx] = { x: accPoints[neighborIdx].x + dx, y: accPoints[neighborIdx].y + dy };
+                                }
+                                // Update End Point
+                                accPoints[accPoints.length - 1] = { x: end.x, y: end.y };
+                            }
+
+                            // Re-calculate length (Euclidean sum of segments)
+                            const newLength = calculateLength(accPoints, state.scaleRatio, state.cableSettings);
+                            return { ...c, points: accPoints, length: newLength };
+                        }
+                        return c;
+                    });
+                }
+
+                return {
+                    anchors: updatedAnchors,
+                    cables: updatedCables
+                };
+            }),
 
             updateAnchors: (updatesBatch) => set((state) => {
                 const updateMap = new Map(updatesBatch.map(u => [u.id, u.updates]));
@@ -768,14 +891,31 @@ export const useProjectStore = create<ProjectState>()(
                 const { hubs, anchors, walls, cableSettings, scaleRatio } = state;
                 if (!hubs.length || !anchors.length) return state;
 
-                const newCables: Cable[] = [];
+                // Filter out Locked Cables - they should NOT be regenerated
+                const lockedCables = (state.cables || []).filter(c => c.locked);
+                const newCables: Cable[] = [...lockedCables];
+
                 const updatedHubs = [...hubs];
 
                 // 1. Assign Anchors to Nearest Hub
+                // EXCLUDE anchors that are already covered by locked cables?
+                // Yes, if an anchor has a locked cable, it shouldn't get a NEW cable.
+                const lockedAnchorIds = new Set<string>();
+                lockedCables.forEach(c => {
+                    lockedAnchorIds.add(c.toId);
+                    lockedAnchorIds.add(c.fromId);
+                });
+
+                // Filter anchors that need cables
+                const freeAnchors = anchors.filter(a => !lockedAnchorIds.has(a.id));
+                // Note: If an anchor has one locked cable but needs redundancy? 
+                // Current logic is 1 cable per anchor usually. 
+                // So skipping 'locked' anchors is correct for auto-gen.
+
                 const hubGroups = new Map<string, Anchor[]>();
                 hubs.forEach(h => hubGroups.set(h.id, []));
 
-                anchors.forEach(a => {
+                freeAnchors.forEach(a => {
                     let nearestHubId = hubs[0].id;
                     let minD = Infinity;
                     hubs.forEach(h => {

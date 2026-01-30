@@ -2,7 +2,7 @@ import React from 'react';
 import { useProjectStore } from '../../store/useProjectStore';
 import { ToolbarButton } from './ToolbarButton';
 import { DXFLayerManager } from './DXFLayerManager';
-import { SlotManager } from './SlotManager'; // Imported
+import { SlotManager } from './SlotManager';
 import {
     MousePointer2,
     Square,
@@ -24,15 +24,18 @@ import {
     FileUp,
     Activity,
     Share2,
-    BookTemplate, // New Icon
+    BookTemplate,
     Lock,
     Spline,
     FilePlus,
     Cable,
+    Settings,
 } from 'lucide-react';
 import { WallDetectionModal } from './WallDetectionModal';
 import { SettingsPanel } from './SettingsPanel';
-import { Settings } from 'lucide-react';
+import { ConfirmationModal } from './ConfirmationModal';
+import type { ImportedObject, Wall } from '../../types';
+import { v4 as uuidv4 } from 'uuid';
 
 // Custom Icons
 const RectWallIcon = ({ size, ...props }: any) => (
@@ -70,7 +73,6 @@ export const Ribbon: React.FC = () => {
     const {
         activeTool,
         setTool,
-
         setStandardWallThickness,
         anchorMode,
         setAnchorMode,
@@ -92,6 +94,8 @@ export const Ribbon: React.FC = () => {
     const [isSlotsOpen, setIsSlotsOpen] = React.useState(false);
     const importInputRef = React.useRef<HTMLInputElement>(null);
 
+    // New Project Modal State
+    const [isNewProjectModalOpen, setIsNewProjectModalOpen] = React.useState(false);
 
     // Normalize check
     const shouldShowConfig = isConfigOpen;
@@ -142,6 +146,19 @@ export const Ribbon: React.FC = () => {
 
             {/* Slot Manager Popup */}
             {isSlotsOpen && <SlotManager onClose={() => setIsSlotsOpen(false)} />}
+
+            {/* New Project Confirmation Modal */}
+            <ConfirmationModal
+                isOpen={isNewProjectModalOpen}
+                title="Start New Project?"
+                message="Are you sure? All unsaved changes will be lost."
+                confirmLabel="Start New"
+                onConfirm={() => {
+                    useProjectStore.getState().newProject();
+                    setIsNewProjectModalOpen(false);
+                }}
+                onCancel={() => setIsNewProjectModalOpen(false)}
+            />
 
             {/* Config Modal Overlay */}
             {isConfigOpen === true && (
@@ -691,11 +708,7 @@ export const Ribbon: React.FC = () => {
                 <ToolbarButton
                     icon={NewProjectIcon as any}
                     label="New"
-                    onClick={() => {
-                        if (window.confirm("Are you sure you want to start a new project? Unsaved changes will be lost.")) {
-                            useProjectStore.getState().newProject();
-                        }
-                    }}
+                    onClick={() => setIsNewProjectModalOpen(true)}
                     tooltip="New Project (Clear All)"
                     className="opacity-80 hover:opacity-100 p-1.5"
                     iconSize={16}
@@ -778,8 +791,7 @@ export const Ribbon: React.FC = () => {
                                 show: state.showHeatmap,
                                 resolution: state.heatmapResolution,
                                 thresholds: state.heatmapThresholds
-                            },
-                            importedObjects: state.importedObjects
+                            }
                         };
 
                         try {

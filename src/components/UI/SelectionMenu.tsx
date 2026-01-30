@@ -140,11 +140,7 @@ export const SelectionMenu: React.FC = () => {
                         </h3>
                         <button
                             onClick={() => {
-                                // Deleting cables not implemented directly via delete key yet, but here we can
-                                // Actually, deleting a cable disconnects it.
-                                // We don't have a direct 'removeCable' action exposed in destructuring, use store directly or add it.
-                                // let's stick to just property editing for now as delete is tricky with auto-connect.
-                                // But user asked for drag/edit generally.
+                                // Deleting cables not implemented directly via delete key yet
                             }}
                             className="text-red-400 hover:text-red-300 text-xs opacity-50 cursor-not-allowed"
                             title="Delete disabled (manage via endpoints)"
@@ -167,188 +163,213 @@ export const SelectionMenu: React.FC = () => {
                                 className="w-full h-8 rounded cursor-pointer"
                             />
                         </div>
+
+                        <div className="flex items-center space-x-2 pt-1 border-t border-gray-200 dark:border-[#555]">
+                            <input
+                                type="checkbox"
+                                id="cable-lock-check"
+                                checked={selectedCables.every(c => c.locked)}
+                                onChange={(e) => {
+                                    const newLocked = e.target.checked;
+                                    const updates = selectedCables.map(c => ({
+                                        id: c.id,
+                                        updates: { locked: newLocked }
+                                    }));
+                                    useProjectStore.getState().updateCables(updates);
+                                }}
+                                className="accent-red-500 rounded sm"
+                            />
+                            <label htmlFor="cable-lock-check" className={`text-[10px] ${subTextClass} uppercase select-none cursor-pointer flex flex-col`}>
+                                <span>Lock Auto-Routing</span>
+                                <span className="text-[9px] opacity-70 normal-case">Prevent "Regenerate" changes</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
             )}
 
             {/* --- ANCHORS SECTION --- */}
-            {selectedAnchors.length > 0 && (
-                <div className="mb-0">
-                    {/* Add divider if walls were also present */}
-                    {selectedWalls.length > 0 && <div className={`border-t ${dividerClass} my-3`}></div>}
+            {
+                selectedAnchors.length > 0 && (
+                    <div className="mb-0">
+                        {/* Add divider if walls were also present */}
+                        {selectedWalls.length > 0 && <div className={`border-t ${dividerClass} my-3`}></div>}
 
-                    <div className={`flex justify-between items-center mb-2 pb-2 border-b ${dividerClass}`}>
-                        <h3 className={`text-xs font-bold uppercase ${headerTextClass}`}>
-                            {selectedAnchors.length} Anchor{selectedAnchors.length > 1 ? 's' : ''} Selected
-                        </h3>
-                        <button
-                            onClick={() => {
-                                if (selectedAnchors.some(a => a.locked)) return;
-                                selectedAnchors.forEach(a => removeAnchor(a.id));
-                                setSelection(selectedIds.filter(id => !selectedAnchors.some(a => a.id === id)));
-                            }}
-                            disabled={selectedAnchors.some(a => a.locked)}
-                            className={`text-xs ${selectedAnchors.some(a => a.locked) ? 'text-gray-600 cursor-not-allowed' : 'text-red-400 hover:text-red-300'}`}
-                        >
-                            Delete
-                        </button>
-                    </div>
+                        <div className={`flex justify-between items-center mb-2 pb-2 border-b ${dividerClass}`}>
+                            <h3 className={`text-xs font-bold uppercase ${headerTextClass}`}>
+                                {selectedAnchors.length} Anchor{selectedAnchors.length > 1 ? 's' : ''} Selected
+                            </h3>
+                            <button
+                                onClick={() => {
+                                    if (selectedAnchors.some(a => a.locked)) return;
+                                    selectedAnchors.forEach(a => removeAnchor(a.id));
+                                    setSelection(selectedIds.filter(id => !selectedAnchors.some(a => a.id === id)));
+                                }}
+                                disabled={selectedAnchors.some(a => a.locked)}
+                                className={`text-xs ${selectedAnchors.some(a => a.locked) ? 'text-gray-600 cursor-not-allowed' : 'text-red-400 hover:text-red-300'}`}
+                            >
+                                Delete
+                            </button>
+                        </div>
 
-                    <div className="space-y-3">
-                        {/* Manual Override */}
-                        <div className="flex items-center space-x-2">
-                            <input
-                                type="checkbox"
-                                id="manual-mode-check"
-                                checked={selectedAnchors.every(a => !a.isAuto)}
-                                onChange={(e) => {
-                                    const newIsManual = e.target.checked;
-                                    const newIsAuto = !newIsManual;
+                        <div className="space-y-3">
+                            {/* Manual Override */}
+                            <div className="flex items-center space-x-2">
+                                <input
+                                    type="checkbox"
+                                    id="manual-mode-check"
+                                    checked={selectedAnchors.every(a => !a.isAuto)}
+                                    onChange={(e) => {
+                                        const newIsManual = e.target.checked;
+                                        const newIsAuto = !newIsManual;
 
-                                    const updatedAnchors = anchors.map(a => {
-                                        if (selectedIds.includes(a.id)) {
-                                            let newId = a.id;
-                                            if (newIsManual && a.isAuto && a.id.startsWith('A')) {
-                                                newId = 'AM' + a.id.substring(1);
+                                        const updatedAnchors = anchors.map(a => {
+                                            if (selectedIds.includes(a.id)) {
+                                                let newId = a.id;
+                                                if (newIsManual && a.isAuto && a.id.startsWith('A')) {
+                                                    newId = 'AM' + a.id.substring(1);
+                                                }
+                                                return { ...a, isAuto: newIsAuto, id: newId };
                                             }
-                                            return { ...a, isAuto: newIsAuto, id: newId };
-                                        }
-                                        return a;
-                                    });
+                                            return a;
+                                        });
 
-                                    const newSelectedIds = selectedAnchors.map(a => {
-                                        if (newIsManual && a.isAuto && a.id.startsWith('A')) {
-                                            return 'AM' + a.id.substring(1);
-                                        }
-                                        return a.id;
-                                    });
+                                        const newSelectedIds = selectedAnchors.map(a => {
+                                            if (newIsManual && a.isAuto && a.id.startsWith('A')) {
+                                                return 'AM' + a.id.substring(1);
+                                            }
+                                            return a.id;
+                                        });
 
-                                    useProjectStore.getState().setAnchors(updatedAnchors);
-                                    useProjectStore.getState().setSelection(newSelectedIds);
+                                        useProjectStore.getState().setAnchors(updatedAnchors);
+                                        useProjectStore.getState().setSelection(newSelectedIds);
+                                    }}
+                                    className="accent-blue-500 rounded sm"
+                                />
+                                <label htmlFor="manual-mode-check" className={`text-[10px] ${subTextClass} uppercase select-none cursor-pointer`}>
+                                    Manual Mode
+                                </label>
+                            </div>
+
+                            {/* Lock Position */}
+                            <div className="flex items-center space-x-2">
+                                <input
+                                    type="checkbox"
+                                    id="lock-position-check"
+                                    checked={selectedAnchors.every(a => a.locked)}
+                                    onChange={(e) => {
+                                        const newLocked = e.target.checked;
+                                        const updatedAnchors = anchors.map(a =>
+                                            selectedIds.includes(a.id)
+                                                ? { ...a, locked: newLocked }
+                                                : a
+                                        );
+                                        useProjectStore.getState().setAnchors(updatedAnchors);
+                                    }}
+                                    className="accent-red-500 rounded sm"
+                                />
+                                <label htmlFor="lock-position-check" className={`text-[10px] ${subTextClass} uppercase select-none cursor-pointer`}>
+                                    Lock Position <span className="text-gray-500 normal-case">(Prevent Move/Del)</span>
+                                </label>
+                            </div>
+
+                            {/* Radius Control */}
+                            <div className="flex flex-col space-y-1">
+                                <label className={`text-[10px] ${subTextClass} uppercase flex justify-between`}>
+                                    Radius (m)
+                                    <span className={isDark ? "text-gray-300" : "text-gray-600"}>{selectedAnchors[0]?.radius ?? useProjectStore.getState().anchorRadius}m</span>
+                                </label>
+                                <input
+                                    type="range"
+                                    min="3" max="30" step="1"
+                                    value={selectedAnchors[0]?.radius ?? useProjectStore.getState().anchorRadius}
+                                    onChange={(e) => {
+                                        const val = Number(e.target.value);
+                                        const updatedAnchors = anchors.map(a =>
+                                            selectedIds.includes(a.id)
+                                                ? { ...a, radius: val }
+                                                : a
+                                        );
+                                        useProjectStore.getState().setAnchors(updatedAnchors);
+                                    }}
+                                    className={`w-full h-1.5 ${isDark ? "bg-[#444]" : "bg-gray-200"} rounded-lg appearance-none cursor-pointer accent-blue-500`}
+                                />
+                            </div>
+
+                            {selectedAnchors.length > 1 && (
+                                <div className={`flex flex-col space-y-2 pt-2 border-t ${dividerClass}`}>
+                                    <label className={`text-[10px] ${subTextClass} uppercase`}>Alignment</label>
+                                    <div className="flex space-x-2">
+                                        <button
+                                            onClick={() => alignAnchors('horizontal')}
+                                            className={`flex-1 ${buttonBgClass} text-[10px] py-1 rounded text-center transition-colors`}
+                                            title="Align Vertically to Left-most (Same Y)"
+                                        >
+                                            Align Horiz
+                                        </button>
+                                        <button
+                                            onClick={() => alignAnchors('vertical')}
+                                            className={`flex-1 ${buttonBgClass} text-[10px] py-1 rounded text-center transition-colors`}
+                                            title="Align Horizontally to Top-most (Same X)"
+                                        >
+                                            Align Vert
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )
+            }
+            {/* --- HUBS SECTION --- */}
+            {
+                selectedHubs.length > 0 && (
+                    <div className="mb-0">
+                        {/* Add divider if walls or anchors were also present */}
+                        {(selectedWalls.length > 0 || selectedAnchors.length > 0) && <div className={`border-t ${dividerClass} my-3`}></div>}
+
+                        <div className={`flex justify-between items-center mb-2 pb-2 border-b ${dividerClass}`}>
+                            <h3 className={`text-xs font-bold uppercase ${headerTextClass}`}>
+                                {selectedHubs.length} Hub{selectedHubs.length > 1 ? 's' : ''} Selected
+                            </h3>
+                            <button
+                                onClick={() => {
+                                    selectedHubs.forEach(h => useProjectStore.getState().removeHub(h.id));
+                                    setSelection(selectedIds.filter(id => !selectedHubs.some(h => h.id === id)));
                                 }}
-                                className="accent-blue-500 rounded sm"
-                            />
-                            <label htmlFor="manual-mode-check" className={`text-[10px] ${subTextClass} uppercase select-none cursor-pointer`}>
-                                Manual Mode
-                            </label>
+                                className="text-red-400 hover:text-red-300 text-xs"
+                            >
+                                Delete
+                            </button>
                         </div>
 
-                        {/* Lock Position */}
-                        <div className="flex items-center space-x-2">
-                            <input
-                                type="checkbox"
-                                id="lock-position-check"
-                                checked={selectedAnchors.every(a => a.locked)}
-                                onChange={(e) => {
-                                    const newLocked = e.target.checked;
-                                    const updatedAnchors = anchors.map(a =>
-                                        selectedIds.includes(a.id)
-                                            ? { ...a, locked: newLocked }
-                                            : a
-                                    );
-                                    useProjectStore.getState().setAnchors(updatedAnchors);
-                                }}
-                                className="accent-red-500 rounded sm"
-                            />
-                            <label htmlFor="lock-position-check" className={`text-[10px] ${subTextClass} uppercase select-none cursor-pointer`}>
-                                Lock Position <span className="text-gray-500 normal-case">(Prevent Move/Del)</span>
-                            </label>
-                        </div>
-
-                        {/* Radius Control */}
-                        <div className="flex flex-col space-y-1">
-                            <label className={`text-[10px] ${subTextClass} uppercase flex justify-between`}>
-                                Radius (m)
-                                <span className={isDark ? "text-gray-300" : "text-gray-600"}>{selectedAnchors[0]?.radius ?? useProjectStore.getState().anchorRadius}m</span>
-                            </label>
-                            <input
-                                type="range"
-                                min="3" max="30" step="1"
-                                value={selectedAnchors[0]?.radius ?? useProjectStore.getState().anchorRadius}
-                                onChange={(e) => {
-                                    const val = Number(e.target.value);
-                                    const updatedAnchors = anchors.map(a =>
-                                        selectedIds.includes(a.id)
-                                            ? { ...a, radius: val }
-                                            : a
-                                    );
-                                    useProjectStore.getState().setAnchors(updatedAnchors);
-                                }}
-                                className={`w-full h-1.5 ${isDark ? "bg-[#444]" : "bg-gray-200"} rounded-lg appearance-none cursor-pointer accent-blue-500`}
-                            />
-                        </div>
-
-                        {selectedAnchors.length > 1 && (
-                            <div className={`flex flex-col space-y-2 pt-2 border-t ${dividerClass}`}>
-                                <label className={`text-[10px] ${subTextClass} uppercase`}>Alignment</label>
-                                <div className="flex space-x-2">
-                                    <button
-                                        onClick={() => alignAnchors('horizontal')}
-                                        className={`flex-1 ${buttonBgClass} text-[10px] py-1 rounded text-center transition-colors`}
-                                        title="Align Vertically to Left-most (Same Y)"
-                                    >
-                                        Align Horiz
-                                    </button>
-                                    <button
-                                        onClick={() => alignAnchors('vertical')}
-                                        className={`flex-1 ${buttonBgClass} text-[10px] py-1 rounded text-center transition-colors`}
-                                        title="Align Horizontally to Top-most (Same X)"
-                                    >
-                                        Align Vert
-                                    </button>
+                        <div className="space-y-3">
+                            <div className="flex flex-col space-y-1">
+                                <label className={`text-[10px] ${subTextClass} uppercase`}>Capacity</label>
+                                <div className="flex space-x-1">
+                                    {[2, 6, 12, 24].map((cap) => (
+                                        <button
+                                            key={cap}
+                                            onClick={() => {
+                                                selectedHubs.forEach(h => useProjectStore.getState().updateHub(h.id, { capacity: cap as any }));
+                                            }}
+                                            className={`flex-1 py-1 rounded text-[10px] transition-colors
+                                            ${selectedHubs.every(h => h.capacity === cap)
+                                                    ? 'bg-blue-500 text-white'
+                                                    : buttonBgClass
+                                                }
+                                        `}
+                                        >
+                                            {cap}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
-                        )}
-                    </div>
-                </div>
-            )}
-            {/* --- HUBS SECTION --- */}
-            {selectedHubs.length > 0 && (
-                <div className="mb-0">
-                    {/* Add divider if walls or anchors were also present */}
-                    {(selectedWalls.length > 0 || selectedAnchors.length > 0) && <div className={`border-t ${dividerClass} my-3`}></div>}
-
-                    <div className={`flex justify-between items-center mb-2 pb-2 border-b ${dividerClass}`}>
-                        <h3 className={`text-xs font-bold uppercase ${headerTextClass}`}>
-                            {selectedHubs.length} Hub{selectedHubs.length > 1 ? 's' : ''} Selected
-                        </h3>
-                        <button
-                            onClick={() => {
-                                selectedHubs.forEach(h => useProjectStore.getState().removeHub(h.id));
-                                setSelection(selectedIds.filter(id => !selectedHubs.some(h => h.id === id)));
-                            }}
-                            className="text-red-400 hover:text-red-300 text-xs"
-                        >
-                            Delete
-                        </button>
-                    </div>
-
-                    <div className="space-y-3">
-                        <div className="flex flex-col space-y-1">
-                            <label className={`text-[10px] ${subTextClass} uppercase`}>Capacity</label>
-                            <div className="flex space-x-1">
-                                {[2, 6, 12, 24].map((cap) => (
-                                    <button
-                                        key={cap}
-                                        onClick={() => {
-                                            selectedHubs.forEach(h => useProjectStore.getState().updateHub(h.id, { capacity: cap as any }));
-                                        }}
-                                        className={`flex-1 py-1 rounded text-[10px] transition-colors
-                                            ${selectedHubs.every(h => h.capacity === cap)
-                                                ? 'bg-blue-500 text-white'
-                                                : buttonBgClass
-                                            }
-                                        `}
-                                    >
-                                        {cap}
-                                    </button>
-                                ))}
-                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
-        </div>
+        </div >
     );
 };
