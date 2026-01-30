@@ -717,18 +717,11 @@ export const useProjectStore = create<ProjectState>()(
                                     // So finding the NEW best port is actually correct for standard behavior.
 
                                     // Re-use logic:
-                                    const bestPort = getHubPortCoordinates(
-                                        { x: sourceHub.x, y: sourceHub.y },
-                                        sourceHub.capacity,
-                                        // We need to FIND the best port index again.
-                                        // Simplified: Just use Hub Center for routing start, 
-                                        // and let visual layer handle connection? 
-                                        // No, the points[] determine the drawing.
-                                        // We must calculate the port.
-
-                                        // Let's run a mini-selector:
-                                        0 // Placeholder, see logic below
-                                    );
+                                    // const bestPort = getHubPortCoordinates(
+                                    //     { x: sourceHub.x, y: sourceHub.y },
+                                    //     sourceHub.capacity,
+                                    //     0 
+                                    // );
                                     // Actually, let's copy the port selection logic inline or make a helper?
                                     // Too much code duplication. 
                                     // Let's do a simplified approach: 

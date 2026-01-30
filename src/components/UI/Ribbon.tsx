@@ -34,8 +34,8 @@ import {
 import { WallDetectionModal } from './WallDetectionModal';
 import { SettingsPanel } from './SettingsPanel';
 import { ConfirmationModal } from './ConfirmationModal';
-import type { ImportedObject, Wall } from '../../types';
-import { v4 as uuidv4 } from 'uuid';
+// import type { ImportedObject, Wall } from '../../types';
+// import { v4 as uuidv4 } from 'uuid';
 
 // Custom Icons
 const RectWallIcon = ({ size, ...props }: any) => (
