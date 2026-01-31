@@ -87,9 +87,13 @@
     - [x] **Visual Fix**: Eliminated "Spike" artifacts by restricting filler wedges to outer convex corners.
 
 ### Project Management
-- [ ] **Save/Load Project**:
-    - [ ] Save full state to `.json`.
-    - [ ] Load project from `.json`.
+- [x] **Save/Load Project**:
+    - [x] Save full state to `.json`.
+    - [x] Load project from `.json`.
+- [x] **Example Projects Integration**:
+    - [x] Copy project files to public directory.
+    - [x] Add "Samples" section to `SlotManager`.
+    - [x] Implement fetch-and-load logic.
 
 ### Analysis Module
 - [ ] **Signal Heatmap**:

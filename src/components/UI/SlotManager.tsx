@@ -109,14 +109,35 @@ export const SlotManager: React.FC<SlotManagerProps> = ({ onClose }) => {
         setSlots(newSlots);
     };
 
+    const handleLoadSample = async (filename: string) => {
+        if (!confirm(`Load example project "${filename}"? Any unsaved changes will be lost.`)) return;
+        try {
+            const response = await fetch(`examples/${filename}`);
+            if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+            const data = await response.json();
+            useProjectStore.getState().loadProject(data);
+            onClose();
+        } catch (err) {
+            console.error("Sample Load Error:", err);
+            alert(`Failed to load sample project: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    };
+
+    const samples = [
+        { name: "Full Example", file: "full_example.json" },
+        { name: "Clean Slate", file: "clean_slate.json" },
+        { name: "Recent Draft", file: "recent_draft.json" }
+    ];
+
     return (
-        <div className="absolute top-16 left-0 w-72 panel-bg border panel-border p-3 shadow-2xl rounded-b-lg z-50 text-primary animate-in slide-in-from-top-2">
+        <div className="absolute top-16 left-0 w-72 panel-bg border panel-border p-3 shadow-2xl rounded-b-lg z-50 text-primary animate-in slide-in-from-top-2 overflow-y-auto max-h-[80vh]">
             <div className="flex justify-between items-center mb-3 pb-2 border-b panel-border">
-                <h3 className="text-xs font-bold uppercase text-secondary">Quick Save Slots</h3>
+                <h3 className="text-xs font-bold uppercase text-secondary">Project Management</h3>
                 <button onClick={onClose} className="text-secondary hover:text-primary"><X size={14} /></button>
             </div>
 
-            <div className="flex flex-col space-y-2">
+            <h4 className="text-[10px] font-bold uppercase text-gray-500 mb-2">Quick Save Slots</h4>
+            <div className="flex flex-col space-y-2 mb-4">
                 {slots.map((slot, i) => (
                     <div key={i} className="flex items-center justify-between p-2 rounded input-bg border panel-border">
                         <div className="flex flex-col">
@@ -129,7 +150,7 @@ export const SlotManager: React.FC<SlotManagerProps> = ({ onClose }) => {
                             <button
                                 onClick={() => handleSave(i)}
                                 className="p-1.5 rounded hover-bg text-accent"
-                                title="Overwirte / Save"
+                                title="Overwrite / Save"
                             >
                                 <Save size={14} />
                             </button>
@@ -155,8 +176,27 @@ export const SlotManager: React.FC<SlotManagerProps> = ({ onClose }) => {
                 ))}
             </div>
 
-            <div className="mt-3 text-[10px] text-gray-500 text-center">
-                Stored locally in browser
+            <h4 className="text-[10px] font-bold uppercase text-gray-500 mb-2">Example Samples</h4>
+            <div className="flex flex-col space-y-2">
+                {samples.map((sample, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 rounded input-bg border border-blue-500/30 bg-blue-500/5">
+                        <div className="flex flex-col">
+                            <span className="text-xs font-semibold text-primary">{sample.name}</span>
+                            <span className="text-[10px] text-gray-500">{sample.file}</span>
+                        </div>
+                        <button
+                            onClick={() => handleLoadSample(sample.file)}
+                            className="p-1.5 rounded hover-bg text-blue-400 group"
+                            title="Load Sample"
+                        >
+                            <FolderOpen size={14} className="group-hover:scale-110 transition-transform" />
+                        </button>
+                    </div>
+                ))}
+            </div>
+
+            <div className="mt-4 pt-2 border-t panel-border text-[10px] text-gray-500 text-center">
+                Slots stored in browser Storage
             </div>
         </div>
     );

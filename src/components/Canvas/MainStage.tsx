@@ -18,6 +18,8 @@ import { generateOffsets, generateSkeletonLines, generateMedialAxis, generateSim
 import type { Point } from '../../types';
 import { SelectionMenu } from '../UI/SelectionMenu';
 import { useProjectStore } from '../../store/useProjectStore';
+import type { ProjectState } from '../../store/useProjectStore';
+import { useShallow } from 'zustand/react/shallow';
 
 export const MainStage: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -49,18 +51,33 @@ export const MainStage: React.FC = () => {
         return () => window.removeEventListener('resize', updateSize);
     }, []);
 
+
+
     const {
         scaleRatio,
         setScaleRatio,
         theme,
-        walls, // Need walls from store
+        walls,
         showOffsets,
         offsetStep,
         showSkeleton,
         skeletonMode,
         showMedialAxis,
         medialAxisStep
-    } = useProjectStore();
+    } = useProjectStore(
+        useShallow((state: ProjectState) => ({
+            scaleRatio: state.scaleRatio,
+            setScaleRatio: state.setScaleRatio,
+            theme: state.theme,
+            walls: state.walls,
+            showOffsets: state.showOffsets,
+            offsetStep: state.offsetStep,
+            showSkeleton: state.showSkeleton,
+            skeletonMode: state.skeletonMode,
+            showMedialAxis: state.showMedialAxis,
+            medialAxisStep: state.medialAxisStep
+        }))
+    );
 
     // --- Geometry Tools Calculation ---
     // Combined memo for all geometry lines to avoid redundant 'detectRooms' calls

@@ -18,12 +18,14 @@ export interface Wall {
     thickness: number; // meters
     material: WallMaterial;
     attenuation?: number; // dB (Optional override)
+    door?: Door;
 }
 
 export interface Door {
     id: string;
     wallId: string;
     distance: number; // Distance from Wall Start Point (P1) in meters
+    offset: number;   // Distance as percentage (0-1)
     width: number; // Meters
     height?: number; // Meters (2.1 default)
     type: 'single' | 'double' | 'slide';

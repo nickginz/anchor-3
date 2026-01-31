@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import Konva from 'konva';
 import { v4 as uuidv4 } from 'uuid';
@@ -138,7 +138,7 @@ const THEME_COLORS = {
 };
 
 export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpenMenu, onOpenScaleModal }) => {
-    const { activeTool, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setTool, walls, anchors, hubs, cables, addCable, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme, setExportRegion, exportRegion, updateCable, wallsLocked, scaleRatio } = useProjectStore(
+    const { activeTool, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setTool, walls, anchors, hubs, cables, addCable, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme, setExportRegion, exportRegion, wallsLocked, scaleRatio, lastLoaded } = useProjectStore(
         useShallow((state: ProjectState) => ({
             activeTool: state.activeTool,
             addWall: state.addWall,
@@ -167,9 +167,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             theme: state.theme,
             setExportRegion: state.setExportRegion,
             exportRegion: state.exportRegion,
-            updateCable: state.updateCable,
             wallsLocked: state.wallsLocked,
-            scaleRatio: state.scaleRatio
+            scaleRatio: state.scaleRatio,
+            lastLoaded: state.lastLoaded
         }))
     );
 
@@ -416,7 +416,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
     // Interaction Handlers (Moved to Top Level)
 
-    const getStagePoint = (): Point | null => {
+    const getStagePoint = useCallback((): Point | null => {
         const pos = stage?.getPointerPosition();
         if (!pos) return null;
         const scale = (stage?.scaleX() || 1);
@@ -424,9 +424,238 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             x: (pos.x - (stage?.x() || 0)) / scale,
             y: (pos.y - (stage?.y() || 0)) / scale,
         };
-    };
+    }, [stage]);
 
-    const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    const fitScreen = useCallback(() => {
+        const state = useProjectStore.getState();
+        const walls = state.walls;
+        const anchors = state.anchors;
+
+        if (walls.length === 0) return;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+        walls.forEach(w => {
+            minX = Math.min(minX, w.points[0], w.points[2]);
+            maxX = Math.max(maxX, w.points[0], w.points[2]);
+            minY = Math.min(minY, w.points[1], w.points[3]);
+            maxY = Math.max(maxY, w.points[1], w.points[3]);
+        });
+
+        anchors.forEach(a => {
+            minX = Math.min(minX, a.x);
+            maxX = Math.max(maxX, a.x);
+            minY = Math.min(minY, a.y);
+            maxY = Math.max(maxY, a.y);
+        });
+
+        // If nothing found (e.g. initial infinity), skip
+        if (minX === Infinity) return;
+
+        const padding = 1.2;
+        const w = (maxX - minX) * padding || 10;
+        const h = (maxY - minY) * padding || 10;
+        if (w === 0 || h === 0) return;
+
+        if (!stage) return;
+
+        const stageW = stage.width();
+        const stageH = stage.height();
+        const scale = Math.min(stageW / w, stageH / h);
+
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+
+        stage.position({
+            x: stageW / 2 - centerX * scale,
+            y: stageH / 2 - centerY * scale
+        });
+        stage.scale({ x: scale, y: scale });
+        stage.batchDraw();
+    }, [stage]);
+
+    // Auto Fit on Project Load
+    useEffect(() => {
+        if (lastLoaded > 0 && stage) {
+            const timer = setTimeout(() => {
+                fitScreen();
+            }, 50);
+            return () => clearTimeout(timer);
+        }
+    }, [stage, fitScreen, lastLoaded]);
+
+    const handleDblClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+        if (useProjectStore.getState().activeTool === 'cable_edit') {
+            const pos = getStagePoint();
+            if (pos) {
+                const cables = useProjectStore.getState().cables;
+                for (const cable of cables) {
+                    const hit = isPointNearCable(pos, cable.points, 10 / (stage?.scaleX() || 1));
+                    if (hit && hit.type === 'segment') {
+                        const newPoints = [...cable.points];
+                        newPoints.splice(hit.index + 1, 0, pos);
+                        useProjectStore.getState().updateCable(cable.id, { points: newPoints });
+                        return;
+                    }
+                }
+            }
+        }
+        if (e.evt.button === 1) { // MMB
+            fitScreen();
+        }
+    }, [stage, fitScreen, getStagePoint]);
+
+    const getAllConnectedWalls = useCallback((startId: string, walls: import('../../types').Wall[]): string[] => {
+        const visited = new Set<string>();
+        const queue = [startId];
+        visited.add(startId);
+
+        while (queue.length > 0) {
+            const currentId = queue.shift()!;
+            const current = walls.find(w => w.id === currentId);
+            if (!current) continue;
+
+            walls.forEach(w => {
+                if (!visited.has(w.id)) {
+                    const epsilon = 0.01;
+                    const p1 = { x: current.points[0], y: current.points[1] };
+                    const p2 = { x: current.points[2], y: current.points[3] };
+                    const q1 = { x: w.points[0], y: w.points[1] };
+                    const q2 = { x: w.points[2], y: w.points[3] };
+
+                    const isConnected =
+                        dist(p1, q1) < epsilon || dist(p1, q2) < epsilon ||
+                        dist(p2, q1) < epsilon || dist(p2, q2) < epsilon;
+
+                    if (isConnected) {
+                        visited.add(w.id);
+                        queue.push(w.id);
+                    }
+                }
+            });
+        }
+        return Array.from(visited);
+    }, []);
+
+    const openAnchorMenu = useCallback((pointer: { x: number, y: number }, targetIds: string[]) => {
+        if (onOpenMenu) {
+            const state = useProjectStore.getState();
+            onOpenMenu(pointer.x, pointer.y, [
+                {
+                    label: 'Set Radius (m)...',
+                    action: () => {
+                        const r = prompt("Enter Radius in meters:", "5");
+                        if (r !== null) {
+                            const val = parseFloat(r);
+                            if (!isNaN(val) && val > 0) {
+                                targetIds.forEach(id => state.updateAnchor(id, { radius: val }));
+                            }
+                        }
+                    }
+                },
+                {
+                    label: 'Shape: Circle',
+                    action: () => targetIds.forEach(id => state.updateAnchor(id, { shape: 'circle' }))
+                },
+                {
+                    label: 'Shape: Square',
+                    action: () => targetIds.forEach(id => state.updateAnchor(id, { shape: 'square' }))
+                },
+                {
+                    label: 'Reset to System Default',
+                    action: () => targetIds.forEach(id => state.updateAnchor(id, { radius: undefined, shape: undefined }))
+                },
+                { type: 'separator' },
+                {
+                    label: 'Group Anchors (Ctrl+G)',
+                    action: () => state.groupAnchors(targetIds)
+                },
+                {
+                    label: 'Ungroup Anchors (Ctrl+Shift+G)',
+                    action: () => state.ungroupAnchors(targetIds)
+                }
+            ]);
+        }
+    }, [onOpenMenu]);
+
+    const handleContextMenu = useCallback((e: Konva.KonvaEventObject<PointerEvent>) => {
+        e.evt.preventDefault();
+    }, []);
+
+    const checkRMBClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+        if (!stage) return;
+        const pointer = stage.getPointerPosition();
+        if (!pointer || !lastPanPos.current) return;
+
+        const dx = pointer.x - lastPanPos.current.x;
+        const dy = pointer.y - lastPanPos.current.y;
+        const distVal = Math.hypot(dx, dy);
+        const duration = Date.now() - panStartTime.current;
+
+        if (distVal < 5 && duration < 500) {
+            const state = useProjectStore.getState();
+            const currentSelection = state.selectedIds;
+
+            if (e.target.name() === 'anchor') {
+                const anchorId = e.target.id();
+                let targetIds = currentSelection;
+                if (!currentSelection.includes(anchorId)) {
+                    state.setSelection([anchorId]);
+                    targetIds = [anchorId];
+                }
+                openAnchorMenu(pointer, targetIds);
+            } else if (e.target.name() === 'hub-bg' || e.target.name() === 'hub-text') {
+                const hubId = e.target.id();
+                let targetIds = currentSelection;
+                if (!currentSelection.includes(hubId)) {
+                    state.setSelection([hubId]);
+                    targetIds = [hubId];
+                }
+                openAnchorMenu(pointer, targetIds);
+            } else {
+                const selectedAnchors = state.anchors.filter(a => currentSelection.includes(a.id));
+                const selectedHubs = state.hubs.filter(h => currentSelection.includes(h.id));
+
+                if (selectedAnchors.length > 0 || selectedHubs.length > 0) {
+                    openAnchorMenu(pointer, currentSelection);
+                } else {
+                    if (activeTool === 'wall' && points.length > 0) {
+                        if (onOpenMenu) {
+                            onOpenMenu(pointer.x, pointer.y, [
+                                {
+                                    label: 'Close Loop',
+                                    action: () => {
+                                        if (chainStart && points.length > 0) {
+                                            const start = points[0];
+                                            const end = chainStart;
+                                            if (start.x !== end.x || start.y !== end.y) {
+                                                addWall({
+                                                    points: [start.x, start.y, end.x, end.y],
+                                                    ...getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness) as any
+                                                });
+                                            }
+                                        }
+                                        setPoints([]);
+                                        setChainStart(null);
+                                    }
+                                },
+                                {
+                                    label: 'Stop Drawing',
+                                    action: () => {
+                                        setPoints([]);
+                                        setChainStart(null);
+                                    }
+                                }
+                            ]);
+                        }
+                    } else {
+                        setTool('select');
+                    }
+                }
+            }
+        }
+    }, [stage, openAnchorMenu, activeTool, points, chainStart, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, addWall, setPoints, setChainStart, setTool, onOpenMenu]);
+
+    const handleMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
         const stagePos = stage?.getPointerPosition();
         if (!stagePos) return;
         const pos = getStagePoint();
@@ -437,8 +666,8 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
         // ALT + Left Click (Import Selection)
         if (e.evt.altKey && e.evt.button === 0) {
-            const stagePos = getStagePoint();
-            if (stagePos) {
+            const stagePosInternal = getStagePoint();
+            if (stagePosInternal) {
                 const state = useProjectStore.getState();
                 // Simple Hit Test (Reverse order for Z-index)
                 const hitObj = [...state.importedObjects].reverse().find(obj => {
@@ -526,8 +755,8 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
         // Hub Drag Check
         const scale = stage?.scaleX() || 1;
-        const hubs = useProjectStore.getState().hubs;
-        const hitHub = hubs.find(h =>
+        const hubsInternal = useProjectStore.getState().hubs;
+        const hitHub = hubsInternal.find(h =>
             Math.abs(pos.x - h.x) < 15 / scale &&
             Math.abs(pos.y - h.y) < 15 / scale
         );
@@ -552,15 +781,15 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             const state = useProjectStore.getState();
             const tol = 10 / (stage?.scaleX() || 1);
             // Reuse helper
-            const getHitWall = (pos: Point, walls: any[], tolerance: number) => {
-                for (const w of walls) {
-                    if (isPointNearWall(pos, w, tolerance)) return w;
+            const getHitWallInternal = (posPoint: Point, wallsList: any[], tolerance: number) => {
+                for (const w of wallsList) {
+                    if (isPointNearWall(posPoint, w, tolerance)) return w;
                 }
                 return null;
             }
 
             // Check if hitting a wall
-            const hitWall = getHitWall(pos, state.walls, tol);
+            const hitWall = getHitWallInternal(pos, state.walls, tol);
             if (hitWall) {
                 // Ignore if hitting Hub or Anchor (handled above/below) - Logic flow ensures Hub is checked first.
                 // Anchor check is below, but usually handles (Circles) capture event if they are on top.
@@ -652,9 +881,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
         // Text Drag Check
         // Allow dragging via Handle (always) OR Text (if already selected)
-        const name = e.target.name();
+        const nameInternal = e.target.name();
         // Dimension Line Drag Check
-        if (name === 'dimension-line') {
+        if (nameInternal === 'dimension-line') {
             const targetId = e.target.id();
             // If dragging line, we must ensure it is selected? Maybe auto-select?
             // For now, let's auto-select if needed or just allow drag.
@@ -696,15 +925,15 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             }
         }
 
-        if (name === 'dim-text-handle' || name === 'dim-text') {
+        if (nameInternal === 'dim-text-handle' || nameInternal === 'dim-text') {
             const targetId = e.target.id();
             // Handle ID is just 'id', Text ID is 'dim-text-id'
-            const realId = name === 'dim-text-handle' ? targetId : targetId.replace('dim-text-', '');
+            const realId = nameInternal === 'dim-text-handle' ? targetId : targetId.replace('dim-text-', '');
 
             const isSelected = useProjectStore.getState().selectedIds.includes(realId);
 
             // If Handle (implies selected) OR (Text AND Selected), start drag
-            if (name === 'dim-text-handle' || (name === 'dim-text' && isSelected)) {
+            if (nameInternal === 'dim-text-handle' || (nameInternal === 'dim-text' && isSelected)) {
                 dragTextId.current = realId;
                 useProjectStore.temporal.getState().pause();
                 return; // Consume event (no selection box)
@@ -716,9 +945,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
 
         // Helper for RMB detection
-        const getHitWall = (pos: Point, walls: any[], tolerance: number) => {
-            for (const w of walls) {
-                if (isPointNearWall(pos, w, tolerance)) return w;
+        const getHitWallInternal2 = (posPoint: Point, wallsList: any[], tolerance: number) => {
+            for (const w of wallsList) {
+                if (isPointNearWall(posPoint, w, tolerance)) return w;
             }
             return null;
         }
@@ -729,7 +958,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         if (e.evt.button === 2) {
             // Check for Wall Context Menu
             const state = useProjectStore.getState();
-            const hitWall = getHitWall(pos, state.walls, 10 / (stage?.scaleX() || 1));
+            const hitWall = getHitWallInternal2(pos, state.walls, 10 / (stage?.scaleX() || 1));
 
             // If we clicked a wall AND walls are NOT locked
             if (hitWall && !wallsLocked) {
@@ -767,16 +996,16 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             }
 
             // Hub Context Menu
-            const hubs = state.hubs;
-            const hitHub = hubs.find(h =>
+            const hubsInternal3 = state.hubs;
+            const hitHubInternal3 = hubsInternal3.find(h =>
                 Math.abs(pos.x - h.x) < 15 / (stage?.scaleX() || 1) &&
                 Math.abs(pos.y - h.y) < 15 / (stage?.scaleX() || 1)
             );
-            if (hitHub) {
+            if (hitHubInternal3) {
                 if (onOpenMenu) {
                     onOpenMenu(e.evt.clientX, e.evt.clientY, [
-                        { label: 'Delete Hub', action: () => state.removeHub(hitHub.id) },
-                        { label: 'Properties...', action: () => alert(`Hub: ${hitHub.capacity} ports`) }
+                        { label: 'Delete Hub', action: () => state.removeHub(hitHubInternal3.id) },
+                        { label: 'Properties...', action: () => alert(`Hub: ${hitHubInternal3.capacity} ports`) }
                     ]);
                     return;
                 }
@@ -809,11 +1038,11 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 hitDevice = true;
             } else {
                 // Check Hubs
-                const hitHub = hubs.find(h => dist(pos, h) < clickRadius);
-                if (hitHub) {
+                const hitHubInternal4 = hubs.find(h => dist(pos, h) < clickRadius);
+                if (hitHubInternal4) {
                     isDrawingCable.current = true;
-                    cableStartId.current = hitHub.id;
-                    setTempCablePath({ start: { x: hitHub.x, y: hitHub.y }, end: pos });
+                    cableStartId.current = hitHubInternal4.id;
+                    setTempCablePath({ start: { x: hitHubInternal4.x, y: hitHubInternal4.y }, end: pos });
                     hitDevice = true;
                 }
             }
@@ -1133,29 +1362,28 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 }
             }
         }
-    };
+    }, [stage, getStagePoint, activeTool, anchors, hubs, walls, cables, setSelection, setPoints, setChainStart, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setRectStart, setCurrentMousePos, setRectEdgeStart, setRectEdgeBaseEnd, setTool, onOpenScaleModal, onOpenMenu, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, wallsLocked, anchorRadius, setExportRegion, setSelectionRect, setIsPanning, selectionStart, isShiftDown, setDraggingDoorId, setTempCablePath, setDragCableHandle]);
 
-    const handleMouseMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    const handleMouseMove = useCallback(() => {
         const pos = getStagePoint();
         if (!pos) return;
 
-        // Cable Edit Hover & Drag Logic
-        const currentActiveTool = useProjectStore.getState().activeTool;
+        const state = useProjectStore.getState();
+        const currentActiveTool = state.activeTool;
+
+        // 0. Cable Edit specific logic
         if (currentActiveTool === 'cable_edit') {
-            // 0. Drawing Cable
             if (isDrawingCable.current && tempCablePath) {
                 setTempCablePath({ start: tempCablePath.start, end: pos });
                 return;
             }
 
-            // 1. Dragging Segment
             if (isMouseDown.current && dragCableHandle && dragCableHandle.handle.type === 'segment') {
                 const cable = cables.find(c => c.id === dragCableHandle.id);
                 if (cable) {
                     const deltaX = pos.x - lastDragPos.current!.x;
                     const deltaY = pos.y - lastDragPos.current!.y;
 
-                    // Constrain to orthogonal
                     const p1 = cable.points[dragCableHandle.handle.index];
                     const p2 = cable.points[dragCableHandle.handle.index + 1];
                     const isVertical = Math.abs(p1.x - p2.x) < 1;
@@ -1163,7 +1391,6 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
                     let moveX = deltaX;
                     let moveY = deltaY;
-
                     if (isVertical) moveY = 0;
                     if (isHorizontal) moveX = 0;
 
@@ -1171,292 +1398,65 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     newPoints[dragCableHandle.handle.index] = { x: p1.x + moveX, y: p1.y + moveY };
                     newPoints[dragCableHandle.handle.index + 1] = { x: p2.x + moveX, y: p2.y + moveY };
 
-                    updateCable(dragCableHandle.id, { points: newPoints, locked: true });
+                    state.updateCable(dragCableHandle.id, { points: newPoints, locked: true });
                     lastDragPos.current = pos;
                     return;
                 }
             }
 
-            // 2. Hover Check (if not dragging)
             if (!isMouseDown.current) {
                 let foundHover = false;
                 for (const cable of cables) {
                     const hit = isPointNearCable(pos, cable.points, 10 / (stage?.scaleX() || 1));
                     if (hit) {
-                        // setHoveredCable({ id: cable.id, handle: hit });
                         foundHover = true;
                         if (hit.type === 'segment') {
                             stage?.container().style.setProperty('cursor', 'move');
                         }
                         break;
                     }
-                    if (!foundHover) {
-                        // setHoveredCable(null);
-                        stage?.container().style.setProperty('cursor', 'default');
-                    }
+                }
+                if (!foundHover) {
+                    stage?.container().style.setProperty('cursor', 'default');
                 }
             }
         }
 
-        if (e.target.name() === 'dim-text-handle' || e.target.name() === 'dim-text') {
-            document.body.style.cursor = 'move';
-            return;
-        }
-
-        // ALT + Left Drag (Move Active Import)
-        if (e.evt.altKey && isMouseDown.current && useProjectStore.getState().activeImportId) {
-            if (lastDragPos.current) {
-                const dx = pos.x - lastDragPos.current.x;
-                const dy = pos.y - lastDragPos.current.y;
-
-                useProjectStore.getState().updateImportedObject(useProjectStore.getState().activeImportId!, {
-                    x: (useProjectStore.getState().importedObjects.find(o => o.id === useProjectStore.getState().activeImportId)?.x || 0) + dx,
-                    y: (useProjectStore.getState().importedObjects.find(o => o.id === useProjectStore.getState().activeImportId)?.y || 0) + dy
-                });
-
-                lastDragPos.current = pos;
-                return;
-            } else {
-                lastDragPos.current = pos;
-            }
-        }
-
-        // Panning
-        if (isPanning && lastPanPos.current) {
-            e.evt.preventDefault();
-            const stagePos = stage?.getPointerPosition();
-            if (stagePos) {
+        // 1. Panning Logic (RMB)
+        if (isPanning && stage) {
+            const stagePos = stage.getPointerPosition();
+            if (stagePos && lastPanPos.current) {
                 const dx = stagePos.x - lastPanPos.current.x;
                 const dy = stagePos.y - lastPanPos.current.y;
-                stage?.position({ x: (stage?.x() || 0) + dx, y: (stage?.y() || 0) + dy });
+                stage.position({
+                    x: stage.x() + dx,
+                    y: stage.y() + dy
+                });
                 lastPanPos.current = { x: stagePos.x, y: stagePos.y };
-                stage?.batchDraw();
+                stage.batchDraw();
             }
             return;
         }
 
-        // Drag Dimension Text
-        if (dragTextId.current && useProjectStore.getState().layers.dimensions) {
-            const dim = useProjectStore.getState().dimensions.find(d => d.id === dragTextId.current);
-            if (dim) {
-                const [x1, y1, x2, y2] = dim.points;
-                const midX = (x1 + x2) / 2;
-                const midY = (y1 + y2) / 2;
-                // Calculate relative offset
-                const offsetX = pos.x - midX;
-                const offsetY = pos.y - midY;
-
-                useProjectStore.getState().updateDimension(dragTextId.current, { textOffset: { x: offsetX, y: offsetY } });
-            }
-            return;
-        }
-
-        // Drag Dimension Line (Perpendicular)
-        if (dragDimLineId.current && lastDragPos.current && useProjectStore.getState().layers.dimensions) {
-            const dim = useProjectStore.getState().dimensions.find(d => d.id === dragDimLineId.current);
-            if (dim) {
-                const dx = pos.x - lastDragPos.current.x;
-                const dy = pos.y - lastDragPos.current.y;
-
-                const [x1, y1, x2, y2] = dim.points;
-                // Calculate Normal
-                const dist = Math.hypot(x2 - x1, y2 - y1);
-                if (dist > 0.001) {
-                    const nx = -(y2 - y1) / dist;
-                    const ny = (x2 - x1) / dist;
-
-                    // Project delta onto normal
-                    const dot = dx * nx + dy * ny;
-                    const moveX = dot * nx;
-                    const moveY = dot * ny;
-
-                    useProjectStore.getState().updateDimension(dim.id, {
-                        points: [x1 + moveX, y1 + moveY, x2 + moveX, y2 + moveY]
-                    });
-                }
-            }
-            lastDragPos.current = pos;
-            return;
-        }
-
-        // Drag Anchor (Delta based)
-        if (dragAnchorId.current && lastDragPos.current && useProjectStore.getState().layers.anchors) {
-            const dx = pos.x - lastDragPos.current.x;
-            const dy = pos.y - lastDragPos.current.y;
-
-            if (Math.abs(dx) > 0 || Math.abs(dy) > 0) hasDragged.current = true;
-
-            const state = useProjectStore.getState();
-
-            const isDragSelected = state.selectedIds.includes(dragAnchorId.current);
-
-            if (isDragSelected) {
-                // Update all selected anchors in batch
-                const updates = state.anchors
-                    .filter(a => state.selectedIds.includes(a.id))
-                    .map(a => ({
-                        id: a.id,
-                        updates: { x: a.x + dx, y: a.y + dy }
-                    }));
-
-                updateAnchors(updates);
-            } else {
-                // Just update dragged anchor if for some reason it's not in selection (though logic ensures it is)
-                const a = state.anchors.find(x => x.id === dragAnchorId.current);
-                if (a) state.updateAnchor(a.id, { x: a.x + dx, y: a.y + dy });
-            }
-
-            lastDragPos.current = pos;
-            return;
-        }
-
-        // Drag Hub
-        if (dragHubId.current && lastDragPos.current) {
-            const dx = pos.x - lastDragPos.current.x;
-            const dy = pos.y - lastDragPos.current.y;
-
-            if (Math.abs(dx) > 0 || Math.abs(dy) > 0) hasDragged.current = true;
-
-            const state = useProjectStore.getState();
-
-            const isDragSelected = state.selectedIds.includes(dragHubId.current);
-            if (isDragSelected) {
-                state.hubs.forEach(h => {
-                    if (state.selectedIds.includes(h.id)) {
-                        state.updateHub(h.id, { x: h.x + dx, y: h.y + dy });
-                    }
-                });
-            } else {
-                const hub = state.hubs.find(h => h.id === dragHubId.current);
-                if (hub) state.updateHub(hub.id, { x: hub.x + dx, y: hub.y + dy });
-            }
-
-            // Batch Update Cables
-            const cablesToUpdate = state.cables.filter(c =>
-                c.fromId === dragHubId.current || c.toId === dragHubId.current ||
-                (isDragSelected && (state.selectedIds.includes(c.fromId) || state.selectedIds.includes(c.toId)))
-            );
-
-            if (cablesToUpdate.length > 0) {
-                const batchUpdates: { id: string, updates: Partial<typeof cablesToUpdate[0]> }[] = [];
-
-                // We need the *original* position of the dragged hub to apply dx/dy correctly.
-                // The 'state' here is the snapshot before the update (lines 1324/1331 updated it, but 'state' var is stable).
-                // Let's find the specific hub we are dragging to get its X/Y.
-                // Note: If multiple selected, this logic applies to all? 
-                // The loop below handles each cable. We must find the HUB that this cable connects to.
-
-                cablesToUpdate.forEach(c => {
-                    const newPoints = [...c.points];
-                    let modified = false;
-
-                    // Check Start (From)
-                    if (c.fromId === dragHubId.current || (isDragSelected && state.selectedIds.includes(c.fromId))) {
-                        const h = state.hubs.find(x => x.id === c.fromId);
-                        if (h) {
-                            // 1. Move Endpoint (Relative to current to preserve Port)
-                            newPoints[0] = { x: newPoints[0].x + dx, y: newPoints[0].y + dy };
-
-                            // 2. Move Neighbor (Translate Segment)
-                            if (newPoints.length > 2) {
-                                newPoints[1] = { x: newPoints[1].x + dx, y: newPoints[1].y + dy };
-                            }
-                            modified = true;
-                        }
-                    }
-
-                    // Check End (To)
-                    if (c.toId === dragHubId.current || (isDragSelected && state.selectedIds.includes(c.toId))) {
-                        const h = state.hubs.find(x => x.id === c.toId);
-                        if (h) {
-                            // 1. Move Endpoint
-                            newPoints[newPoints.length - 1] = {
-                                x: newPoints[newPoints.length - 1].x + dx,
-                                y: newPoints[newPoints.length - 1].y + dy
-                            };
-
-                            // 2. Move Neighbor (Translate Segment)
-                            if (newPoints.length > 2) {
-                                const neighborIdx = newPoints.length - 2;
-                                newPoints[neighborIdx] = {
-                                    x: newPoints[neighborIdx].x + dx,
-                                    y: newPoints[neighborIdx].y + dy
-                                };
-                            }
-                            modified = true;
-                        }
-                    }
-
-                    if (modified) {
-                        batchUpdates.push({ id: c.id, updates: { points: newPoints } });
-                    }
-                });
-
-                if (batchUpdates.length > 0) {
-                    state.updateCables(batchUpdates as any);
-                }
-            }
-
-            lastDragPos.current = pos;
-            return;
-        }
-
-        // Drag Wall (Edge)
+        // 2. Multi-move Walls logic
         if (dragWallId.current && lastDragPos.current && !wallsLocked) {
             const dx = pos.x - lastDragPos.current.x;
             const dy = pos.y - lastDragPos.current.y;
-
             if (Math.abs(dx) > 0 || Math.abs(dy) > 0) hasDragged.current = true;
-
-            const state = useProjectStore.getState();
-
-            // If we want to support multi-selection dragging for walls, we can iterate selection.
-            // For now, let's implement single wall drag which effectively drags its endpoints (and connected walls).
-
-            // Note: updateWallPoint updates *all* walls sharing the point.
-            // So we just need to update the two endpoints of the dragged wall.
-
-            /* 
-               Issue: If we select multiple walls (e.g. a box) and drag one, do we want to move the whole box?
-               Standard CAD: Yes, move all selected.
-               Implementation:
-               If dragWallId is in selection -> transform ALL selected walls.
-               Else -> transform only dragWallId.
-            */
 
             const isDragSelected = state.selectedIds.includes(dragWallId.current);
             const wallsToMove = isDragSelected
                 ? state.walls.filter(w => state.selectedIds.includes(w.id))
                 : state.walls.filter(w => w.id === dragWallId.current);
 
-            // To avoid double-move issues when updating shared points multiple times in a loop,
-            // we should be careful. `updateWallPoint` updates based on Coordinate Match.
-            // If we move p1 of Wall A, Wall B's p1 also moves.
-            // If we then try to move p1 of Wall B (which is now at new pos), we might double move if we aren't careful?
-            // Actually `updateWallPoint` takes (oldX, oldY, newX, newY).
-            // If we use the CURRENT state for oldX, oldY each time, it should be fine?
-            // BUT:
-            // 1. Move Wall A Point 1 (old -> new). Wall B Point 1 also moves.
-            // 2. Loop to Wall B. We want to move Wall B Point 1.
-            //    If we read Wall B Current Point 1, it is ALREADY at `new`.
-            //    So `old` = `new`. `new` = `new` + delta.
-            //    So it moves again! Double move!
-
-            // Solution: 
-            // Collect all UNIQUE points from the selection that need to move.
-            // Then move each unique point ONCE.
-
-            const pointsToMove = new Set<string>(); // "x,y" strings
+            const pointsToMove = new Set<string>();
             const pointsMap: { x: number, y: number }[] = [];
-
             wallsToMove.forEach(w => {
-                // Start
                 const sKey = `${w.points[0].toFixed(4)},${w.points[1].toFixed(4)}`;
                 if (!pointsToMove.has(sKey)) {
                     pointsToMove.add(sKey);
                     pointsMap.push({ x: w.points[0], y: w.points[1] });
                 }
-                // End
                 const eKey = `${w.points[2].toFixed(4)},${w.points[3].toFixed(4)}`;
                 if (!pointsToMove.has(eKey)) {
                     pointsToMove.add(eKey);
@@ -1464,7 +1464,6 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 }
             });
 
-            // Apply updates
             pointsMap.forEach(p => {
                 state.updateWallPoint(p.x, p.y, p.x + dx, p.y + dy);
             });
@@ -1473,39 +1472,114 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             return;
         }
 
-        // Tool Mouse Move checks...
-        if (activeTool === 'wall' || activeTool === 'wall_rect' || activeTool === 'wall_rect_edge' || activeTool === 'dimension') {
-            const state = useProjectStore.getState();
-            const snap = (state.layers.walls || state.layers.anchors) ? getSnapPoint(pos, walls, anchors, 20 / ((stage?.scaleX() || 1))) : null;
-            setCurrentMousePos(snap ? snap.point : pos);
-        } else if (activeTool === 'scale' && points.length > 0) {
-            setCurrentMousePos(pos);
-        } else if (activeTool === 'select') {
-            if (selectionStart && isMouseDown.current) {
-                setSelectionRect({
-                    x: Math.min(selectionStart.x, pos.x),
-                    y: Math.min(selectionStart.y, pos.y),
-                    width: Math.abs(pos.x - selectionStart.x),
-                    height: Math.abs(pos.y - selectionStart.y)
+        // 3. Simple Dragging Logic for hubs, anchors, dimensions
+        if (isMouseDown.current && lastDragPos.current) {
+            hasDragged.current = true;
+            const dx = pos.x - lastDragPos.current.x;
+            const dy = pos.y - lastDragPos.current.y;
+
+            if (dragHubId.current) {
+                const isSelected = state.selectedIds.includes(dragHubId.current);
+                const targets = isSelected ? state.hubs.filter(h => state.selectedIds.includes(h.id)) : state.hubs.filter(h => h.id === dragHubId.current);
+                targets.forEach(t => {
+                    state.updateHub(t.id, { x: t.x + dx, y: t.y + dy });
                 });
-                setCurrentMousePos(pos);
+                lastDragPos.current = pos;
+                return;
             }
-        } else if (activeTool === 'export_area') {
-            if (selectionStart) {
-                const x = Math.min(selectionStart.x, pos.x);
-                const y = Math.min(selectionStart.y, pos.y);
-                const width = Math.abs(pos.x - selectionStart.x);
-                const height = Math.abs(pos.y - selectionStart.y);
-                setSelectionRect({ x, y, width, height });
+
+            if (dragAnchorId.current && state.layers.anchors) {
+                const isSelected = state.selectedIds.includes(dragAnchorId.current);
+                const targets = isSelected ? state.anchors.filter(a => state.selectedIds.includes(a.id)) : state.anchors.filter(a => a.id === dragAnchorId.current);
+                targets.forEach(t => {
+                    state.updateAnchor(t.id, { x: t.x + dx, y: t.y + dy });
+                });
+                lastDragPos.current = pos;
+                return;
+            }
+
+            if (dragDimLineId.current && state.layers.dimensions) {
+                const dim = state.dimensions.find(d => d.id === dragDimLineId.current);
+                if (dim) {
+                    const [x1, y1, x2, y2] = dim.points;
+                    const dLine = Math.hypot(x2 - x1, y2 - y1);
+                    if (dLine > 0.001) {
+                        const nx = -(y2 - y1) / dLine;
+                        const ny = (x2 - x1) / dLine;
+                        const dot = dx * nx + dy * ny;
+                        state.updateDimension(dim.id, {
+                            points: [x1 + dot * nx, y1 + dot * ny, x2 + dot * nx, y2 + dot * ny]
+                        });
+                    }
+                }
+                lastDragPos.current = pos;
+                return;
+            }
+
+            if (dragTextId.current && state.layers.dimensions) {
+                const dim = state.dimensions.find(d => d.id === dragTextId.current);
+                if (dim) {
+                    const [x1, y1, x2, y2] = dim.points;
+                    const midX = (x1 + x2) / 2;
+                    const midY = (y1 + y2) / 2;
+                    state.updateDimension(dim.id, { textOffset: { x: pos.x - midX, y: pos.y - midY } });
+                }
+                return;
+            }
+
+            if (draggingDoorId) {
+                const wall = walls.find(w => w.id === draggingDoorId);
+                if (wall && wall.door) {
+                    const length = Math.hypot(wall.points[2] - wall.points[0], wall.points[3] - wall.points[1]);
+                    const vmx = pos.x - wall.points[0];
+                    const vmy = pos.y - wall.points[1];
+                    const wx = wall.points[2] - wall.points[0];
+                    const wy = wall.points[3] - wall.points[1];
+                    const dot = (vmx * wx + vmy * wy) / (length * length);
+                    const halfWidthPct = (wall.door.width / 2) / length;
+                    const newOffset = Math.max(halfWidthPct, Math.min(1 - halfWidthPct, dot));
+                    state.updateWall(wall.id, { door: { ...wall.door, offset: newOffset } });
+                }
+                lastDragPos.current = pos;
+                return;
             }
         }
 
+        // 4. Previews (Wall, Rect, Dimension, etc.)
+        let currentPos = pos;
+        if (isShiftDown && points.length > 0) {
+            currentPos = applyOrthogonal(points[points.length - 1], pos);
+        }
 
-    };
+        if (activeTool === 'wall' || activeTool === 'wall_rect' || activeTool === 'wall_rect_edge' || activeTool === 'dimension') {
+            const snap = (state.layers.walls || state.layers.anchors) ? getSnapPoint(pos, walls, anchors, 20 / (stage?.scaleX() || 1)) : null;
+            if (snap) currentPos = snap.point;
+        }
+
+        setCurrentMousePos(currentPos);
+
+        if (activeTool === 'select' && selectionStart && isMouseDown.current) {
+            setSelectionRect({
+                x: Math.min(selectionStart.x, pos.x),
+                y: Math.min(selectionStart.y, pos.y),
+                width: Math.abs(pos.x - selectionStart.x),
+                height: Math.abs(pos.y - selectionStart.y)
+            });
+        }
+
+        if (activeTool === 'export_area' && selectionStart) {
+            setSelectionRect({
+                x: Math.min(selectionStart.x, pos.x),
+                y: Math.min(selectionStart.y, pos.y),
+                width: Math.abs(pos.x - selectionStart.x),
+                height: Math.abs(pos.y - selectionStart.y)
+            });
+        }
+    }, [getStagePoint, isPanning, stage, isShiftDown, points, activeTool, walls, anchors, setCurrentMousePos, selectionStart, setSelectionRect, rectStart, hubs, draggingDoorId, cables, tempCablePath, setTempCablePath, dragCableHandle, wallsLocked]);
 
 
 
-    const handleMouseUp = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    const handleMouseUp = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
         isMouseDown.current = false;
 
         // Door Drag End
@@ -1980,267 +2054,14 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             setSelectionRect(null);
             setCurrentMousePos(null);
         }
-    };
+    }, [draggingDoorId, setDraggingDoorId, activeTool, selectionStart, getStagePoint, setExportRegion, setTool, stage, anchors, hubs, walls, addCable, dragCableHandle, setDragCableHandle, updateAnchors, points, setPoints, rectStart, setRectStart, setCurrentMousePos, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, addWalls, rectEdgeBaseEnd, setRectEdgeBaseEnd, rectEdgeStart, setRectEdgeStart, isPanning, checkRMBClick, selectionRect, setSelectionRect, wallsLocked, dimensions, setSelection, isShiftDown, setSelectionStart]);
 
 
 
 
-    const lastLoaded = useProjectStore(state => state.lastLoaded);
-
-    const fitScreen = () => {
-        const state = useProjectStore.getState();
-        const walls = state.walls;
-        const anchors = state.anchors;
-
-        if (walls.length === 0) return;
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-        walls.forEach(w => {
-            minX = Math.min(minX, w.points[0], w.points[2]);
-            maxX = Math.max(maxX, w.points[0], w.points[2]);
-            minY = Math.min(minY, w.points[1], w.points[3]);
-            maxY = Math.max(maxY, w.points[1], w.points[3]);
-        });
-
-        anchors.forEach(a => {
-            minX = Math.min(minX, a.x);
-            maxX = Math.max(maxX, a.x);
-            minY = Math.min(minY, a.y);
-            maxY = Math.max(maxY, a.y);
-        });
-
-        // If nothing found (e.g. initial infinity), skip
-        if (minX === Infinity) return;
-
-        const padding = 1.2;
-        const w = (maxX - minX) * padding || 10;
-        const h = (maxY - minY) * padding || 10;
-        if (w === 0 || h === 0) return;
-
-        if (w === 0 || h === 0) return;
-        if (!stage) return;
-
-        const stageW = stage.width();
-        const stageH = stage.height();
-        const scale = Math.min(stageW / w, stageH / h);
-
-        const centerX = (minX + maxX) / 2;
-        const centerY = (minY + maxY) / 2;
-
-        stage.position({
-            x: stageW / 2 - centerX * scale,
-            y: stageH / 2 - centerY * scale
-        });
-        stage.scale({ x: scale, y: scale });
-        stage.batchDraw();
-    };
-
-    // Auto Fit on Project Load
-    useEffect(() => {
-        if (lastLoaded > 0 && stage) {
-            // Determine bounding box and fit
-            // Use setTimeout to ensure all layers (Walls, Anchors) have finished rendering
-            const timer = setTimeout(() => {
-                fitScreen();
-            }, 50);
-            return () => clearTimeout(timer);
-        }
-    }, [lastLoaded, stage]);
-
-    const handleDblClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
-        // 1. Cable Split (Add Vertex)
-        if (useProjectStore.getState().activeTool === 'cable_edit') {
-            const pos = getStagePoint();
-            if (pos) {
-                const cables = useProjectStore.getState().cables;
-                for (const cable of cables) {
-                    const hit = isPointNearCable(pos, cable.points, 10 / (stage?.scaleX() || 1));
-                    if (hit && hit.type === 'segment') {
-                        // Add vertex at pos
-                        const newPoints = [...cable.points];
-                        // Insert after index
-                        newPoints.splice(hit.index + 1, 0, pos);
-                        useProjectStore.getState().updateCable(cable.id, { points: newPoints });
-                        return;
-                    }
-                }
-            }
-        }
-
-        // Existing "Zoom to Fit" logic or similar (if any)
-        // ...
-        if (e.evt.button === 1) { // MMB
-            fitScreen();
-        }
-    };
-
-    // Helper: Find all connected walls (Chain Selection)
-    const getAllConnectedWalls = (startId: string, walls: import('../../types').Wall[]): string[] => {
-        const visited = new Set<string>();
-        const queue = [startId];
-        visited.add(startId);
-
-        while (queue.length > 0) {
-            const currentId = queue.shift()!;
-            const current = walls.find(w => w.id === currentId);
-            if (!current) continue;
-
-            // Check all other walls for connection
-            walls.forEach(w => {
-                if (!visited.has(w.id)) {
-                    // Check if points match (with small epsilon)
-                    const epsilon = 0.01; // 1cm
-                    const p1 = { x: current.points[0], y: current.points[1] };
-                    const p2 = { x: current.points[2], y: current.points[3] };
-                    const q1 = { x: w.points[0], y: w.points[1] };
-                    const q2 = { x: w.points[2], y: w.points[3] };
-
-                    const isConnected =
-                        dist(p1, q1) < epsilon || dist(p1, q2) < epsilon ||
-                        dist(p2, q1) < epsilon || dist(p2, q2) < epsilon;
-
-                    if (isConnected) {
-                        visited.add(w.id);
-                        queue.push(w.id);
-                    }
-                }
-            });
-        }
-        return Array.from(visited);
-    };
 
 
 
-    const openAnchorMenu = (pointer: { x: number, y: number }, targetIds: string[]) => {
-        if (onOpenMenu) {
-            const state = useProjectStore.getState();
-            onOpenMenu(pointer.x, pointer.y, [
-                {
-                    label: 'Set Radius (m)...',
-                    action: () => {
-                        const r = prompt("Enter Radius in meters:", "5");
-                        if (r !== null) {
-                            const val = parseFloat(r);
-                            if (!isNaN(val) && val > 0) {
-                                targetIds.forEach(id => state.updateAnchor(id, { radius: val }));
-                            }
-                        }
-                    }
-                },
-                {
-                    label: 'Shape: Circle',
-                    action: () => targetIds.forEach(id => state.updateAnchor(id, { shape: 'circle' }))
-                },
-                {
-                    label: 'Shape: Square',
-                    action: () => targetIds.forEach(id => state.updateAnchor(id, { shape: 'square' }))
-                },
-                {
-                    label: 'Reset to System Default',
-                    action: () => targetIds.forEach(id => state.updateAnchor(id, { radius: undefined, shape: undefined }))
-                },
-                { type: 'separator' },
-                {
-                    label: 'Group Anchors (Ctrl+G)',
-                    action: () => state.groupAnchors(targetIds)
-                },
-                {
-                    label: 'Ungroup Anchors (Ctrl+Shift+G)',
-                    action: () => state.ungroupAnchors(targetIds)
-                }
-            ]);
-        }
-    };
-
-    const handleContextMenu = (e: Konva.KonvaEventObject<PointerEvent>) => {
-        e.evt.preventDefault();
-        // We rely on MouseUp for the actual trigger to distinguish click vs drag
-    };
-
-    const checkRMBClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
-        if (!stage) return;
-        const pointer = stage.getPointerPosition();
-        if (!pointer || !lastPanPos.current) return;
-
-        // Calc distance
-        const dx = pointer.x - lastPanPos.current.x;
-        const dy = pointer.y - lastPanPos.current.y;
-        const dist = Math.hypot(dx, dy);
-
-        const duration = Date.now() - panStartTime.current;
-
-        if (dist < 5 && duration < 500) {
-            // It's a CLICK
-            const state = useProjectStore.getState();
-            const currentSelection = state.selectedIds;
-
-            // If we clicked an anchor directly
-            if (e.target.name() === 'anchor') {
-                const anchorId = e.target.id();
-                // If clicked anchor is not selected, select it (exclusive)
-                let targetIds = currentSelection;
-                if (!currentSelection.includes(anchorId)) {
-                    state.setSelection([anchorId]);
-                    targetIds = [anchorId];
-                }
-                openAnchorMenu(pointer, targetIds);
-            } else if (e.target.name() === 'hub-bg' || e.target.name() === 'hub-text') {
-                // Clicked a Hub
-                const hubId = e.target.id();
-                let targetIds = currentSelection;
-                if (!currentSelection.includes(hubId)) {
-                    state.setSelection([hubId]);
-                    targetIds = [hubId];
-                }
-                // Re-use logic to open selection menu (it's generic)
-                openAnchorMenu(pointer, targetIds);
-            } else {
-                // Clicked background or other
-                // If we have selected anchors or hubs, show menu for them
-                const selectedAnchors = state.anchors.filter(a => currentSelection.includes(a.id));
-                const selectedHubs = state.hubs.filter(h => currentSelection.includes(h.id));
-
-                if (selectedAnchors.length > 0 || selectedHubs.length > 0) {
-                    openAnchorMenu(pointer, currentSelection);
-                } else {
-                    // Default Logic (Wall Loop, etc or just nothing)
-                    if (activeTool === 'wall' && points.length > 0) {
-                        // Wall Menu
-                        if (onOpenMenu) {
-                            onOpenMenu(pointer.x, pointer.y, [
-                                {
-                                    label: 'Close Loop',
-                                    action: () => {
-                                        if (chainStart && points.length > 0) {
-                                            const start = points[0];
-                                            const end = chainStart;
-                                            if (start.x !== end.x || start.y !== end.y) {
-                                                addWall({
-                                                    points: [start.x, start.y, end.x, end.y],
-                                                    ...getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness) as any
-                                                });
-                                            }
-                                        }
-                                        setPoints([]);
-                                        setChainStart(null);
-                                    }
-                                },
-                                {
-                                    label: 'Stop Drawing',
-                                    action: () => {
-                                        setPoints([]);
-                                        setChainStart(null);
-                                    }
-                                }
-                            ]);
-                        }
-                    } else {
-                        setTool('select');
-                    }
-                }
-            }
-        }
-    };
 
     // Dedicated Global Keyboard Handler
     useEffect(() => {
@@ -2428,6 +2249,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             stage.off('mouseup', handleMouseUp);
             stage.off('dblclick', handleDblClick);
             stage.off('contextmenu', handleContextMenu);
+            stage.off('wheel', handleWheel);
         };
     }, [stage, handleMouseDown, handleMouseMove, handleMouseUp, handleDblClick, handleContextMenu]);
 
