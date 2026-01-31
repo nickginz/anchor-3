@@ -340,7 +340,7 @@ export const useProjectStore = create<ProjectState>()(
             },
 
             // QA Monitor
-            showQAMonitor: true, // Default ON
+            showQAMonitor: false, // Default ON
             setShowQAMonitor: (v) => set({ showQAMonitor: v }),
 
             // Global UI
