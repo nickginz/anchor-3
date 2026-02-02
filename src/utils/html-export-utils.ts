@@ -763,11 +763,18 @@ function updateViewBox() {
             activePanel.style.right = 'auto'; 
         }
         if (isSvgDragging && activeSvgGroup) {
-            const pt = svg.createSVGPoint();
-            pt.x = e.clientX;
-            pt.y = e.clientY;
-            const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
-            activeSvgGroup.setAttribute('transform', 'translate(' + (svgP.x - svgDragOffset.x) + ', ' + (svgP.y - svgDragOffset.y) + ')');
+            try {
+                const pt = svg.createSVGPoint();
+                pt.x = e.clientX;
+                pt.y = e.clientY;
+                const m = svg.getScreenCTM().inverse();
+                const svgP = pt.matrixTransform(m);
+                const nx = svgP.x - svgDragOffset.x;
+                const ny = svgP.y - svgDragOffset.y;
+                if (!isNaN(nx) && !isNaN(ny)) {
+                    activeSvgGroup.setAttribute('transform', 'translate(' + nx + ', ' + ny + ')');
+                }
+            } catch (err) { console.error('SVG Drag Error:', err); }
         }
         if (isDrawingDim) {
             const current = getSvgCoords(e);
@@ -796,18 +803,26 @@ function updateViewBox() {
         pt.y = e.clientY;
         const mouseSvg = pt.matrixTransform(svg.getScreenCTM().inverse());
         
-        // Parse current translation to avoid jump
-        const transform = activeSvgGroup.getAttribute('transform') || '';
-        const match = /translate\(([^,]+),?\s*([^)]+)\)/.exec(transform);
+        // Final Robust Parsing
         let currX = 0, currY = 0;
-        if (match) {
-            currX = parseFloat(match[1]);
-            currY = parseFloat(match[2]);
-        }
+        try {
+            if (activeSvgGroup.transform && activeSvgGroup.transform.baseVal.numberOfItems > 0) {
+                const t = activeSvgGroup.transform.baseVal.getItem(0);
+                currX = t.matrix.e;
+                currY = t.matrix.f;
+            } else {
+                const transform = activeSvgGroup.getAttribute('transform') || '';
+                const match = /translate\(([^, ]+)[, ]+([^)]+)\)/.exec(transform);
+                if (match) {
+                    currX = parseFloat(match[1]);
+                    currY = parseFloat(match[2]);
+                }
+            }
+        } catch (err) { console.warn('Transform parse failed, defaulting to 0,0', err); }
         
         svgDragOffset = {
-            x: mouseSvg.x - currX,
-            y: mouseSvg.y - currY
+            x: mouseSvg.x - (isNaN(currX) ? 0 : currX),
+            y: mouseSvg.y - (isNaN(currY) ? 0 : currY)
         };
     };
 
