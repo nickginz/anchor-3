@@ -673,9 +673,6 @@ function updateViewBox() {
                '</g>';
     }
 
-    window.addEventListener('mousemove', (e) => {
-        // Pan logic moved to main mousemove handler to unify
-    });
 
     window.updateRadius = (val) => {
         document.getElementById('radius-val').innerText = val + ' m';
@@ -693,20 +690,6 @@ function updateViewBox() {
         }
     };
 
-    window.addEventListener('mouseup', (e) => { 
-        isPanning = false; 
-        if (isDrawingDim) {
-            const current = getSvgCoords(e);
-            if (dimStart && current && Math.hypot(current.x - dimStart.x, current.y - dimStart.y) > 5) {
-                measurementLayer.innerHTML += createDimSvg(dimStart, current);
-            }
-            isDrawingDim = false;
-            previewLayer.innerHTML = '';
-        }
-    });
-
-    let lastEvent = null;
-    window.addEventListener('mousemove', (e) => { lastEvent = e; });
 
     svg.addEventListener('wheel', (e) => {
         e.preventDefault();
@@ -784,8 +767,6 @@ function updateViewBox() {
             pt.x = e.clientX;
             pt.y = e.clientY;
             const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
-            
-            // Offset-based move (No jump)
             activeSvgGroup.setAttribute('transform', 'translate(' + (svgP.x - svgDragOffset.x) + ', ' + (svgP.y - svgDragOffset.y) + ')');
         }
         if (isDrawingDim) {
@@ -793,7 +774,7 @@ function updateViewBox() {
             previewLayer.innerHTML = createDimSvg(dimStart, current, true);
         }
 
-        if (isPanning && !isSvgDragging) {
+        if (isPanning && !isSvgDragging && !isDragging) {
             const dx = (e.clientX - startPoint.x) * (viewBox.w / svg.clientWidth);
             const dy = (e.clientY - startPoint.y) * (viewBox.h / svg.clientHeight);
             viewBox.x -= dx;
@@ -815,15 +796,31 @@ function updateViewBox() {
         pt.y = e.clientY;
         const mouseSvg = pt.matrixTransform(svg.getScreenCTM().inverse());
         
-        // Use CTM for absolute robustness (handles translate, matrix, etc.)
-        const ctm = activeSvgGroup.getCTM();
+        // Parse current translation to avoid jump
+        const transform = activeSvgGroup.getAttribute('transform') || '';
+        const match = /translate\(([^,]+),?\s*([^)]+)\)/.exec(transform);
+        let currX = 0, currY = 0;
+        if (match) {
+            currX = parseFloat(match[1]);
+            currY = parseFloat(match[2]);
+        }
+        
         svgDragOffset = {
-            x: mouseSvg.x - ctm.e,
-            y: mouseSvg.y - ctm.f
+            x: mouseSvg.x - currX,
+            y: mouseSvg.y - currY
         };
     };
 
-    window.addEventListener('mouseup', () => {
+    window.addEventListener('mouseup', (e) => {
+        if (isDrawingDim) {
+            const current = getSvgCoords(e);
+            if (dimStart && current && Math.hypot(current.x - dimStart.x, current.y - dimStart.y) > 5) {
+                measurementLayer.innerHTML += createDimSvg(dimStart, current);
+            }
+            isDrawingDim = false;
+            previewLayer.innerHTML = '';
+        }
+        isPanning = false;
         isDragging = false;
         activePanel = null;
         isSvgDragging = false;
