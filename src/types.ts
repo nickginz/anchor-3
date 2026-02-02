@@ -115,6 +115,7 @@ export interface BaseImportedObject {
     visible: boolean;
     locked: boolean;
     name: string;
+    opacity?: number;
 }
 
 export interface ImageObject extends BaseImportedObject {
@@ -130,7 +131,6 @@ export interface DXFObject extends BaseImportedObject {
     layers: Record<string, boolean>; // Layer visibility
     width?: number; // Calculated BBox width
     height?: number; // Calculated BBox height
-    opacity?: number; // Opacity of the DXF
 }
 
 export type ImportedObject = ImageObject | DXFObject;

@@ -1,4 +1,5 @@
 import Konva from 'konva';
+import { useProjectStore } from '../store/useProjectStore';
 
 
 interface ExportOptions {
@@ -116,7 +117,108 @@ export const exportCanvas = async (stage: Konva.Stage, options: ExportOptions) =
 
     ghostStage.draw();
 
-    // Verify Dimensions
+    // Verify Dimensions & Calculate Fit for Scale Bar
+    const sizes: Record<string, [number, number]> = {
+        'a4': [595.28, 841.89],
+        'a3': [841.89, 1190.55],
+        'a2': [1190.55, 1683.78],
+        'a1': [1683.78, 2383.94],
+        'a0': [2383.94, 3370.39]
+    };
+    let [pageW, pageH] = sizes[pdfSize as string] || sizes['a4'];
+    if (orientation === 'landscape') [pageW, pageH] = [pageH, pageW];
+
+    const rawW = exportRect.width;
+    const rawH = exportRect.height;
+    const fitRatio = Math.min(pageW / rawW, pageH / rawH) * 0.98;
+
+    // Target Physical Length: ~4cm (113pts) to ensure >3cm visibility
+    // 3cm = 85pts. Let's aim for 4cm (approx 113pts) as base.
+    const targetPts = 113;
+    const targetPx = targetPts / fitRatio; // pixels on canvas needed to be 4cm on paper
+
+    // Convert targetPx to Meters to find nearest nice number
+    const scaleRatio = useProjectStore.getState().scaleRatio || 50;
+    const targetMeters = targetPx / scaleRatio;
+
+    // Find nice round number (1, 2, 5, 10, 20, 50...)
+    const niceNumbers = [1, 2, 5, 10, 20, 50, 100];
+    const barMeters = niceNumbers.reduce((prev, curr) =>
+        Math.abs(curr - targetMeters) < Math.abs(prev - targetMeters) ? curr : prev
+    );
+
+    let step = 1;
+    if (barMeters <= 2) step = 0.5;
+    else if (barMeters <= 5) step = 1;
+    else if (barMeters <= 10) step = 2;
+    else if (barMeters <= 20) step = 5;
+    else if (barMeters <= 50) step = 10;
+    else step = 20;
+
+    const barPx = barMeters * scaleRatio;
+
+    // Scale Bar Group
+    const overlayLayer = new Konva.Layer();
+    const sbGroup = new Konva.Group({
+        x: exportRect.width - barPx - 100,
+        y: exportRect.height - 100
+    });
+
+    // Background
+    sbGroup.add(new Konva.Rect({
+        x: -20,
+        y: -40,
+        width: barPx + 40,
+        height: 100,
+        fill: 'rgba(255, 255, 255, 0.8)',
+        cornerRadius: 4
+    }));
+
+    // Main Line
+    sbGroup.add(new Konva.Line({ points: [0, 0, barPx, 0], stroke: '#000', strokeWidth: 6, strokeCap: 'round' }));
+
+    // Ticks & Labels Loop
+    for (let m = 0; m <= barMeters; m += step) {
+        const xPos = (m / barMeters) * barPx;
+
+        // Tick
+        const tickH = 15;
+        sbGroup.add(new Konva.Line({
+            points: [xPos, -tickH, xPos, tickH],
+            stroke: '#000',
+            strokeWidth: 4,
+            strokeCap: 'round'
+        }));
+
+        // Label
+        sbGroup.add(new Konva.Text({
+            text: m.toString(),
+            x: xPos - 20,
+            y: 20,
+            width: 40,
+            align: 'center',
+            fontSize: 20,
+            fontStyle: 'bold',
+            fontFamily: 'Arial',
+            fill: '#000'
+        }));
+    }
+
+    // Unit Label (at the end)
+    sbGroup.add(new Konva.Text({
+        text: 'm',
+        x: barPx + 15,
+        y: 0,
+        fontSize: 20,
+        fontStyle: 'bold',
+        fontFamily: 'Arial',
+        fill: '#000'
+    }));
+
+    overlayLayer.add(sbGroup);
+    ghostStage.add(overlayLayer);
+
+    ghostStage.draw();
 
 
     try {

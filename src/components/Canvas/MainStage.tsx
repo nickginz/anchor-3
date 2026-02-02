@@ -16,7 +16,7 @@ import { ContextMenu } from '../UI/ContextMenu';
 import { detectRooms } from '../../utils/room-detection';
 import { generateOffsets, generateSkeletonLines, generateMedialAxis, generateSimplifiedSkeleton } from '../../utils/geometry-tools';
 import type { Point } from '../../types';
-import { SelectionMenu } from '../UI/SelectionMenu';
+import { QAMonitor } from '../UI/Overlays/QAMonitor';
 import { useProjectStore } from '../../store/useProjectStore';
 import type { ProjectState } from '../../store/useProjectStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -68,14 +68,14 @@ export const MainStage: React.FC = () => {
         useShallow((state: ProjectState) => ({
             scaleRatio: state.scaleRatio,
             setScaleRatio: state.setScaleRatio,
-            theme: state.theme,
-            walls: state.walls,
             showOffsets: state.showOffsets,
             offsetStep: state.offsetStep,
             showSkeleton: state.showSkeleton,
             skeletonMode: state.skeletonMode,
             showMedialAxis: state.showMedialAxis,
-            medialAxisStep: state.medialAxisStep
+            medialAxisStep: state.medialAxisStep,
+            theme: state.theme,
+            walls: state.walls
         }))
     );
 
@@ -164,9 +164,8 @@ export const MainStage: React.FC = () => {
         };
         stage.position(newPos);
     };
-
-    // Theme Colors
-    const axisColor = theme === 'light' ? '#6b7280' : '#666';
+    const gridColor = theme === 'light' ? '#e5e7eb' : '#555'; // Improved contrast (was #444)
+    const axisColor = theme === 'light' ? '#9ca3af' : '#666';
 
     // Optimized Grid Rendering using a single Shape
     // This avoids creating thousands of Konva nodes which kills performance on zoom
@@ -175,7 +174,7 @@ export const MainStage: React.FC = () => {
             <Shape
                 key="optimized-grid"
                 listening={false}
-                stroke={theme === 'light' ? '#e5e7eb' : '#333'}
+                stroke={gridColor}
                 strokeWidth={1}
                 sceneFunc={(context: Konva.Context, shape: Konva.Shape) => {
                     const stage = shape.getStage();
@@ -281,8 +280,9 @@ export const MainStage: React.FC = () => {
                 </div>
             )}
 
-            {/* Selection Menu Overlay */}
-            <SelectionMenu />
+
+            {/* QA Monitor */}
+            <QAMonitor stage={stage} />
 
             {size.width > 0 && (
                 <Stage

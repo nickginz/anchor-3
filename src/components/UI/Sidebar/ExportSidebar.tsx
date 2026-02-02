@@ -249,7 +249,7 @@ export const ExportSidebar: React.FC = () => {
                 {format === 'html' && (
                     <div className="animate-in fade-in slide-in-from-top-2 duration-200">
                         <p className={`text-[10px] ${subTextClass} mt-1 italic`}>
-                            The exported HTML will include an interactive Notes section in its sidebar.
+                            The exported HTML allows you to view the project structure in any browser.
                         </p>
                     </div>
                 )}

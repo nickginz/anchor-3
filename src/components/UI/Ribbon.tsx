@@ -599,7 +599,7 @@ export const Ribbon: React.FC = () => {
                     {/* Heatmap Toggle */}
                     <button
                         onClick={() => useProjectStore.getState().setShowHeatmap(!useProjectStore.getState().showHeatmap)}
-                        className={`flex items-center justify-center p-1.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors ${useProjectStore.getState().showHeatmap ? 'bg-gray-200 dark:bg-[#333] text-green-500' : 'text-secondary'} `}
+                        className={`flex items-center justify-center p-1.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors ${useProjectStore.getState().showHeatmap ? 'bg-accent text-white' : 'text-secondary'} `}
                         title="Toggle Signal Heatmap"
                     >
                         <Signal size={18} />
@@ -607,8 +607,8 @@ export const Ribbon: React.FC = () => {
 
                     {/* Heatmap Resolution Stack */}
                     <div className="flex flex-col space-y-1 justify-center border-l panel-border pl-2">
-                        <button onClick={() => useProjectStore.getState().setHeatmapResolution(200)} className={`text-[10px] px-2 py-0.5 rounded leading-none transition-colors ${useProjectStore.getState().heatmapResolution === 200 ? 'bg-accent text-white' : 'hover:bg-[#e5e7eb] dark:hover:bg-[#333] text-secondary'} `}>Low</button>
-                        <button onClick={() => useProjectStore.getState().setHeatmapResolution(20)} className={`text-[10px] px-2 py-0.5 rounded leading-none transition-colors ${useProjectStore.getState().heatmapResolution === 20 ? 'bg-accent text-white' : 'hover:bg-[#e5e7eb] dark:hover:bg-[#333] text-secondary'} `}>High</button>
+                        <button onClick={() => useProjectStore.getState().setHeatmapResolution(200)} className={`text-[10px] px-2 py-0.5 rounded leading-none transition-colors ${useProjectStore.getState().heatmapResolution === 200 ? 'bg-accent text-white' : 'hover-bg text-secondary'} `}>Low</button>
+                        <button onClick={() => useProjectStore.getState().setHeatmapResolution(20)} className={`text-[10px] px-2 py-0.5 rounded leading-none transition-colors ${useProjectStore.getState().heatmapResolution === 20 ? 'bg-accent text-white' : 'hover-bg text-secondary'} `}>High</button>
                     </div>
                 </div>
             </div>
@@ -625,14 +625,14 @@ export const Ribbon: React.FC = () => {
                                 <button
                                     onClick={() => setTool('hub')}
                                     title="Place Connection Hub (H)"
-                                    className={`p-0.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors flex items-center justify-center ${activeTool === 'hub' ? 'text-accent' : 'text-secondary'} `}
+                                    className={`p-0.5 rounded hover-bg transition-colors flex items-center justify-center ${activeTool === 'hub' ? 'bg-accent text-white' : 'text-secondary'} `}
                                 >
                                     <Router size={14} />
                                 </button>
                                 <button
                                     onClick={() => setTool(activeTool === 'cable_edit' ? 'select' : 'cable_edit')}
                                     title="Cable Management Mode (Edit/Re-route)"
-                                    className={`p-0.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors flex items-center justify-center ${activeTool === 'cable_edit' ? 'text-orange-400' : 'text-secondary'} `}
+                                    className={`p-0.5 rounded hover-bg transition-colors flex items-center justify-center ${activeTool === 'cable_edit' ? 'bg-accent text-white' : 'text-secondary'} `}
                                 >
                                     <Spline size={14} />
                                 </button>
@@ -653,7 +653,7 @@ export const Ribbon: React.FC = () => {
                                         }
                                     }}
                                     title="Cable Routing Settings"
-                                    className={`p-0.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors flex items-center justify-center ${useProjectStore.getState().isCableSidebarOpen ? 'text-orange-400' : 'text-secondary'} `}
+                                    className={`p-0.5 rounded hover-bg transition-colors flex items-center justify-center ${useProjectStore.getState().isCableSidebarOpen ? 'text-orange-400' : 'text-secondary'} `}
                                 >
                                     <Cable size={14} />
                                 </button>

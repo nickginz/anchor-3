@@ -9,7 +9,6 @@ import { MainStage } from './components/Canvas/MainStage';
 
 import { useProjectStore } from './store/useProjectStore';
 
-import { PerformanceMonitor } from './components/Debug/PerformanceMonitor';
 
 // QA Tool Flag - Set to false to disable in production
 // const SHOW_QA_TOOLS = true; // MOVED TO STORE
@@ -17,11 +16,10 @@ import { PerformanceMonitor } from './components/Debug/PerformanceMonitor';
 import type { ProjectState } from './store/useProjectStore';
 
 function App() {
-  const { theme, showQAMonitor } = useProjectStore(useShallow((state: ProjectState) => ({ theme: state.theme, showQAMonitor: state.showQAMonitor })));
+  const { theme } = useProjectStore(useShallow((state: ProjectState) => ({ theme: state.theme })));
 
   return (
     <div className={`flex flex-col h-screen w-screen bg-[var(--bg-canvas)] ${theme === 'light' ? 'theme-light' : ''}`}>
-      {showQAMonitor && <PerformanceMonitor />}
       <Ribbon />
       <BOMModal />
       <AutoPlacementSidebar />

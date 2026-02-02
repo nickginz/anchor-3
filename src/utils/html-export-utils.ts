@@ -5,6 +5,46 @@ export const generateHtmlContent = (state: ProjectState, projectName: string = "
     const { minX, minY, width, height } = calculateBounds(state);
     const viewBoxString = `${minX} ${minY} ${width} ${height}`;
 
+    // Calculate Scale Bar Size (Aim for ~4cm on A4 Landscape Width 297mm)
+    // A4 Width = 297mm. 4cm = ~13.5% of width.
+    const targetPx = width * 0.135;
+    const scaleRatio = state.scaleRatio || 50;
+    const targetMeters = targetPx / scaleRatio;
+    const niceNumbers = [1, 2, 5, 10, 20, 50, 100];
+    const barMeters = niceNumbers.reduce((prev, curr) =>
+        Math.abs(curr - targetMeters) < Math.abs(prev - targetMeters) ? curr : prev
+    );
+    const barPx = barMeters * scaleRatio;
+
+    // Calculate Ticks & Blocks for HTML (Professional Style)
+    let step = 1;
+    if (barMeters <= 2) step = 0.5;
+    else if (barMeters <= 5) step = 1;
+    else if (barMeters <= 10) step = 2;
+    else if (barMeters <= 20) step = 5;
+    else if (barMeters <= 50) step = 10;
+    else step = 20;
+
+    const barHeight = 12;
+    let blocksSvg = '';
+    let labelsSvg = '';
+
+    // 1. Blocks
+    for (let m = 0; m < barMeters; m += step) {
+        const stepIndex = Math.round(m / step);
+        if (stepIndex % 2 === 0) {
+            const x = (m / barMeters) * barPx;
+            const w = (step / barMeters) * barPx;
+            blocksSvg += `<rect x="${x}" y="0" width="${w}" height="${barHeight}" fill="black" />`;
+        }
+    }
+
+    // 2. Labels
+    for (let m = 0; m <= barMeters; m += step) {
+        const x = (m / barMeters) * barPx;
+        labelsSvg += `<text x="${x}" y="${barHeight + 14}" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="black">${m}</text>`;
+    }
+
     const svgContent = generateSvgLayers(state);
     const bomHtml = generateBomHtml(state);
     const script = getViewerScript(minX, minY, width, height, state.scaleRatio || 50);
@@ -25,62 +65,78 @@ export const generateHtmlContent = (state: ProjectState, projectName: string = "
 <body>
     <!-- Sidebar -->
     <div id="sidebar">
-        <div class="sidebar-header">
-            <h2>Layers</h2>
-        </div>
-        <div class="layer-list">
-            <label class="layer-item">
-                <input type="checkbox" checked onchange="toggleLayer('layer-walls')">
-                <span>Walls</span>
-            </label>
-             <label class="layer-item">
-                <input type="checkbox" checked onchange="toggleLayer('layer-anchors')">
-                <span>Anchors</span>
-            </label>
-            <label class="layer-item">
-                <input type="checkbox" checked onchange="toggleLayer('layer-cables')">
-                <span>Cables</span>
-            </label>
-            <label class="layer-item">
-                <input type="checkbox" checked onchange="toggleLayer('layer-hubs')">
-                <span>Hubs</span>
-            </label>
-            <label class="layer-item">
-                <input type="checkbox" onchange="toggleLayer('layer-radius')">
-                <span>Coverage Radius</span>
-            </label>
-             <div class="layer-item" style="flex-direction: column; align-items: flex-start;">
-                <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:4px;">
-                    <span style="font-size: 11px;">Radius Size</span>
-                    <span id="radius-val" style="font-size: 11px; font-weight:bold;">${defaultRadius}.0 m</span>
-                </div>
-                <input type="range" min="3" max="15" step="0.5" value="${defaultRadius}" oninput="updateRadius(this.value)" style="width: 100%;">
+        <div id="layers-container" style="flex: 1; overflow-y: auto;">
+            <div class="sidebar-header">
+                <h2>Layers</h2>
             </div>
-             <label class="layer-item">
-                <input type="checkbox" onchange="toggleLayer('layer-heatmap')">
-                <span>Signal Heatmap</span>
-            </label>
-             <label class="layer-item">
-                <input type="checkbox" checked onchange="toggleLayer('layer-bom')">
-                <span>Bill of Materials</span>
-            </label>
-        </div>
-        <!-- Notes Section -->
-        <div class="sidebar-notes">
-            <div class="notes-header">
-                <h3>Notes</h3>
-                <div class="notes-tools">
-                    <button onclick="document.execCommand('bold',false,null)" title="Bold"><b>B</b></button>
-                    <button onclick="document.execCommand('underline',false,null)" title="Underline"><u>U</u></button>
-                    <div style="width:1px; height:12px; background:#e2e8f0; margin:0 4px;"></div>
-                     <input type="color" onchange="document.execCommand('foreColor',false,this.value)" title="Text Color" style="width:16px; height:16px; padding:0; border:none; background:transparent; cursor:pointer;" value="#334155" />
+            <div class="layer-list">
+                <label class="layer-item">
+                    <input type="checkbox" checked onchange="toggleLayer('layer-imported')">
+                    <span>Imported Drawings</span>
+                </label>
+                <label class="layer-item">
+                    <input type="checkbox" checked onchange="toggleLayer('layer-walls')">
+                    <span>Walls</span>
+                </label>
+                 <label class="layer-item">
+                    <input type="checkbox" checked onchange="toggleLayer('layer-anchors')">
+                    <span>Anchors</span>
+                </label>
+                <label class="layer-item">
+                    <input type="checkbox" checked onchange="toggleLayer('layer-cables')">
+                    <span>Cables</span>
+                </label>
+                <label class="layer-item">
+                    <input type="checkbox" checked onchange="toggleLayer('layer-hubs')">
+                    <span>Hubs</span>
+                </label>
+                <label class="layer-item">
+                    <input type="checkbox" onchange="toggleLayer('layer-radius')">
+                    <span>Coverage Radius</span>
+                </label>
+                 <div class="layer-item" style="flex-direction: column; align-items: flex-start;">
+                    <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:4px;">
+                        <span style="font-size: 11px;">Radius Size</span>
+                        <span id="radius-val" style="font-size: 11px; font-weight:bold;">${defaultRadius}.0 m</span>
+                    </div>
+                    <input type="range" min="3" max="15" step="0.5" value="${defaultRadius}" oninput="updateRadius(this.value)" style="width: 100%;">
                 </div>
+                 <label class="layer-item">
+                    <input type="checkbox" onchange="toggleLayer('layer-heatmap')">
+                    <span>Signal Heatmap</span>
+                </label>
+                 <label class="layer-item">
+                    <input type="checkbox" checked onchange="toggleLayer('layer-bom')">
+                    <span>Bill of Materials</span>
+                </label>
+                 <label class="layer-item">
+                    <input type="checkbox" onchange="toggleLayer('layer-dimensions')">
+                    <span>Dimensions</span>
+                </label>
+                <label class="layer-item">
+                    <input type="checkbox" checked onchange="toggleLayer('layer-scalebar')">
+                    <span>Scale Bar</span>
+                </label>
             </div>
-            <div id="project-notes" contenteditable="true" placeholder="Type notes..."></div>
-            <div class="save-status">Auto-saved</div>
         </div>
 
-        <div class="project-info">
+        <div id="tools-container" style="flex-shrink: 0; border-top: 1px solid #e2e8f0; background: #fff;">
+            <div class="sidebar-header">
+                <h2>Tools</h2>
+            </div>
+            <div class="layer-list">
+                 <button id="tool-pan" class="tool-btn active" onclick="setTool('pan')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-3 3-3-3"/><path d="M12 3v18"/><path d="m9 6 3-3 3 3"/><path d="M18 15 21 12 18 9"/><path d="M3 12h18"/><path d="m6 9-3 3 3 3"/></svg>
+                    Pan View
+                 </button>
+                 <button id="tool-measure" class="tool-btn" onclick="setTool('measure')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m11 11 2 2"/><path d="m11 13 2-2"/><path d="M14 6 6 14"/><path d="M15 11 11 15"/><path d="M19.1 4.9a2.1 2.1 0 0 0-3 0l-1.5 1.5-1.1-1.1-1.4 1.4 1.1 1.1L4.9 16.1a2.1 2.1 0 0 0 0 3l.7.7 3.5-3.5 1.4 1.4-3.5 3.5.7.7a2.1 2.1 0 0 0 3 0l8.3-8.3 1.1 1.1 1.4-1.4-1.1-1.1 1.5-1.5a2.1 2.1 0 0 0 0-3l-.7-.7Z"/></svg>
+                    Measure
+                 </button>
+            </div>
+        </div>
+
+        <div class="project-info" style="flex-shrink: 0;">
              <span>${projectName} &bull; ${new Date().toLocaleDateString()}</span>
         </div>
     </div>
@@ -97,11 +153,43 @@ export const generateHtmlContent = (state: ProjectState, projectName: string = "
                     <stop offset="0%" stop-color="rgba(0, 255, 0, 0.6)" />
                     <stop offset="100%" stop-color="rgba(0, 255, 0, 0)" />
                  </radialGradient>
+                 <marker id="arrowhead" markerWidth="8" markerHeight="5" refX="7" refY="2.5" orient="auto">
+                    <path d="M 0 0 L 8 2.5 L 0 5 Z" fill="#22c55e" />
+                 </marker>
+                 <marker id="arrowhead-start" markerWidth="8" markerHeight="5" refX="1" refY="2.5" orient="auto-start-reverse">
+                    <path d="M 0 0 L 8 2.5 L 0 5 Z" fill="#22c55e" />
+                 </marker>
             </defs>
             <rect x="${minX - 10000}" y="${minY - 10000}" width="${width + 20000}" height="${height + 20000}" fill="#ffffff" />
             
             <!-- Layers -->
+            <!-- Layers -->
             ${svgContent}
+
+            <!-- Scale Bar (Professional Alternating Blocks) - Draggable -->
+            <g id="layer-scalebar" transform="translate(${minX + width - barPx - 80}, ${minY + height - 80})" onmousedown="startSvgDrag(event, 'layer-scalebar')" style="cursor: move;">
+                <!-- Hit Area for easy grabbing -->
+                <rect x="-20" y="-30" width="${barPx + 50}" height="70" fill="transparent" />
+                
+                <!-- Background Halo -->
+                <rect x="-10" y="-20" width="${barPx + 40}" height="60" fill="rgba(255, 255, 255, 0.85)" rx="2" style="pointer-events: none;" />
+                
+                <!-- Main Border (White Base) -->
+                <rect x="0" y="0" width="${barPx}" height="${barHeight}" fill="white" stroke="black" stroke-width="2" style="pointer-events: none;" />
+                
+                <!-- Black Blocks -->
+                <g style="pointer-events: none;">
+                ${blocksSvg}
+                </g>
+                
+                <!-- Labels -->
+                <g style="pointer-events: none;">
+                ${labelsSvg}
+                </g>
+                
+                <!-- Unit -->
+                <text x="${barPx + 15}" y="10" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="black" style="pointer-events: none;">m</text>
+            </g>
         </svg>
 
         <!-- Draggable BOM -->
@@ -122,18 +210,6 @@ export const generateHtmlContent = (state: ProjectState, projectName: string = "
     </div>
 
     <script>
-        // Initialize Notes from LocalStorage
-        const noteKey = 'anchorcad_notes_${projectName}';
-        const notesDiv = document.getElementById('project-notes');
-        
-        if (notesDiv) {
-            const saved = localStorage.getItem(noteKey);
-            if (saved) notesDiv.innerHTML = saved;
-            
-            notesDiv.addEventListener('input', () => {
-                localStorage.setItem(noteKey, notesDiv.innerHTML);
-            });
-        }
 
         ${script}
     </script>
@@ -199,11 +275,81 @@ const calculateBounds = (state: ProjectState) => {
 };
 
 const generateSvgLayers = (state: ProjectState) => {
+    // Layer: Imported Drawings (Images and DXF)
+    const importedSvg = (state.importedObjects || []).map(obj => {
+        if (!obj.visible) return '';
+
+        if (obj.type === 'image') {
+            const w = obj.width * obj.scale;
+            const h = obj.height * obj.scale;
+            return `
+                <g transform="translate(${obj.x}, ${obj.y}) rotate(${obj.rotation})">
+                    <image href="${obj.src}" width="${w}" height="${h}" opacity="${obj.opacity ?? 1}" />
+                </g>
+            `;
+        }
+
+        if (obj.type === 'dxf') {
+            const entities = obj.data?.entities || [];
+            const dxfColors = ['#000000', '#FF0000', '#FFFF00', '#00FF00', '#00FFFF', '#0000FF', '#FF00FF', '#FFFFFF', '#808080', '#C0C0C0'];
+
+            const entitySvg = entities.map((entity: any) => {
+                if (obj.layers && obj.layers[entity.layer] === false) return '';
+                const color = dxfColors[entity.color % dxfColors.length] || '#666666';
+
+                if (entity.type === 'LINE') {
+                    return `<line x1="${entity.vertices[0].x}" y1="${entity.vertices[0].y}" x2="${entity.vertices[1].x}" y2="${entity.vertices[1].y}" stroke="${color}" stroke-width="1" opacity="0.5" />`;
+                }
+
+                if (entity.type === 'LWPOLYLINE' || entity.type === 'POLYLINE') {
+                    const points = entity.vertices.map((v: any) => `${v.x},${v.y}`).join(' ');
+                    const closed = entity.shape || entity.closed;
+                    return `<polyline points="${points}${closed ? ` ${entity.vertices[0].x},${entity.vertices[0].y}` : ''}" fill="none" stroke="${color}" stroke-width="1" opacity="0.5" />`;
+                }
+
+                return '';
+            }).join('');
+
+            return `
+                <g transform="translate(${obj.x}, ${obj.y}) rotate(${obj.rotation}) scale(${obj.scale})">
+                    ${entitySvg}
+                </g>
+            `;
+        }
+        return '';
+    }).join('');
+
     // Layer: Walls
     const wallsSvg = state.walls.map(w => `
         <line x1="${w.points[0]}" y1="${w.points[1]}" x2="${w.points[2]}" y2="${w.points[3]}" 
               stroke="#000000" stroke-width="${Math.max(w.thickness, 4)}" stroke-linecap="round" />
     `).join('');
+
+    // Layer: Dimensions (Manual Green Dimensions)
+    const dimensionsSvg = state.dimensions.map(d => {
+        const [x1, y1, x2, y2] = d.points;
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+        // Offset perpendicular to the line for the text
+        const length = Math.hypot(dx, dy);
+        const nx = -dy / length;
+        const ny = dx / length;
+        const tx = midX + nx * 20;
+        const ty = midY + ny * 20;
+
+        return `
+            <g>
+                <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)" />
+                <text x="${tx}" y="${ty}" transform="rotate(${angle}, ${tx}, ${ty})" text-anchor="middle" fill="#22c55e" font-size="12" font-weight="bold" font-family="Arial, sans-serif" stroke="white" stroke-width="3" paint-order="stroke">${d.label}</text>
+                <text x="${tx}" y="${ty}" transform="rotate(${angle}, ${tx}, ${ty})" text-anchor="middle" fill="#22c55e" font-size="12" font-weight="bold" font-family="Arial, sans-serif">${d.label}</text>
+            </g>
+        `;
+    }).join('');
 
     // Layer: Anchors (Just the dots/text)
     const anchorsSvg = state.anchors.map(a => `
@@ -306,12 +452,16 @@ const generateSvgLayers = (state: ProjectState) => {
     }).join('');
 
     return `
+        <g id="layer-imported">${importedSvg}</g>
         <g id="layer-heatmap" style="display:none">${heatmapSvg}</g> 
         <g id="layer-walls">${wallsSvg}</g>
+        <g id="layer-dimensions" style="display:none">${dimensionsSvg}</g>
         <g id="layer-cables">${cablesSvg}</g>
         <g id="layer-radius" style="display:none">${radiusSvg}</g>
         <g id="layer-anchors">${anchorsSvg}</g>
         <g id="layer-hubs">${hubsSvg}</g>
+        <g id="layer-measurements"></g>
+        <g id="measure-preview" style="pointer-events:none"></g>
     `;
 };
 
@@ -389,31 +539,26 @@ const generateBomHtml = (state: ProjectState) => {
 const getViewerStyles = () => `
     body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8fafc; color: #334155; overflow: hidden; display: flex; height: 100vh; }
     
-    /* Sidebar */
-    #sidebar { width: 250px; background: #ffffff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 10px rgba(0,0,0,0.05); }
-    .sidebar-header { padding: 20px; border-bottom: 1px solid #e2e8f0; background: #f1f5f9; }
-    .sidebar-header h2 { margin: 0; font-size: 18px; color: #0f172a; letter-spacing: 0.5px; }
-    .layer-list { flex: 1; padding: 20px; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
-    .layer-list::-webkit-scrollbar { display: none; }
-    .layer-item { display: flex; items-center; margin-bottom: 12px; cursor: pointer; user-select: none; padding: 8px; border-radius: 4px; transition: background 0.2s; color: #475569; font-weight: 500; }
+    /* Sidebar Compact */
+    #sidebar { width: 220px; background: #ffffff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 10px rgba(0,0,0,0.05); }
+    .sidebar-header { padding: 12px 16px; border-bottom: 1px solid #e2e8f0; background: #f1f5f9; flex-shrink: 0; }
+    .sidebar-header h2 { margin: 0; font-size: 14px; color: #0f172a; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 700; }
+    .layer-list { padding: 8px 12px; }
+    .layer-item { display: flex; align-items: center; margin-bottom: 4px; cursor: pointer; user-select: none; padding: 6px; border-radius: 4px; transition: background 0.2s; color: #475569; font-weight: 600; font-size: 12px; }
     .layer-item:hover { background: #f1f5f9; }
-    .layer-item input { margin-right: 12px; accent-color: #3b82f6; cursor: pointer; width: 16px; height: 16px; }
+    .layer-item input { margin-right: 8px; accent-color: #3b82f6; cursor: pointer; width: 14px; height: 14px; flex-shrink: 0; }
     
-    .project-info { padding: 12px; border-top: 1px solid #e2e8f0; font-size: 10px; color: #cbd5e1; text-align: center; background: #fff; }
+    .project-info { padding: 8px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #cbd5e1; text-align: center; background: #fff; }
     
-    /* Notes */
-    .sidebar-notes { padding: 16px; border-top: 1px solid #e2e8f0; background: #f8fafc; height: 35%; display: flex; flex-direction: column; }
-    .notes-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .notes-header h3 { margin: 0; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
-    .notes-tools { display: flex; align-items: center; background: #fff; padding: 2px; border: 1px solid #e2e8f0; border-radius: 4px; }
-    .notes-tools button { border: none; background: transparent; cursor: pointer; padding: 4px 6px; border-radius: 2px; font-size: 10px; color: #475569; display: flex; align-items: center; justify-content: center; }
-    .notes-tools button:hover { background: #f1f5f9; color: #0f172a; }
+    .tool-btn { 
+        display: flex; align-items: center; gap: 8px; width: 100%; border: none; background: transparent; 
+        padding: 8px 12px; margin-bottom: 4px; border-radius: 6px; cursor: pointer; color: #475569; 
+        font-weight: 600; font-size: 12px; transition: all 0.2s;
+    }
+    .tool-btn:hover { background: #f1f5f9; color: #1e293b; }
+    .tool-btn.active { background: #3b82f6; color: white; }
+    .tool-btn svg { flex-shrink: 0; pointer-events: none; width: 14px; height: 14px; }
     
-    #project-notes { flex: 1; border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px; font-size: 13px; line-height: 1.5; color: #334155; overflow-y: auto; outline: none; background: #fff; box-shadow: inset 0 1px 2px rgba(0,0,0,0.02); resize: none; font-family: inherit; }
-    #project-notes:focus { border-color: #3b82f6; ring: 2px solid #3b82f6; }
-    #project-notes:empty:before { content: attr(placeholder); color: #94a3b8; }
-    
-    .save-status { font-size: 9px; color: #94a3b8; margin-top: 6px; text-align: right; font-style: italic; }
 
     /* Viewer */
     #viewer { flex: 1; position: relative; background: #f8fafc; cursor: grab; }
@@ -455,25 +600,81 @@ const svg = document.getElementById('main-svg');
 let viewBox = { x: ${x}, y: ${y}, w: ${w}, h: ${h} };
 let isPanning = false;
 let startPoint = { x: 0, y: 0 };
+let activeTool = 'pan';
+
+function setTool(tool) {
+    activeTool = tool;
+    document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('tool-' + tool).classList.add('active');
+    
+    if (tool === 'measure') {
+        document.getElementById('viewer').style.cursor = 'crosshair';
+    } else {
+        document.getElementById('viewer').style.cursor = 'grab';
+    }
+}
 
 function updateViewBox() {
     svg.setAttribute('viewBox', \`\${viewBox.x} \${viewBox.y} \${viewBox.w} \${viewBox.h}\`);
     }
 
     svg.addEventListener('mousedown', (e) => {
-        isPanning = true;
-        startPoint = { x: e.clientX, y: e.clientY };
+        if (activeTool === 'pan' && e.button === 0) {
+            isPanning = true;
+            startPoint = { x: e.clientX, y: e.clientY };
+        } else if (activeTool === 'measure') {
+            startMeasure(e);
+        }
     });
 
+    // Measurement Drawing Logic
+    let isDrawingDim = false;
+    let dimStart = null;
+    const measurementLayer = document.getElementById('layer-measurements');
+    const previewLayer = document.getElementById('measure-preview');
+
+    function getSvgCoords(e) {
+        const pt = svg.createSVGPoint();
+        pt.x = e.clientX;
+        pt.y = e.clientY;
+        return pt.matrixTransform(svg.getScreenCTM().inverse());
+    }
+
+    function startMeasure(e) {
+        isDrawingDim = true;
+        dimStart = getSvgCoords(e);
+    }
+
+    function createDimSvg(p1, p2, isPreview = false) {
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.hypot(dx, dy);
+        const meters = (len / ${scale}).toFixed(2);
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        
+        const midX = (p1.x + p2.x) / 2;
+        const midY = (p1.y + p2.y) / 2;
+        
+        // Offset
+        const nx = -dy / len || 0;
+        const ny = dx / len || 0;
+        const tx = midX + nx * 15;
+        const ty = midY + ny * 15;
+
+        let txtAngle = angle;
+        if (txtAngle > 90 || txtAngle < -90) txtAngle += 180;
+
+        const removeOnClick = !isPreview ? 'onclick="this.remove()"' : '';
+        
+        return '<g class="temp-dim" ' + removeOnClick + ' style="cursor: pointer">' +
+               '  <line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)" />' +
+               '  <text x="' + tx + '" y="' + ty + '" transform="rotate(' + txtAngle + ', ' + tx + ', ' + ty + ')" text-anchor="middle" fill="#22c55e" font-size="12" font-weight="bold" font-family="Arial, sans-serif" stroke="white" stroke-width="3" paint-order="stroke">' + meters + 'm</text>' +
+               '  <text x="' + tx + '" y="' + ty + '" transform="rotate(' + txtAngle + ', ' + tx + ', ' + ty + ')" text-anchor="middle" fill="#22c55e" font-size="12" font-weight="bold" font-family="Arial, sans-serif">' + meters + 'm</text>' +
+               '</g>';
+    }
+
     window.addEventListener('mousemove', (e) => {
-        if (isPanning) {
-            const dx = (e.clientX - startPoint.x) * (viewBox.w / svg.clientWidth);
-            const dy = (e.clientY - startPoint.y) * (viewBox.h / svg.clientHeight);
-            viewBox.x -= dx;
-            viewBox.y -= dy;
-            startPoint = { x: e.clientX, y: e.clientY };
-            updateViewBox();
-        }
+        // Pan logic moved to main mousemove handler to unify
     });
 
     window.updateRadius = (val) => {
@@ -492,7 +693,20 @@ function updateViewBox() {
         }
     };
 
-    window.addEventListener('mouseup', () => { isPanning = false; });
+    window.addEventListener('mouseup', (e) => { 
+        isPanning = false; 
+        if (isDrawingDim) {
+            const current = getSvgCoords(e);
+            if (dimStart && current && Math.hypot(current.x - dimStart.x, current.y - dimStart.y) > 5) {
+                measurementLayer.innerHTML += createDimSvg(dimStart, current);
+            }
+            isDrawingDim = false;
+            previewLayer.innerHTML = '';
+        }
+    });
+
+    let lastEvent = null;
+    window.addEventListener('mousemove', (e) => { lastEvent = e; });
 
     svg.addEventListener('wheel', (e) => {
         e.preventDefault();
@@ -544,22 +758,76 @@ function updateViewBox() {
 
     window.startDrag = (e, id) => {
         isDragging = true;
+        isPanning = false; 
+        e.stopPropagation();
+        e.preventDefault();
         activePanel = document.getElementById(id);
-        const rect = activePanel.getBoundingClientRect();
-        dragOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        dragOffset = { 
+            x: e.clientX - activePanel.offsetLeft, 
+            y: e.clientY - activePanel.offsetTop 
+        };
     };
+
+    // SVG Drag State
+    let isSvgDragging = false;
+    let activeSvgGroup = null;
+    let svgDragOffset = { x: 0, y: 0 };
 
     window.addEventListener('mousemove', (e) => {
         if (isDragging && activePanel) {
             activePanel.style.left = (e.clientX - dragOffset.x) + 'px';
             activePanel.style.top = (e.clientY - dragOffset.y) + 'px';
-            activePanel.style.right = 'auto'; // Clear right if set
+            activePanel.style.right = 'auto'; 
+        }
+        if (isSvgDragging && activeSvgGroup) {
+            const pt = svg.createSVGPoint();
+            pt.x = e.clientX;
+            pt.y = e.clientY;
+            const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+            
+            // Offset-based move (No jump)
+            activeSvgGroup.setAttribute('transform', 'translate(' + (svgP.x - svgDragOffset.x) + ', ' + (svgP.y - svgDragOffset.y) + ')');
+        }
+        if (isDrawingDim) {
+            const current = getSvgCoords(e);
+            previewLayer.innerHTML = createDimSvg(dimStart, current, true);
+        }
+
+        if (isPanning && !isSvgDragging) {
+            const dx = (e.clientX - startPoint.x) * (viewBox.w / svg.clientWidth);
+            const dy = (e.clientY - startPoint.y) * (viewBox.h / svg.clientHeight);
+            viewBox.x -= dx;
+            viewBox.y -= dy;
+            startPoint = { x: e.clientX, y: e.clientY };
+            updateViewBox();
         }
     });
+
+    window.startSvgDrag = (e, id) => {
+        e.preventDefault();
+        e.stopPropagation(); 
+        isPanning = false; 
+        isSvgDragging = true;
+        activeSvgGroup = document.getElementById(id);
+        
+        const pt = svg.createSVGPoint();
+        pt.x = e.clientX;
+        pt.y = e.clientY;
+        const mouseSvg = pt.matrixTransform(svg.getScreenCTM().inverse());
+        
+        // Use CTM for absolute robustness (handles translate, matrix, etc.)
+        const ctm = activeSvgGroup.getCTM();
+        svgDragOffset = {
+            x: mouseSvg.x - ctm.e,
+            y: mouseSvg.y - ctm.f
+        };
+    };
 
     window.addEventListener('mouseup', () => {
         isDragging = false;
         activePanel = null;
+        isSvgDragging = false;
+        activeSvgGroup = null;
     });
 
     // BOM Scaling Observer

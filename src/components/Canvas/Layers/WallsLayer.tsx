@@ -8,14 +8,13 @@ import type { Wall } from '../../../types';
 import { getWallPattern } from '../../../utils/wall-patterns';
 
 export const WallsLayer: React.FC = () => {
-    const { walls, scaleRatio, layers, selectedIds, theme, wallsLocked } = useProjectStore(
+    const { walls, scaleRatio, layers, selectedIds, theme } = useProjectStore(
         useShallow((state: ProjectState) => ({
             walls: state.walls,
             scaleRatio: state.scaleRatio,
             layers: state.layers,
             selectedIds: state.selectedIds,
-            theme: state.theme,
-            wallsLocked: state.wallsLocked
+            theme: state.theme
         }))
     );
 
@@ -137,7 +136,7 @@ export const WallsLayer: React.FC = () => {
     if (!layers.walls) return null;
 
     return (
-        <Group key={theme} listening={!wallsLocked}>
+        <Group key={theme} listening={false}>
             {/* Render Merged Geometry Groups */}
             {/* Render Merged Geometry Groups */}
             {renderFills}

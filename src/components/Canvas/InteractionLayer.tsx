@@ -655,11 +655,46 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         }
     }, [stage, openAnchorMenu, activeTool, points, chainStart, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, addWall, setPoints, setChainStart, setTool, onOpenMenu]);
 
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            console.log('[Global Debug] Window Click Target:', e.target);
+        };
+        window.addEventListener('mousedown', handler, true); // Capture phase
+        return () => window.removeEventListener('mousedown', handler, true);
+    }, []);
+
+    // --- State Reset on Tool Change ---
+    useEffect(() => {
+        console.log(`[InteractionLayer] Tool changed to: ${activeTool}. Resetting state.`);
+        setPoints([]);
+        setChainStart(null);
+        setRectStart(null);
+        setRectEdgeStart(null);
+        setRectEdgeBaseEnd(null);
+        setSelectionRect(null);
+        setDraggingDoorId(null);
+
+        // Reset Refs
+        isMouseDown.current = false;
+        hasDragged.current = false;
+        isDrawingCable.current = false;
+        cableStartId.current = null;
+        dragWallId.current = null;
+        dragAnchorId.current = null;
+        dragHubId.current = null;
+        dragTextId.current = null;
+        dragDimLineId.current = null;
+        lastDragPos.current = null;
+        lastPanPos.current = null;
+    }, [activeTool, setPoints, setChainStart, setRectStart, setRectEdgeStart, setRectEdgeBaseEnd, setSelectionRect, setDraggingDoorId]);
+
     const handleMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
         const stagePos = stage?.getPointerPosition();
         if (!stagePos) return;
         const pos = getStagePoint();
         if (!pos) return;
+
+        console.log(`[InteractionLayer] MouseDown | Tool: ${activeTool} | Button: ${e.evt.button} | Target: ${e.target.name()} | Locked: ${wallsLocked} | Pts: ${points.length}`);
 
         isMouseDown.current = true;
         hasDragged.current = false;
@@ -1106,7 +1141,11 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             }
             // Wall Tool
         } else if (activeTool === 'wall') {
-            if (wallsLocked) return; // Prevent drawing if locked
+            console.log(`[InteractionLayer] Wall Tool Click | Locked: ${wallsLocked} | Button: ${e.evt.button}`);
+            if (wallsLocked) {
+                console.warn("[InteractionLayer] Wall placement blocked: wallsLocked is true");
+                return; // Prevent drawing if locked
+            }
             if (e.evt.button === 0) {
                 let finalPos = pos;
                 // Check if snapping allowed (hidden layer = no snap)
@@ -1129,6 +1168,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 }
 
                 if (points.length === 0) {
+                    console.log(`[InteractionLayer] Wall Start. Pos: ${JSON.stringify(finalPos)}`);
                     setPoints([finalPos]);
                     setChainStart(finalPos);
                 } else {
@@ -1161,6 +1201,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 }
 
                 if (!rectStart) {
+                    console.log(`[InteractionLayer] Rect Start. Pos: ${JSON.stringify(finalPos)}`);
                     setRectStart(finalPos);
                     setCurrentMousePos(finalPos);
                     lastDragPos.current = finalPos; // Track for Drag
@@ -1362,7 +1403,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 }
             }
         }
-    }, [stage, getStagePoint, activeTool, anchors, hubs, walls, cables, setSelection, setPoints, setChainStart, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setRectStart, setCurrentMousePos, setRectEdgeStart, setRectEdgeBaseEnd, setTool, onOpenScaleModal, onOpenMenu, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, wallsLocked, anchorRadius, setExportRegion, setSelectionRect, setIsPanning, selectionStart, isShiftDown, setDraggingDoorId, setTempCablePath, setDragCableHandle]);
+    }, [stage, getStagePoint, activeTool, anchors, hubs, walls, cables, setSelection, setPoints, setChainStart, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setRectStart, setCurrentMousePos, setRectEdgeStart, setRectEdgeBaseEnd, setTool, onOpenScaleModal, onOpenMenu, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, wallsLocked, anchorRadius, setExportRegion, setSelectionRect, setIsPanning, selectionStart, isShiftDown, setDraggingDoorId, setTempCablePath, setDragCableHandle, points, rectStart, rectEdgeStart, rectEdgeBaseEnd]);
 
     const handleMouseMove = useCallback(() => {
         const pos = getStagePoint();
@@ -1370,6 +1411,10 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
         const state = useProjectStore.getState();
         const currentActiveTool = state.activeTool;
+
+        if (points.length > 0) {
+            // console.log(`[InteractionLayer] MouseMove | Points: ${points.length} | Tool: ${currentActiveTool}`);
+        }
 
         // 0. Cable Edit specific logic
         if (currentActiveTool === 'cable_edit') {
