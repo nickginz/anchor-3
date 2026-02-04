@@ -95,17 +95,13 @@ export interface ProjectState {
     // Export Tool State
     isExportSidebarOpen: boolean;
     setIsExportSidebarOpen: (v: boolean) => void;
-    showExportBOM: boolean; // New
-    setShowExportBOM: (v: boolean) => void; // New
-    showExportScaleBar: boolean; // New
-    setShowExportScaleBar: (v: boolean) => void; // New
-    showExportBOM: boolean; // New
-    setShowExportBOM: (v: boolean) => void; // New
+    showExportBOM: boolean;
+    setShowExportBOM: (v: boolean) => void;
+    showExportScaleBar: boolean;
+    setShowExportScaleBar: (v: boolean) => void;
     exportBOMPosition: { x: number; y: number } | null;
     setExportBOMPosition: (pos: { x: number; y: number } | null) => void;
 
-    showExportScaleBar: boolean; // New
-    setShowExportScaleBar: (v: boolean) => void; // New
     exportScalePosition: { x: number; y: number } | null;
     setExportScalePosition: (pos: { x: number; y: number } | null) => void;
 

@@ -1,7 +1,8 @@
 import React from 'react';
-import { Layer, Rect, Group, Text, Line } from 'react-konva';
+import { Rect, Group, Text, Line } from 'react-konva';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { useShallow } from 'zustand/react/shallow';
+import type { Point } from '../../../types';
 
 export const ExportPreviewLayer: React.FC<{ stage: any }> = ({ stage }) => {
     const {
@@ -10,7 +11,8 @@ export const ExportPreviewLayer: React.FC<{ stage: any }> = ({ stage }) => {
         showExportBOM,
         showExportScaleBar,
         theme,
-        walls, anchors, hubs, cables
+        walls, anchors, hubs, cables,
+        scaleRatio
     } = useProjectStore(useShallow(state => ({
         isExportSidebarOpen: state.isExportSidebarOpen,
         exportRegion: state.exportRegion,
@@ -20,30 +22,36 @@ export const ExportPreviewLayer: React.FC<{ stage: any }> = ({ stage }) => {
         walls: state.walls,
         anchors: state.anchors,
         hubs: state.hubs,
-        cables: state.cables
+        cables: state.cables,
+        scaleRatio: state.scaleRatio
     })));
 
     if (!isExportSidebarOpen || !stage) return null;
 
     // Calculate Bounds (Default Region)
     const getBounds = () => {
-        if (exportRegion) return exportRegion;
+        let pointsToBound: Point[] = [];
 
-        // Calculate bounding box of all items
+        if (exportRegion && exportRegion.length > 0) {
+            pointsToBound = exportRegion;
+        } else {
+            // Calculate bounding box of all items
+            pointsToBound = [
+                ...walls.flatMap(w => [{ x: w.points[0], y: w.points[1] }, { x: w.points[2], y: w.points[3] }]),
+                ...anchors,
+                ...hubs,
+                ...cables.flatMap(c => c.points)
+            ];
+        }
+
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        const allPoints = [
-            ...walls.flatMap(w => [{ x: w.points[0], y: w.points[1] }, { x: w.points[2], y: w.points[3] }]),
-            ...anchors,
-            ...hubs,
-            ...cables.flatMap(c => c.points)
-        ];
 
-        if (allPoints.length === 0) {
+        if (pointsToBound.length === 0) {
             // Default Viewport if empty?
             return { x: 0, y: 0, width: stage.width(), height: stage.height() };
         }
 
-        allPoints.forEach(p => {
+        pointsToBound.forEach(p => {
             if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) {
                 if (p.x < minX) minX = p.x;
                 if (p.y < minY) minY = p.y;
@@ -57,8 +65,8 @@ export const ExportPreviewLayer: React.FC<{ stage: any }> = ({ stage }) => {
             return { x: 0, y: 0, width: stage.width(), height: stage.height() };
         }
 
-        // Add padding
-        const padding = 50;
+        // Add padding if not using explicit exportRegion
+        const padding = exportRegion ? 0 : 50;
         return {
             x: minX - padding,
             y: minY - padding,
@@ -82,7 +90,6 @@ export const ExportPreviewLayer: React.FC<{ stage: any }> = ({ stage }) => {
     const scalePos = useProjectStore.getState().exportScalePosition || { x: bounds.x + 20, y: bounds.y + bounds.height - 60 };
 
     // Calculate Cable Length
-    const scaleRatio = useProjectStore.getState().scaleRatio;
     const totalCablePixels = cables.reduce((acc, cable) => {
         if (!cable || !cable.points || cable.points.length < 2) return acc;
         let len = 0;

@@ -1,5 +1,5 @@
 import Konva from 'konva';
-import { useProjectStore } from '../store/useProjectStore';
+
 
 
 interface ExportOptions {

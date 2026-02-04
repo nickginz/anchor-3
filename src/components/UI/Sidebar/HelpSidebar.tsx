@@ -257,28 +257,48 @@ const DOCUMENTATION: HelpSection[] = [
         id: 'logic',
         title: 'Tool Logic',
         content: (
-            <div className="space-y-3">
+            <div className="space-y-4">
                 <div>
-                    <h4 className="text-sm font-bold text-gray-300">Auto-Placement</h4>
-                    <p className="text-xs text-gray-400 mt-1">
-                        The system intelligently analyzes room geometry to place anchors. It distinguishes between small compact rooms (1 anchor) and larger complex spaces (multiple anchors), optimizing fo Line-of-Sight coverage.
-                    </p>
+                    <h4 className="text-sm font-bold text-gray-300 flex items-center gap-2">
+                        <Wand2 size={14} className="text-blue-500" />
+                        Anchor Placement (Shift+A)
+                    </h4>
+                    <div className="text-xs text-gray-400 mt-1 space-y-2">
+                        <p>
+                            Automatically fill your plan with anchors using advanced spatial algorithms.
+                        </p>
+                        <ul className="list-disc pl-4 space-y-1">
+                            <li><strong className="text-gray-300">Room Analysis</strong>: Detects enclosed spaces and places anchors based on area and shape.</li>
+                            <li><strong className="text-gray-300">Tools & Debug</strong>: Toggle <span className="text-blue-400">Centroids</span>, <span className="text-blue-400">Skeleton Mode</span>, and <span className="text-blue-400">Offsets</span> to visualize the internal logic.</li>
+                            <li><strong className="text-gray-300">Placement Area</strong>: Use the <span className="text-orange-400">Define Area</span> tool to restrict auto-placement to specific polygons.</li>
+                            <li><strong className="text-gray-300">Smart Reduction</strong>: Quickly reduce anchor density by percentage (-5% to -20%) to optimize signal-to-cost ratio.</li>
+                            <li><strong className="text-gray-300">Median Signal</strong>: Real-time statistics showing the estimated signal quality across your rooms.</li>
+                        </ul>
+                    </div>
                 </div>
-                <div>
-                    <h4 className="text-sm font-bold text-gray-300">Cable Routing</h4>
-                    <p className="text-xs text-gray-400 mt-1">
-                        Cables automatically follow walls (Manhattan routing) to reach hubs. Select <strong>Route</strong> to draw/edit cables.
-                    </p>
+
+                <div className="border-t border-[#444] pt-3">
+                    <h4 className="text-sm font-bold text-gray-300 flex items-center gap-2">
+                        <Cable size={14} className="text-orange-500" />
+                        Cable Routing (C)
+                    </h4>
+                    <div className="text-xs text-gray-400 mt-1 space-y-2">
+                        <p>
+                            Design network connectivity with automated or manual routing.
+                        </p>
+                        <ul className="list-disc pl-4 space-y-1">
+                            <li><strong className="text-gray-300">Star Topology</strong>: Every anchor connects directly to the nearest Hub.</li>
+                            <li><strong className="text-gray-300">Daisy Chain</strong>: Anchors connect to each other in sequence to save cable length.</li>
+                            <li><strong className="text-gray-300">Manhattan Routing</strong>: Cables automatically follow wall lines and prefer 90-degree turns.</li>
+                            <li><strong className="text-gray-300">Manual Dragging</strong>: Selected cable segments can be dragged to avoid obstacles or follow custom paths.</li>
+                            <li><strong className="text-gray-300">Regenerate Routes</strong>: Recalculates all optimal paths based on current device positions and settings.</li>
+                        </ul>
+                    </div>
                 </div>
-                <div>
-                    <h4 className="text-sm font-bold text-gray-300">Wall Detection</h4>
-                    <p className="text-xs text-gray-400 mt-1">
-                        When importing an image, you can use the Wand tool to detect walls. Ensure lines in your drawing are high-contrast and fully closed for best results.
-                    </p>
-                </div>
+
             </div>
         ),
-        searchableText: "tool logic auto-placement room geometry anchors small compact rooms large complex spaces line-of-sight coverage cable routing walls manhattan routing hubs star daisy-chain topology wall detection import image wand tool high-contrast"
+        searchableText: "tool logic auto-placement room geometry anchors centroids skeleton offsets placement area define area smart reduction median signal cable routing star daisy-chain topology manhattan routing manual dragging regenerate routes"
     }
 ];
 

@@ -3,19 +3,19 @@ import { useShallow } from 'zustand/react/shallow';
 import { Group, Rect, Text, Path, Line } from 'react-konva';
 import { useProjectStore } from '../../../store/useProjectStore';
 import type { ProjectState } from '../../../store/useProjectStore';
-import { getHubPortCoordinates } from '../../../utils/routing';
+import type { Point } from '../../../types';
+import { getHubPortCoordinates, distance } from '../../../utils/routing';
 
 
 
 export const HubsLayer: React.FC = () => {
-    const { hubs, cables, selectedIds, theme, layers, setSelection, cableSettings } = useProjectStore(
+    const { hubs, cables, selectedIds, theme, layers, cableSettings } = useProjectStore(
         useShallow((state: ProjectState) => ({
             hubs: state.hubs,
             cables: state.cables,
             selectedIds: state.selectedIds,
             theme: state.theme,
             layers: state.layers,
-            setSelection: state.setSelection,
             cableSettings: state.cableSettings
         }))
     );
@@ -109,6 +109,7 @@ export const HubsLayer: React.FC = () => {
             isHorizontal: boolean;
             minX: number; maxX: number;
             minY: number; maxY: number;
+            locked: boolean;
         };
 
         const allSegments: RenderSegment[] = [];
@@ -138,7 +139,8 @@ export const HubsLayer: React.FC = () => {
                     minX: Math.min(p1.x, p2.x),
                     maxX: Math.max(p1.x, p2.x),
                     minY: Math.min(p1.y, p2.y),
-                    maxY: Math.max(p1.y, p2.y)
+                    maxY: Math.max(p1.y, p2.y),
+                    locked: !!c.locked
                 });
             }
         });
@@ -147,65 +149,268 @@ export const HubsLayer: React.FC = () => {
         // 2. RENDERING PASS
         // ---------------------------------------------------------
 
-        return (cables || []).map(c => {
-            const pts = c.points;
-            if (!pts || pts.length < 2) return { id: c.id, data: '' };
-
-            let d = '';
-
-            for (let i = 0; i < pts.length - 1; i++) {
-                const off = getOffset(c.id, pts[i], pts[i + 1]);
-                const p1 = { x: pts[i].x + off.x, y: pts[i].y + off.y };
-                const p2 = { x: pts[i + 1].x + off.x, y: pts[i + 1].y + off.y };
-
-                // Move to start of segment
-                if (i === 0) d += `M ${p1.x} ${p1.y}`;
-
-                // Draw straight line to p2
-                d += ` L ${p2.x} ${p2.y}`;
-            }
-
-            return { id: c.id, data: d };
-        });
+        return {
+            visuals: (cables || []).map(c => {
+                const pts = c.points;
+                if (!pts || pts.length < 2) return { id: c.id, data: '' };
+                let d = '';
+                for (let i = 0; i < pts.length - 1; i++) {
+                    const off = getOffset(c.id, pts[i], pts[i + 1]);
+                    const p1 = { x: pts[i].x + off.x, y: pts[i].y + off.y };
+                    const p2 = { x: pts[i + 1].x + off.x, y: pts[i + 1].y + off.y };
+                    if (i === 0) d += `M ${p1.x} ${p1.y}`;
+                    d += ` L ${p2.x} ${p2.y}`;
+                }
+                return { id: c.id, data: d };
+            }),
+            segments: allSegments
+        };
 
     }, [cables, layers.cables, cableSettings.showParallel]);
 
+    // Ref for stable drag locking
+    const dragStartPos = React.useRef<{ x: number, y: number } | null>(null);
+
     if (!hubs?.length && !cables?.length) return null;
-    // If both hidden, return null early? Or just render empty groups?
     if (!layers.hubs && !layers.cables) return null;
+
+    // Helper to check orthogonality with tolerance
+    const isVertical = (p1: { x: number, y: number }, p2: { x: number, y: number }) => Math.abs(p1.x - p2.x) < 0.1;
+    const isHorizontal = (p1: { x: number, y: number }, p2: { x: number, y: number }) => Math.abs(p1.y - p2.y) < 0.1;
 
     return (
         <Group>
-            {/* Render Cables */}
-            {/* Render Cables */}
-            {layers.cables && cablePaths.map(cp => {
+            {/* 1. Visual Cables */}
+            {layers.cables && (cablePaths as any).visuals.map((cp: any) => {
                 const isSelected = selectedIds.includes(cp.id);
                 return (
                     <Path
                         key={cp.id}
+                        id={`visual-cable-${cp.id}`} // Visual ID for imperative updates
                         data={cp.data}
-                        stroke={isSelected ? '#fde047' : (cables.find(c => c.id === cp.id)?.color || colors.cable)} // Yellow if selected, else custom or theme blue
+                        stroke={isSelected ? '#fde047' : (cables.find(c => c.id === cp.id)?.color || colors.cable)}
                         strokeWidth={isSelected ? 4 : 2}
                         lineCap="round"
                         lineJoin="round"
                         opacity={1}
-                        listening={true}
-                        onClick={(e) => {
-                            e.cancelBubble = true;
-                            // Toggle selection with Shift
-                            if (e.evt.shiftKey) {
-                                if (isSelected) {
-                                    setSelection(selectedIds.filter(id => id !== cp.id));
-                                } else {
-                                    setSelection([...selectedIds, cp.id]);
-                                }
-                            } else {
-                                setSelection([cp.id]);
-                            }
+                        listening={false} // Pass events to segments
+                    />
+                );
+            })}
+
+            {/* 2. Interaction Segments (Invisible but Draggable) */}
+            {layers.cables && (cablePaths as any).segments.map((seg: any) => {
+                // Determine drag axis based on segment orientation
+                // If segment is Horizontal (isHoriz=true), we drag vertically (Lock X).
+                // If segment is Vertical, we drag horizontally (Lock Y).
+                const dragAxis = seg.isHorizontal ? 'y' : 'x';
+
+                return (
+                    <Line
+                        key={`${seg.cableId}-${seg.segmentIdx}`}
+                        points={[seg.p1.x, seg.p1.y, seg.p2.x, seg.p2.y]}
+                        stroke="transparent"
+                        strokeWidth={14} // Wide hit area
+                        draggable={!seg.locked && (useProjectStore.getState().activeTool === 'cable_edit' || useProjectStore.getState().activeTool === 'select')}
+                        onMouseEnter={(e) => {
+                            if (seg.locked || (useProjectStore.getState().activeTool !== 'cable_edit' && useProjectStore.getState().activeTool !== 'select')) return;
+                            const stage = e.target.getStage();
+                            if (stage) stage.container().style.cursor = dragAxis === 'y' ? 'ns-resize' : 'ew-resize';
                         }}
-                        onTap={(e) => {
+                        onMouseLeave={(e) => {
+                            const stage = e.target.getStage();
+                            if (stage) stage.container().style.cursor = 'default';
+                        }}
+                        dragBoundFunc={(pos) => {
+                            if (!dragStartPos.current || seg.locked) return pos;
+                            return {
+                                x: dragAxis === 'x' ? pos.x : dragStartPos.current.x,
+                                y: dragAxis === 'y' ? pos.y : dragStartPos.current.y
+                            };
+                        }}
+                        onDragStart={(e) => {
+                            const state = useProjectStore.getState();
+                            if (seg.locked || (state.activeTool !== 'cable_edit' && state.activeTool !== 'select')) {
+                                e.target.stopDrag();
+                                return;
+                            }
                             e.cancelBubble = true;
-                            setSelection([cp.id]);
+                            dragStartPos.current = e.target.getAbsolutePosition();
+                            useProjectStore.temporal.getState().pause();
+                        }}
+                        onDragMove={(e) => {
+                            if (seg.locked) return;
+                            const state = useProjectStore.getState();
+                            const cable = state.cables.find(c => c.id === seg.cableId);
+                            if (!cable) return;
+
+                            const dx = e.target.x();
+                            const dy = e.target.y();
+
+                            const pts = [...cable.points];
+                            const u = seg.segmentIdx;
+                            const v = u + 1;
+
+                            // Apply Delta
+                            let pStart = { x: pts[u].x + dx, y: pts[u].y + dy };
+                            let pEnd = { x: pts[u + 1].x + dx, y: pts[u + 1].y + dy };
+
+                            // Visual Patch for connectivity and orthogonality
+                            let visualPts = [...pts];
+                            visualPts[u] = pStart;
+                            visualPts[v] = pEnd;
+
+                            // 1. Connectivity Patches (Ends)
+                            if (u === 0 && cable.fromId) {
+                                const dev = state.hubs.find(h => h.id === cable.fromId) || state.anchors.find(a => a.id === cable.fromId);
+                                if (dev) {
+                                    const dPos = { x: dev.x, y: dev.y };
+                                    if (Math.abs(dPos.x - pStart.x) > 1 && Math.abs(dPos.y - pStart.y) > 1) {
+                                        visualPts.unshift(dPos, { x: pStart.x, y: dPos.y });
+                                    } else {
+                                        visualPts.unshift(dPos);
+                                    }
+                                }
+                            }
+                            if (v === pts.length - 1 && cable.toId) {
+                                const dev = state.hubs.find(h => h.id === cable.toId) || state.anchors.find(a => a.id === cable.toId);
+                                if (dev) {
+                                    const dPos = { x: dev.x, y: dev.y };
+                                    const last = visualPts[visualPts.length - 1];
+                                    if (Math.abs(dPos.x - last.x) > 1 && Math.abs(dPos.y - last.y) > 1) {
+                                        visualPts.push({ x: last.x, y: dPos.y }, dPos);
+                                    } else {
+                                        visualPts.push(dPos);
+                                    }
+                                }
+                            }
+
+                            // 2. Interior Orthogonality Patches (Live Smart Extension)
+                            // Note: index 'u' and 'v' might have shifted due to unshift
+                            const addedAtStart = visualPts.length > pts.length && u === 0 && cable.fromId ? (Math.abs(visualPts[0].x - visualPts[1].x) > 1 ? 2 : 1) : 0;
+                            const currentU = u + addedAtStart;
+                            const currentV = v + addedAtStart;
+
+                            if (currentU > 0) {
+                                const pPrev = visualPts[currentU - 1];
+                                const pCurr = visualPts[currentU];
+                                if (!isVertical(pPrev, pCurr) && !isHorizontal(pPrev, pCurr)) {
+                                    visualPts.splice(currentU, 0, { x: pPrev.x, y: pCurr.y });
+                                }
+                            }
+                            // Adjust v if we spliced
+                            const shiftedV = currentV + (currentU > 0 && !isVertical(visualPts[currentU - 1], visualPts[currentU]) && !isHorizontal(visualPts[currentU - 1], visualPts[currentU]) ? 1 : 0);
+                            if (shiftedV < visualPts.length - 1) {
+                                const pCurr = visualPts[shiftedV];
+                                const pNext = visualPts[shiftedV + 1];
+                                if (!isVertical(pCurr, pNext) && !isHorizontal(pCurr, pNext)) {
+                                    visualPts.splice(shiftedV + 1, 0, { x: pNext.x, y: pCurr.y });
+                                }
+                            }
+
+                            let d = '';
+                            visualPts.forEach((p, i) => {
+                                d += (i === 0 ? 'M ' : ' L ') + `${p.x} ${p.y}`;
+                            });
+
+                            const stage = e.target.getStage();
+                            const visualNode = stage?.findOne(`#visual-cable-${cable.id}`);
+                            if (visualNode) visualNode.setAttr('data', d);
+                        }}
+                        onDragEnd={(e) => {
+                            e.cancelBubble = true;
+                            const state = useProjectStore.getState();
+                            const cable = state.cables.find(c => c.id === seg.cableId);
+                            if (!cable) return;
+
+                            const dx = e.target.x();
+                            const dy = e.target.y();
+                            e.target.position({ x: 0, y: 0 });
+
+                            if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+
+                            const pts = cable.points;
+                            const u = seg.segmentIdx;
+                            const v = u + 1;
+
+                            // Patching Logic (Same as onDragMove but affects state)
+                            let finalPts = [...pts];
+                            finalPts[u] = { x: pts[u].x + dx, y: pts[u].y + dy };
+                            finalPts[v] = { x: pts[v].x + dx, y: pts[v].y + dy };
+
+                            // 1. Connectivity
+                            if (u === 0 && cable.fromId) {
+                                const dev = state.hubs.find(h => h.id === cable.fromId) || state.anchors.find(a => a.id === cable.fromId);
+                                if (dev) {
+                                    const dPos = { x: dev.x, y: dev.y };
+                                    if (Math.abs(dPos.x - finalPts[0].x) > 1 && Math.abs(dPos.y - finalPts[0].y) > 1) {
+                                        finalPts.unshift(dPos, { x: finalPts[0].x, y: dPos.y });
+                                    } else {
+                                        finalPts.unshift(dPos);
+                                    }
+                                }
+                            }
+                            if (v === pts.length - 1 && cable.toId) {
+                                const dev = state.hubs.find(h => h.id === cable.toId) || state.anchors.find(a => a.id === cable.toId);
+                                if (dev) {
+                                    const dPos = { x: dev.x, y: dev.y };
+                                    const last = finalPts[finalPts.length - 1];
+                                    if (Math.abs(dPos.x - last.x) > 1 && Math.abs(dPos.y - last.y) > 1) {
+                                        finalPts.push({ x: last.x, y: dPos.y }, dPos);
+                                    } else {
+                                        finalPts.push(dPos);
+                                    }
+                                }
+                            }
+
+                            // 2. Orthogonality
+                            // Need to correctly locate U and V in finalPts
+                            const startAdjust = u === 0 && cable.fromId ? (finalPts.length > pts.length ? (Math.abs(finalPts[0].x - finalPts[1].x) > 1 ? 2 : 1) : 0) : 0;
+                            const curU = u + startAdjust;
+                            const curV = v + startAdjust;
+
+                            if (curU > 0) {
+                                const pPrev = finalPts[curU - 1];
+                                const pCurr = finalPts[curU];
+                                if (!isVertical(pPrev, pCurr) && !isHorizontal(pPrev, pCurr)) {
+                                    finalPts.splice(curU, 0, { x: pPrev.x, y: pCurr.y });
+                                }
+                            }
+                            const nextIndexV = curV + (curU > 0 && !isVertical(finalPts[curU - 1], finalPts[curU]) && !isHorizontal(finalPts[curU - 1], finalPts[curU]) ? 1 : 0);
+                            if (nextIndexV < finalPts.length - 1) {
+                                const pCurr = finalPts[nextIndexV];
+                                const pNext = finalPts[nextIndexV + 1];
+                                if (!isVertical(pCurr, pNext) && !isHorizontal(pCurr, pNext)) {
+                                    finalPts.splice(nextIndexV + 1, 0, { x: pNext.x, y: pCurr.y });
+                                }
+                            }
+
+                            // 3. Clean-up redundant segments
+                            const cleanPts: Point[] = [];
+                            finalPts.forEach((p, i) => {
+                                if (i === 0) cleanPts.push(p);
+                                else {
+                                    const prev = cleanPts[cleanPts.length - 1];
+                                    if (distance(p, prev) > 0.5) {
+                                        // Check if collinear with prev-prev
+                                        if (cleanPts.length >= 2) {
+                                            const pp = cleanPts[cleanPts.length - 2];
+                                            const isHoriz = isHorizontal(pp, prev) && isHorizontal(prev, p);
+                                            const isVert = isVertical(pp, prev) && isVertical(prev, p);
+                                            if (isHoriz || isVert) {
+                                                cleanPts[cleanPts.length - 1] = p; // Remove middle man
+                                            } else {
+                                                cleanPts.push(p);
+                                            }
+                                        } else {
+                                            cleanPts.push(p);
+                                        }
+                                    }
+                                }
+                            });
+
+                            state.updateCable(cable.id, { points: cleanPts });
+                            useProjectStore.temporal.getState().resume();
                         }}
                     />
                 );

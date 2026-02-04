@@ -1,6 +1,6 @@
 import React from 'react';
 import { useProjectStore } from '../../../store/useProjectStore';
-import { Cable, Network, AlignJustify, RefreshCw, X } from 'lucide-react';
+import { Cable, Network, RefreshCw, X } from 'lucide-react';
 
 export const CableSidebar: React.FC = () => {
     const {
@@ -69,28 +69,7 @@ export const CableSidebar: React.FC = () => {
 
 
 
-                {/* 3. Visualization */}
-                <div>
-                    <h4 className={`text-[10px] font-bold uppercase ${textHeader} mb-2 flex items-center gap-2`}>
-                        <AlignJustify size={12} />
-                        <span>Visualization</span>
-                    </h4>
-                    <button
-                        onClick={() => setCableSettings({ showParallel: !cableSettings.showParallel })}
-                        className={`w-full flex items-center justify-between p-2 rounded border transition-all ${cableSettings.showParallel
-                            ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400'
-                            : `${isDark ? 'bg-[#252526] border-[#333]' : 'bg-gray-50 border-gray-200'} text-gray-500`
-                            }`}
-                    >
-                        <span className="text-xs font-medium">Electrical View (Parallel)</span>
-                        <div className={`w-8 h-4 rounded-full relative transition-colors ${cableSettings.showParallel ? 'bg-indigo-500' : 'bg-gray-600'}`}>
-                            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${cableSettings.showParallel ? 'left-4.5' : 'left-0.5'}`} style={{ left: cableSettings.showParallel ? '18px' : '2px' }}></div>
-                        </div>
-                    </button>
-                    <p className="text-[9px] text-gray-500 mt-1 px-1">
-                        Display cables as parallel bus lines instead of overlapping paths.
-                    </p>
-                </div>
+
 
                 {/* 4. Actions */}
                 <div className="pt-4 border-t border-gray-700/50">

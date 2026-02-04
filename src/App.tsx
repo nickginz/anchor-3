@@ -9,6 +9,7 @@ import { CableSidebar } from './components/UI/Sidebar/CableSidebar';
 import { WallPropertiesToolbar } from './components/UI/Overlays/WallPropertiesToolbar';
 
 import { HubPropertiesToolbar } from './components/UI/Overlays/HubPropertiesToolbar';
+import { CablePropertiesToolbar } from './components/UI/Overlays/CablePropertiesToolbar';
 import { HubSettingsModal } from './components/UI/Modals/HubSettingsModal';
 import { MainStage } from './components/Canvas/MainStage';
 
@@ -75,6 +76,7 @@ function App() {
       <HelpSidebar />
       <WallPropertiesToolbar />
       <HubPropertiesToolbar />
+      <CablePropertiesToolbar />
       <HubSettingsModal />
       <div className="flex-1 w-full h-full">
         <MainStage />

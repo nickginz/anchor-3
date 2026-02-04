@@ -52,12 +52,12 @@
 
 ## 🚀 Planned (To Do)
 
-### Export System
-- [x] **Image Export**:
-    - [x] Export Viewport (PNG).
-    - [x] **High-Resolution support**: Adjustable via pixelRatio.
-    - [x] **Region Export**: User defined area or "Fit Content".
-- [ ] **DXF Export (CAD)**:
+- [ ] **Cable Management**
+    - [x] Auto-Routing (A* Orthogonal).
+    - [x] Manual Routing (Drag Segments/Vertices).
+    - [ ] **Smart Extension**: Auto-extend cables when segments are dragged away from devices.
+    - [ ] **Length Tracking**: Real-time length calculation (with vertical drops/slack).
+    - [ ] **BOM Integration**: Cable totals in export.
     - [ ] Generate `.dxf` file with proper layers (`WALLS`, `ANCHORS`).
     - [ ] Export Walls as LINES, Anchors as CIRCLES.
 - [x] **PDF Export**:
@@ -67,6 +67,19 @@
     - [ ] Vector paths (instead of raster).
     - [ ] PDF Layers.
     - [ ] BOM / Inventory Page.
+- [x] **UI Refinement**
+  - [x] Remove "ELECTRICAL VIEW" from Cable Routing sidebar.
+- [x] **Documentation Updates**
+  - [x] Add Anchor Placement explanation to Help & Guide.
+  - [x] Add Cable Routing explanation to Help & Guide.
+- [x] **Cable Locking**
+  - [x] Select a cable and verify `CablePropertiesToolbar` appears
+- [x] Lock/Unlock a cable and verify dragging behavior
+- [x] Verify "Regenerate Routes" preserves locked cables
+- [x] **Debug: Fix Smart Cable Extension and Connectivity**
+  - [x] Restore 'dogleg' logic preserved during drag
+  - [x] Fix Hub/Anchor disconnection bug
+  - [x] Allow cable dragging in 'Select' mode (unlocked only)
 
 ### Implement Wall Settings Popup (Width and Material)
 
@@ -138,6 +151,11 @@ Add a dedicated modal for editing wall properties (thickness and material) and i
     - [ ] Render color-coded heatmap overlay.
 - [ ] **Coverage Zones**:
     - [ ] Visual indicator of "Good/Bad" coverage areas.
+- [x] **Smart Cable Extension**
+  - [x] Enable individual segment dragging (orthogonal constraint).
+  - [x] Auto-insert corners when dragging breaks orthogonality.
+  - [x] Snap/Bridge connections to devices when dragging ends.
+  - [x] Fix "Freezing" issue during drag (implemented `useRef` for stability).
 
 ### Automation
 - [ ] **Wall Detection**:
