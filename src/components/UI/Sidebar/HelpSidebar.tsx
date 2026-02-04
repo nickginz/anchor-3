@@ -164,7 +164,7 @@ const DOCUMENTATION: HelpSection[] = [
                             <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><FileUp size={14} /></div>
                             <div>
                                 <p className="font-bold text-gray-200 text-xs">Import / Export</p>
-                                <p className="text-[10px] text-gray-400 text-pretty">Import background images/DXF. Export finished plan as PDF or Image.</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Import background images/DXF. Export finished plan as PDF or Image. <strong>Alt+Click</strong> to select.</p>
                             </div>
                         </div>
                         <div className="flex items-start space-x-3">
@@ -200,7 +200,7 @@ const DOCUMENTATION: HelpSection[] = [
                             <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Scaling size={14} /></div>
                             <div>
                                 <p className="font-bold text-gray-200 text-xs">Scale (S)</p>
-                                <p className="text-[10px] text-gray-400 text-pretty">Set the pixel-to-meter ratio.</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Set the pixel-to-meter ratio. If icon is <span className="text-orange-400 font-bold">Orange</span>, scale is not set.</p>
                             </div>
                         </div>
                         <div className="flex items-start space-x-3">
@@ -245,6 +245,7 @@ const DOCUMENTATION: HelpSection[] = [
                         <tr><td className="p-2 border-r panel-border font-mono text-accent">A</td><td className="p-2">Place Anchor</td></tr>
                         <tr><td className="p-2 border-r panel-border font-mono text-accent">H</td><td className="p-2">Place Hub</td></tr>
                         <tr><td className="p-2 border-r panel-border font-mono text-accent">V / Esc</td><td className="p-2">Select Mode</td></tr>
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">Alt + Click</td><td className="p-2">Select Import</td></tr>
                         <tr><td className="p-2 border-r panel-border font-mono text-accent">Ctrl + Z</td><td className="p-2">Undo</td></tr>
                     </tbody>
                 </table>

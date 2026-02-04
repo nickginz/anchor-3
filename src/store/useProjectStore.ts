@@ -99,6 +99,13 @@ export interface ProjectState {
     setIsBOMOpen: (v: boolean) => void;
     isHelpOpen: boolean; // NEW: Help/About Sidebar
     setIsHelpOpen: (v: boolean) => void;
+
+    // Hub Settings Modal
+    isHubSettingsOpen: boolean;
+    activeHubId: string | null;
+    setIsHubSettingsOpen: (v: boolean) => void;
+    setActiveHubId: (id: string | null) => void;
+
     exportRegion: Point[] | null;
     setExportRegion: (region: Point[] | null) => void;
 
@@ -422,6 +429,11 @@ export const useProjectStore = create<ProjectState>()(
             setIsBOMOpen: (v) => set({ isBOMOpen: v }),
             isHelpOpen: false,
             setIsHelpOpen: (v) => set({ isHelpOpen: v }),
+
+            isHubSettingsOpen: false,
+            activeHubId: null,
+            setIsHubSettingsOpen: (v) => set({ isHubSettingsOpen: v }),
+            setActiveHubId: (id) => set({ activeHubId: id }),
             exportRegion: null,
             setExportRegion: (region) => set({ exportRegion: region }),
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useProjectStore } from '../../../store/useProjectStore';
-import { X } from 'lucide-react';
+import { X, ArrowRight, ArrowDown } from 'lucide-react';
 
 export const WallPropertiesToolbar: React.FC = () => {
     const { walls, selectedIds, updateWall, setSelection } = useProjectStore(
@@ -83,6 +83,42 @@ export const WallPropertiesToolbar: React.FC = () => {
                     <option value="glass">Glass</option>
                 </select>
             </div>
+
+            {/* Alignment Tools (Single Wall Only) */}
+            {selectedWalls.length === 1 && (
+                <div className="flex items-center space-x-1 border-l border-gray-200 dark:border-[#444] pl-3 ml-1">
+                    <button
+                        onClick={() => {
+                            const w = selectedWalls[0];
+                            const [x1, y1, x2, y2] = w.points;
+                            // Make Horizontal: Move Rightest Edge (Max X)
+                            // If x1 > x2, modify p1.y to match p2.y
+                            // If x2 > x1, modify p2.y to match p1.y
+                            if (x1 > x2) updateWall(w.id, { points: [x1, y2, x2, y2] });
+                            else updateWall(w.id, { points: [x1, y1, x2, y1] });
+                        }}
+                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#444] text-gray-500 hover:text-blue-500 transition-colors"
+                        title="Make Horizontal (Align Right Edge)"
+                    >
+                        <ArrowRight size={14} className="transform rotate-0" />
+                    </button>
+                    <button
+                        onClick={() => {
+                            const w = selectedWalls[0];
+                            const [x1, y1, x2, y2] = w.points;
+                            // Make Vertical: Move Bottom Edge (Max Y)
+                            // If y1 > y2, modify p1.x to match p2.x
+                            // If y2 > y1, modify p2.x to match p1.x
+                            if (y1 > y2) updateWall(w.id, { points: [x2, y1, x2, y2] });
+                            else updateWall(w.id, { points: [x1, y1, x1, y2] });
+                        }}
+                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#444] text-gray-500 hover:text-blue-500 transition-colors"
+                        title="Make Vertical (Align Bottom Edge)"
+                    >
+                        <ArrowDown size={14} />
+                    </button>
+                </div>
+            )}
 
             {/* Close / Deselect */}
             <button

@@ -1038,7 +1038,12 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 if (onOpenMenu) {
                     onOpenMenu(e.evt.clientX, e.evt.clientY, [
                         { label: 'Delete Hub', action: () => state.removeHub(hitHubInternal3.id) },
-                        { label: 'Properties...', action: () => alert(`Hub: ${hitHubInternal3.capacity} ports`) }
+                        {
+                            label: 'Properties...', action: () => {
+                                state.setActiveHubId(hitHubInternal3.id);
+                                state.setIsHubSettingsOpen(true);
+                            }
+                        }
                     ]);
                     return;
                 }

@@ -7,6 +7,9 @@ import { BOMModal } from './components/UI/Modals/BOMModal';
 import { HelpSidebar } from './components/UI/Sidebar/HelpSidebar';
 import { CableSidebar } from './components/UI/Sidebar/CableSidebar';
 import { WallPropertiesToolbar } from './components/UI/Overlays/WallPropertiesToolbar';
+
+import { HubPropertiesToolbar } from './components/UI/Overlays/HubPropertiesToolbar';
+import { HubSettingsModal } from './components/UI/Modals/HubSettingsModal';
 import { MainStage } from './components/Canvas/MainStage';
 
 import { useProjectStore } from './store/useProjectStore';
@@ -44,6 +47,7 @@ function App() {
         if (state.isExportSidebarOpen) { state.setIsExportSidebarOpen(false); return; }
         if (state.isCableSidebarOpen) { state.setIsCableSidebarOpen(false); return; }
         if (state.isAutoPlacementOpen) { state.setIsAutoPlacementOpen(false); return; }
+        if (state.isHubSettingsOpen) { state.setIsHubSettingsOpen(false); return; }
         if (state.isSettingsOpen) { state.setIsSettingsOpen(false); return; }
       }
     };
@@ -51,6 +55,15 @@ function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // Sync Theme with HTML Class for Tailwind
+  React.useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
 
   return (
     <div className={`flex flex-col h-screen w-screen bg-[var(--bg-canvas)] ${theme === 'light' ? 'theme-light' : ''}`}>
@@ -61,6 +74,8 @@ function App() {
       <CableSidebar />
       <HelpSidebar />
       <WallPropertiesToolbar />
+      <HubPropertiesToolbar />
+      <HubSettingsModal />
       <div className="flex-1 w-full h-full">
         <MainStage />
       </div>
