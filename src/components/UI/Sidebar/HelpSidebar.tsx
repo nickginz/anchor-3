@@ -5,7 +5,7 @@ import {
     MousePointer2, Undo2, Redo2, Upload,
     PenTool, Lock, Square, BoxSelect,
     Wifi, Wand2, Router, Spline, Cable, Settings,
-    FileUp, BookTemplate, Calculator, Ruler, Scaling, FilePlus
+    FileUp, BookTemplate, Calculator, Ruler, Scaling, FilePlus, MenuSquare
 } from 'lucide-react';
 
 const SIDEBAR_MIN_WIDTH = 300;
@@ -69,7 +69,7 @@ const DOCUMENTATION: HelpSection[] = [
                             <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Upload size={14} /></div>
                             <div>
                                 <p className="font-bold text-gray-200 text-xs">Layer Toggles</p>
-                                <p className="text-[10px] text-gray-400 text-pretty">Show or hide specific layers like Walls, Cables, or the Floorplan image.</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Show/hide Walls, Cables, Floorplan. <strong>Signal Heatmap</strong> visualizes coverage strength.</p>
                             </div>
                         </div>
                     </div>
@@ -82,7 +82,7 @@ const DOCUMENTATION: HelpSection[] = [
                             <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><PenTool size={14} /></div>
                             <div>
                                 <p className="font-bold text-gray-200 text-xs">Wall (W)</p>
-                                <p className="text-[10px] text-gray-400 text-pretty">Draw linear walls. Click to start, click to place corners. Esc to stop.</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Draw linear walls. Adjust <strong>Width (m)</strong> and <strong>Material</strong> in settings. Esc to stop.</p>
                             </div>
                         </div>
                         <div className="flex items-start space-x-3">
@@ -208,6 +208,13 @@ const DOCUMENTATION: HelpSection[] = [
                             <div>
                                 <p className="font-bold text-gray-200 text-xs">New Project</p>
                                 <p className="text-[10px] text-gray-400 text-pretty">Clear canvas and start over.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><MenuSquare size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Selected Walls Toolbar</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Select multiple walls to batch edit <strong>Thickness</strong> and <strong>Material</strong>.</p>
                             </div>
                         </div>
                     </div>

@@ -240,11 +240,13 @@ export const HeatmapLayer: React.FC<{ stage: any }> = ({ stage }) => {
             fCtx.drawImage(gridCanvas, 0, 0, boundsWidth, boundsHeight);
 
             const finalImage = new window.Image();
+            finalImage.onload = () => {
+                // Store positioning info
+                (finalImage as any)._x = minX;
+                (finalImage as any)._y = minY;
+                setImage(finalImage);
+            };
             finalImage.src = finalCanvas.toDataURL();
-            // Store positioning info
-            (finalImage as any)._x = minX;
-            (finalImage as any)._y = minY;
-            setImage(finalImage);
         }
 
     }, [walls, anchors, showHeatmap, layers.heatmap, scaleRatio, stage, heatmapResolution, heatmapColorMode, heatmapThresholds]);

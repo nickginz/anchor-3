@@ -104,6 +104,29 @@ export const Ribbon: React.FC = () => {
     const { addWalls, activeImportId, importedObjects } = useProjectStore();
     const activeImport = activeImportId ? importedObjects.find(o => o.id === activeImportId) : null;
 
+    // DEBUG: Log render and config state
+    console.log('[Ribbon] Rendered. isConfigOpen:', isConfigOpen, 'ToolbarSize:', toolbarSize);
+
+    // Local Escape Handler (Lower priority logic via checks)
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                const state = useProjectStore.getState();
+                // Defer to Global Handlers if high priority
+                if (state.selectedIds.length > 0 || state.activeTool !== 'select') return;
+
+                // Close Local Modals
+                if (isNewProjectModalOpen) { setIsNewProjectModalOpen(false); return; }
+                if (isSlotsOpen) { setIsSlotsOpen(false); return; }
+                if (isLayerManagerOpen) { setIsLayerManagerOpen(false); return; }
+                if (isDetectionModalOpen) { setIsDetectionModalOpen(false); return; }
+                if (isConfigOpen) { setIsConfigOpen(false); return; }
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isNewProjectModalOpen, isSlotsOpen, isLayerManagerOpen, isDetectionModalOpen, isConfigOpen]);
+
     return (
         <div className={`${toolbarSize === 'small' ? 'h-[54px]' : 'h-[64px]'} panel-bg border-b panel-border flex items-stretch px-4 shadow-xl z-20 relative select-none transition-all duration-300`}>
 
@@ -161,12 +184,30 @@ export const Ribbon: React.FC = () => {
             />
 
             {/* Config Modal Overlay */}
-            {isConfigOpen === true && (
+            {isConfigOpen === 'walls' && (
                 <div className="absolute top-16 left-0 w-64 panel-bg border panel-border p-3 shadow-2xl rounded-b-lg z-50 text-white animate-in slide-in-from-top-2">
                     <h3 className="text-xs font-bold mb-2 uppercase text-secondary">Wall Settings</h3>
-                    <div className="flex flex-col space-y-2 mb-3">
+
+                    {/* Material Selector */}
+                    <div className="mb-3">
+                        <span className="text-xs text-secondary block mb-1">Material:</span>
+                        <select
+                            value={useProjectStore.getState().wallMaterial}
+                            onChange={(e) => useProjectStore.getState().setWallMaterial(e.target.value as any)}
+                            className="w-full input-bg border panel-border rounded px-2 py-1 text-xs text-primary focus:outline-none focus:border-[var(--accent)]"
+                        >
+                            <option value="drywall">Drywall</option>
+                            <option value="concrete">Concrete</option>
+                            <option value="brick">Brick</option>
+                            <option value="wood">Wood</option>
+                            <option value="metal">Metal</option>
+                            <option value="glass">Glass</option>
+                        </select>
+                    </div>
+
+                    <div className="mb-3">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs text-secondary">Standard (m):</span>
+                            <span className="text-xs text-secondary">Width (m):</span>
                             <input
                                 type="number"
                                 step="0.05"
@@ -175,31 +216,11 @@ export const Ribbon: React.FC = () => {
                                 className="input-bg border panel-border rounded px-2 py-1 text-xs w-16 focus:outline-none focus:border-blue-500 text-primary"
                             />
                         </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs text-secondary">Thick (m):</span>
-                            <input
-                                type="number"
-                                step="0.05"
-                                value={useProjectStore.getState().thickWallThickness}
-                                onChange={(e) => useProjectStore.getState().setThickWallThickness(parseFloat(e.target.value) || 0.2)}
-                                className="input-bg border panel-border rounded px-2 py-1 text-xs w-16 focus:outline-none focus:border-blue-500 text-primary"
-                            />
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-300">Wide (m):</span>
-                            <input
-                                type="number"
-                                step="0.05"
-                                value={useProjectStore.getState().wideWallThickness}
-                                onChange={(e) => useProjectStore.getState().setWideWallThickness(parseFloat(e.target.value) || 0.3)}
-                                className="input-bg border panel-border rounded px-2 py-1 text-xs w-16 focus:outline-none focus:border-blue-500 text-primary"
-                            />
-                        </div>
                     </div>
                     <div className="flex justify-end space-x-2">
                         <button
                             onClick={() => setIsConfigOpen(false)}
-                            className="text-xs px-2 py-1 rounded bg-blue-600 hover:bg-blue-500"
+                            className="text-xs px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white"
                         >Done</button>
                     </div>
                 </div>
@@ -310,7 +331,14 @@ export const Ribbon: React.FC = () => {
                             >
                                 <RectWallIcon size={14} />
                             </button>
-
+                            {/* Wall Settings Trigger (Small) */}
+                            <button
+                                onClick={() => setIsConfigOpen(isConfigOpen === 'walls' ? false : 'walls')}
+                                className={`p-0.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] ${isConfigOpen === 'walls' ? 'text-accent' : 'text-gray-400'} `}
+                                title="Wall Settings"
+                            >
+                                <Settings size={14} />
+                            </button>
                         </div>
                     ) : (
                         <div className="flex space-x-0.5">
@@ -348,6 +376,14 @@ export const Ribbon: React.FC = () => {
                                 className={`p-1.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] transition-colors ${useProjectStore.getState().wallsLocked ? 'bg-red-600 text-white shadow-inner' : 'text-secondary'} `}
                             >
                                 <Lock size={18} />
+                            </button>
+                            {/* Wall Settings Trigger (Large) */}
+                            <button
+                                onClick={() => setIsConfigOpen(isConfigOpen === 'walls' ? false : 'walls')}
+                                className={`p-1.5 rounded hover:bg-[#e5e7eb] dark:hover:bg-[#333] ${isConfigOpen === 'walls' ? 'text-accent' : 'text-gray-400'} `}
+                                title="Wall Settings"
+                            >
+                                <Settings size={16} />
                             </button>
                         </div>
                     )}

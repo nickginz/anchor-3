@@ -68,6 +68,43 @@
     - [ ] PDF Layers.
     - [ ] BOM / Inventory Page.
 
+### Implement Wall Settings Popup (Width and Material)
+
+Add a dedicated modal for editing wall properties (thickness and material) and integrate it into the wall context menu.
+
+## Proposed Changes
+
+### [Store] [useProjectStore.ts](file:///c:/Users/NikolayGunzburg/Desktop/wall_pro/ANCHOR2/src/store/useProjectStore.ts)
+- Add `isWallSettingsOpen: boolean` and `wallSettingsIds: string[]` to the state.
+- Add `setIsWallSettingsOpen: (open: boolean, ids?: string[]) => void` action.
+
+### [UI Components] [NEW] [WallSettingsModal.tsx](file:///c:/Users/NikolayGunzburg/Desktop/wall_pro/ANCHOR2/src/components/UI/Modals/WallSettingsModal.tsx)
+- Create a premium-looking modal using the project's design system.
+- Include a numeric input for wall thickness (meters).
+- Include a dropdown/select for wall material (Concrete, Drywall, Brick, Metal, Wood, Glass).
+- Use `updateWall` from the store to apply changes.
+
+### [UI Components] [App.tsx](file:///c:/Users/NikolayGunzburg/Desktop/wall_pro/ANCHOR2/src/App.tsx)
+- Render `WallSettingsModal` alongside other global modals.
+
+### [Canvas] [InteractionLayer.tsx](file:///c:/Users/NikolayGunzburg/Desktop/wall_pro/ANCHOR2/src/components/Canvas/InteractionLayer.tsx)
+- Add a "Properties..." menu item to the wall context menu.
+- The "Properties..." action will call `setIsWallSettingsOpen(true, targetIds)`.
+
+## Verification Plan
+
+### Automated Tests
+- N/A (UI-centric change)
+
+### Manual Verification
+1.  Draw a few walls.
+2.  Right-click on a wall to open the context menu.
+3.  Select "Properties...".
+4.  Verify that the `WallSettingsModal` appears.
+5.  Change the material and thickness and click "Apply/Done".
+6.  Verify that the wall's appearance changes (if material changed) and its thickness is updated on the canvas.
+7.  Check the Bill of Materials (BOM) to verify updated properties are reflected.
+
 ### Debugging & Fixes (Priority)
 - [x] **DXF Interaction**:
     - [x] Investigate why DXF objects cannot be selected/moved.

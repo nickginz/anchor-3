@@ -29,6 +29,8 @@ export interface ProjectState {
 
     lastLoaded: number; // Timestamp of last project load
     wallPreset: 'default' | 'thick' | 'wide';
+    wallMaterial: 'drywall' | 'concrete' | 'brick' | 'metal' | 'wood' | 'glass'; // RESTORED: Wall Material State
+    setWallMaterial: (material: 'drywall' | 'concrete' | 'brick' | 'metal' | 'wood' | 'glass') => void;
     wallsLocked: boolean; // NEW: Lock walls from editing/selection
     toolbarSize: 'small' | 'big'; // NEW: Global Toolbar Size
 
@@ -296,6 +298,7 @@ export const useProjectStore = create<ProjectState>()(
             activeTool: 'select',
             selectedIds: [],
             wallPreset: 'thick',
+            wallMaterial: 'drywall', // Default Material
             standardWallThickness: 0.1, // Default 10cm
             thickWallThickness: 0.1,
             wideWallThickness: 0.2,
@@ -363,6 +366,7 @@ export const useProjectStore = create<ProjectState>()(
             setTool: (tool) => set({ activeTool: tool }),
             setSelection: (ids) => set({ selectedIds: ids }),
             setWallPreset: (preset) => set({ wallPreset: preset }),
+            setWallMaterial: (m) => set({ wallMaterial: m }),
             setWallsLocked: (locked: boolean) => set({ wallsLocked: locked }),
 
             setStandardWallThickness: (val) => set({ standardWallThickness: val }),

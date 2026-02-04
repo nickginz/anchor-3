@@ -16,12 +16,9 @@ interface InteractionLayerProps {
     onOpenScaleModal?: (pixelDistance: number) => void;
 }
 
-const getWallParams = (preset: string, standard: number, thick: number, wide: number) => {
-    switch (preset) {
-        case 'thick': return { thickness: thick, material: 'drywall' as const };
-        case 'wide': return { thickness: wide, material: 'concrete' as const };
-        default: return { thickness: standard, material: 'drywall' as const };
-    }
+const getWallParams = (standard: number, material: string) => {
+    // Simplified: Always use "standard" (Width) thickness and selected material
+    return { thickness: standard, material: material as any };
 };
 
 // Helper: Improved Point in Polygon / Near Segment check
@@ -138,7 +135,7 @@ const THEME_COLORS = {
 };
 
 export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpenMenu, onOpenScaleModal }) => {
-    const { activeTool, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setTool, walls, anchors, hubs, cables, addCable, setSelection, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme, setExportRegion, exportRegion, wallsLocked, scaleRatio, lastLoaded } = useProjectStore(
+    const { activeTool, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setTool, walls, anchors, hubs, cables, addCable, setSelection, wallPreset, wallMaterial, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme, setExportRegion, exportRegion, wallsLocked, scaleRatio, lastLoaded } = useProjectStore(
         useShallow((state: ProjectState) => ({
             activeTool: state.activeTool,
             addWall: state.addWall,
@@ -154,6 +151,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             addCable: state.addCable,
             setSelection: state.setSelection,
             wallPreset: state.wallPreset,
+            wallMaterial: state.wallMaterial,
             standardWallThickness: state.standardWallThickness,
             thickWallThickness: state.thickWallThickness,
             wideWallThickness: state.wideWallThickness,
@@ -630,7 +628,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                                             if (start.x !== end.x || start.y !== end.y) {
                                                 addWall({
                                                     points: [start.x, start.y, end.x, end.y],
-                                                    ...getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness) as any
+                                                    ...getWallParams(standardWallThickness, wallMaterial) as any
                                                 });
                                             }
                                         }
@@ -1115,8 +1113,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             return;
         }
 
-        // Deselect if clicking empty space in cable_edit mode
-        setSelection([]);
+
 
         // Scale Tool
         if (activeTool === 'scale') {
@@ -1177,7 +1174,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     if (start.x !== end.x || start.y !== end.y) {
                         addWall({
                             points: [start.x, start.y, end.x, end.y],
-                            ...getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness) as any
+                            ...getWallParams(standardWallThickness, wallMaterial) as any
                         });
                     }
                     // Continue chain
@@ -1227,7 +1224,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                         const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, anchors, 20 / (stage?.scaleX() || 1)) : null;
                         if (snapP4 && snapP4.type === 'edge' && snapP4.id) state.splitWall(snapP4.id, snapP4.point);
 
-                        const params = getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness);
+                        const params = getWallParams(standardWallThickness, wallMaterial);
 
                         addWalls([
                             { points: [x1, y1, x2, y1], ...params as any },
@@ -1309,7 +1306,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, anchors, 20 / (stage?.scaleX() || 1)) : null;
                     if (snapP4 && snapP4.type === 'edge' && snapP4.id) state.splitWall(snapP4.id, snapP4.point);
 
-                    const params = getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness);
+                    const params = getWallParams(standardWallThickness, wallMaterial);
 
                     addWalls([
                         { points: [p1.x, p1.y, p2.x, p2.y], ...params as any }, // Base
@@ -1856,7 +1853,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                                 const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, anchors, 20 / ((stage?.scaleX() || 1))) : null;
                                 if (snapP4 && snapP4.type === 'edge' && snapP4.id) state.splitWall(snapP4.id, snapP4.point);
 
-                                const params = getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness);
+                                const params = getWallParams(standardWallThickness, wallMaterial);
                                 addWalls([
                                     { points: [x1, y1, x2, y1], ...params as any },
                                     { points: [x2, y1, x2, y2], ...params as any },
@@ -1900,7 +1897,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                             const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, anchors, 20 / ((stage?.scaleX() || 1))) : null;
                             if (snapP4 && snapP4.type === 'edge' && snapP4.id) state.splitWall(snapP4.id, snapP4.point);
 
-                            const params = getWallParams(wallPreset, standardWallThickness, thickWallThickness, wideWallThickness);
+                            const params = getWallParams(standardWallThickness, wallMaterial);
 
                             addWalls([
                                 { points: [p1.x, p1.y, p2.x, p2.y], ...params as any },
@@ -2011,7 +2008,12 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                         maxY: Math.max(selectionStart.y, currentMousePos.y)
                     };
                     const foundIds = getIdsInRect(rect, isCrossing);
-                    setSelection(foundIds);
+                    if (isShiftDown) {
+                        const current = useProjectStore.getState().selectedIds;
+                        setSelection([...new Set([...current, ...foundIds])]);
+                    } else {
+                        setSelection(foundIds);
+                    }
 
                 } else if (selectionStart && !hasDragRect) {
                     const clickPos = getStagePoint();
