@@ -254,6 +254,51 @@ export const ExportSidebar: React.FC = () => {
                     </div>
                 )}
 
+                {/* Overlay Options */}
+                <div className="space-y-2">
+                    <h4 className={`text-[11px] font-bold uppercase ${subTextClass} mb-2`}>Overlays</h4>
+
+                    <button
+                        onClick={() => useProjectStore.getState().setShowExportBOM(!useProjectStore.getState().showExportBOM)}
+                        className={`w-full flex items-center justify-between p-2 rounded border transition-colors ${useProjectStore.getState().showExportBOM
+                            ? 'bg-blue-900/10 border-blue-500/50'
+                            : `${isDark ? 'bg-[#252526] border-[#333]' : 'bg-gray-50 border-gray-200'}`}`}
+                    >
+                        <span className={`text-xs ${textClass}`}>Show Bill of Materials</span>
+                        {useProjectStore.getState().showExportBOM ? (
+                            <div className="w-8 h-4 bg-blue-500 rounded-full relative">
+                                <div className="absolute right-0.5 top-0.5 w-3 h-3 bg-white rounded-full shadow-sm"></div>
+                            </div>
+                        ) : (
+                            <div className="w-8 h-4 bg-gray-400 rounded-full relative">
+                                <div className="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full shadow-sm"></div>
+                            </div>
+                        )}
+                    </button>
+
+                    <button
+                        onClick={() => useProjectStore.getState().setShowExportScaleBar(!useProjectStore.getState().showExportScaleBar)}
+                        className={`w-full flex items-center justify-between p-2 rounded border transition-colors ${useProjectStore.getState().showExportScaleBar
+                            ? 'bg-blue-900/10 border-blue-500/50'
+                            : `${isDark ? 'bg-[#252526] border-[#333]' : 'bg-gray-50 border-gray-200'}`}`}
+                    >
+                        <span className={`text-xs ${textClass}`}>Show Scale Bar</span>
+                        {useProjectStore.getState().showExportScaleBar ? (
+                            <div className="w-8 h-4 bg-blue-500 rounded-full relative">
+                                <div className="absolute right-0.5 top-0.5 w-3 h-3 bg-white rounded-full shadow-sm"></div>
+                            </div>
+                        ) : (
+                            <div className="w-8 h-4 bg-gray-400 rounded-full relative">
+                                <div className="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full shadow-sm"></div>
+                            </div>
+                        )}
+                    </button>
+
+                    <p className={`text-[9px] ${subTextClass} mt-1 italic pl-1`}>
+                        Items will appear in the export file.
+                    </p>
+                </div>
+
                 {/* Region Selection */}
                 <div>
                     <h4 className={`text-[11px] font-bold uppercase ${subTextClass} mb-2`}>Export Area</h4>

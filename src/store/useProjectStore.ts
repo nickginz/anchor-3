@@ -95,6 +95,20 @@ export interface ProjectState {
     // Export Tool State
     isExportSidebarOpen: boolean;
     setIsExportSidebarOpen: (v: boolean) => void;
+    showExportBOM: boolean; // New
+    setShowExportBOM: (v: boolean) => void; // New
+    showExportScaleBar: boolean; // New
+    setShowExportScaleBar: (v: boolean) => void; // New
+    showExportBOM: boolean; // New
+    setShowExportBOM: (v: boolean) => void; // New
+    exportBOMPosition: { x: number; y: number } | null;
+    setExportBOMPosition: (pos: { x: number; y: number } | null) => void;
+
+    showExportScaleBar: boolean; // New
+    setShowExportScaleBar: (v: boolean) => void; // New
+    exportScalePosition: { x: number; y: number } | null;
+    setExportScalePosition: (pos: { x: number; y: number } | null) => void;
+
     isBOMOpen: boolean;
     setIsBOMOpen: (v: boolean) => void;
     isHelpOpen: boolean; // NEW: Help/About Sidebar
@@ -425,6 +439,16 @@ export const useProjectStore = create<ProjectState>()(
 
             isExportSidebarOpen: false,
             setIsExportSidebarOpen: (v) => set({ isExportSidebarOpen: v }),
+            showExportBOM: true,
+            setShowExportBOM: (v) => set({ showExportBOM: v }),
+            exportBOMPosition: null,
+            setExportBOMPosition: (pos) => set({ exportBOMPosition: pos }),
+
+            showExportScaleBar: true,
+            setShowExportScaleBar: (v) => set({ showExportScaleBar: v }),
+            exportScalePosition: null,
+            setExportScalePosition: (pos) => set({ exportScalePosition: pos }),
+
             isBOMOpen: false,
             setIsBOMOpen: (v) => set({ isBOMOpen: v }),
             isHelpOpen: false,

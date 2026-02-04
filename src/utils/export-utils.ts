@@ -115,9 +115,42 @@ export const exportCanvas = async (stage: Konva.Stage, options: ExportOptions) =
     const anchorRadiusGroups = ghostStage.find('.anchor-radius');
     const anchorCoreGroups = ghostStage.find('.anchor-core');
 
+    // -------------------------------------------------------------
+    // STYLE OVERRIDES FOR EXPORT (BOM & Scale Bar)
+    // -------------------------------------------------------------
+    // Force White Background / Black Text for these overlays
+    const overlays = [
+        ...ghostStage.find('.export-bom-group'),
+        ...ghostStage.find('.export-scale-group')
+    ];
+
+    overlays.forEach((group: any) => {
+        // Background Rects
+        const rects = group.find('Rect');
+        rects.forEach((r: any) => {
+            // Main background (usually the first one or largest)
+            if (r.fill() !== 'transparent') {
+                r.fill('rgba(255, 255, 255, 0.9)');
+                r.stroke('#000000');
+            }
+        });
+
+        // Text
+        const texts = group.find('Text');
+        texts.forEach((t: any) => {
+            t.fill('#000000');
+        });
+
+        // Lines
+        const lines = group.find('Line');
+        lines.forEach((l: any) => {
+            l.stroke('#000000');
+        });
+    });
+
     ghostStage.draw();
 
-    // Verify Dimensions & Calculate Fit for Scale Bar
+    // Verify Dimensions
     const sizes: Record<string, [number, number]> = {
         'a4': [595.28, 841.89],
         'a3': [841.89, 1190.55],
@@ -128,95 +161,7 @@ export const exportCanvas = async (stage: Konva.Stage, options: ExportOptions) =
     let [pageW, pageH] = sizes[pdfSize as string] || sizes['a4'];
     if (orientation === 'landscape') [pageW, pageH] = [pageH, pageW];
 
-    const rawW = exportRect.width;
-    const rawH = exportRect.height;
-    const fitRatio = Math.min(pageW / rawW, pageH / rawH) * 0.98;
-
-    // Target Physical Length: ~4cm (113pts) to ensure >3cm visibility
-    // 3cm = 85pts. Let's aim for 4cm (approx 113pts) as base.
-    const targetPts = 113;
-    const targetPx = targetPts / fitRatio; // pixels on canvas needed to be 4cm on paper
-
-    // Convert targetPx to Meters to find nearest nice number
-    const scaleRatio = useProjectStore.getState().scaleRatio || 50;
-    const targetMeters = targetPx / scaleRatio;
-
-    // Find nice round number (1, 2, 5, 10, 20, 50...)
-    const niceNumbers = [1, 2, 5, 10, 20, 50, 100];
-    const barMeters = niceNumbers.reduce((prev, curr) =>
-        Math.abs(curr - targetMeters) < Math.abs(prev - targetMeters) ? curr : prev
-    );
-
-    let step = 1;
-    if (barMeters <= 2) step = 0.5;
-    else if (barMeters <= 5) step = 1;
-    else if (barMeters <= 10) step = 2;
-    else if (barMeters <= 20) step = 5;
-    else if (barMeters <= 50) step = 10;
-    else step = 20;
-
-    const barPx = barMeters * scaleRatio;
-
-    // Scale Bar Group
-    const overlayLayer = new Konva.Layer();
-    const sbGroup = new Konva.Group({
-        x: exportRect.width - barPx - 100,
-        y: exportRect.height - 100
-    });
-
-    // Background
-    sbGroup.add(new Konva.Rect({
-        x: -20,
-        y: -40,
-        width: barPx + 40,
-        height: 100,
-        fill: 'rgba(255, 255, 255, 0.8)',
-        cornerRadius: 4
-    }));
-
-    // Main Line
-    sbGroup.add(new Konva.Line({ points: [0, 0, barPx, 0], stroke: '#000', strokeWidth: 6, strokeCap: 'round' }));
-
-    // Ticks & Labels Loop
-    for (let m = 0; m <= barMeters; m += step) {
-        const xPos = (m / barMeters) * barPx;
-
-        // Tick
-        const tickH = 15;
-        sbGroup.add(new Konva.Line({
-            points: [xPos, -tickH, xPos, tickH],
-            stroke: '#000',
-            strokeWidth: 4,
-            strokeCap: 'round'
-        }));
-
-        // Label
-        sbGroup.add(new Konva.Text({
-            text: m.toString(),
-            x: xPos - 20,
-            y: 20,
-            width: 40,
-            align: 'center',
-            fontSize: 20,
-            fontStyle: 'bold',
-            fontFamily: 'Arial',
-            fill: '#000'
-        }));
-    }
-
-    // Unit Label (at the end)
-    sbGroup.add(new Konva.Text({
-        text: 'm',
-        x: barPx + 15,
-        y: 0,
-        fontSize: 20,
-        fontStyle: 'bold',
-        fontFamily: 'Arial',
-        fill: '#000'
-    }));
-
-    overlayLayer.add(sbGroup);
-    ghostStage.add(overlayLayer);
+    // Removed Legacy Scale Bar Generation (using on-canvas overlays instead)
 
     ghostStage.draw();
 

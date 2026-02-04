@@ -20,6 +20,8 @@ import { QAMonitor } from '../UI/Overlays/QAMonitor';
 import { useProjectStore } from '../../store/useProjectStore';
 import type { ProjectState } from '../../store/useProjectStore';
 import { useShallow } from 'zustand/react/shallow';
+import { ExportPreviewLayer } from './Layers/ExportPreviewLayer';
+
 
 export const MainStage: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -348,6 +350,7 @@ export const MainStage: React.FC = () => {
                             onOpenMenu={(x, y, options) => setMenu({ x, y, options })}
                             onOpenScaleModal={handleOpenScaleModal}
                         />
+                        <ExportPreviewLayer stage={stage} />
                     </Layer>
                 </Stage>
             )
