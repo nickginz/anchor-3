@@ -145,12 +145,43 @@ export const generateJoinedWalls = (walls: Wall[], scaleRatio: number, allWalls:
             }
         }
 
-        // (Manual Extension Removed)
-
-        const co = new ClipperLib.ClipperOffset();
         const startP = { x: points[0].X / SCALE, y: points[0].Y / SCALE };
         const endP = { x: points[points.length - 1].X / SCALE, y: points[points.length - 1].Y / SCALE };
         const isLoop = (distSq(startP, endP) < EPS && path.length > 2);
+
+        // Extension for clean junctions
+        const startKey = getKey(startP.x, startP.y);
+        const endKey = getKey(endP.x, endP.y);
+        const startDeg = degrees.get(startKey) || 0;
+        const endDeg = degrees.get(endKey) || 0;
+
+        // Extension amount: half width + small overlap (e.g. 5cm)
+        const extAmount = (path[0].thickness * scaleRatio * SCALE) / 2 + (0.05 * SCALE);
+
+        if (!isLoop && startDeg !== 2 && points.length >= 2) {
+            const p1 = points[0];
+            const p2 = points[1];
+            const dx = p1.X - p2.X;
+            const dy = p1.Y - p2.Y;
+            const len = Math.hypot(dx, dy);
+            if (len > 0.001) {
+                p1.X += (dx / len) * extAmount;
+                p1.Y += (dy / len) * extAmount;
+            }
+        }
+        if (!isLoop && endDeg !== 2 && points.length >= 2) {
+            const pN = points[points.length - 1];
+            const pN1 = points[points.length - 2];
+            const dx = pN.X - pN1.X;
+            const dy = pN.Y - pN1.Y;
+            const len = Math.hypot(dx, dy);
+            if (len > 0.001) {
+                pN.X += (dx / len) * extAmount;
+                pN.Y += (dy / len) * extAmount;
+            }
+        }
+
+        const co = new ClipperLib.ClipperOffset();
 
         const joinType = ClipperLib.JoinType.jtMiter;
         const endType = isLoop ? ClipperLib.EndType.etClosedLine : ClipperLib.EndType.etOpenButt;

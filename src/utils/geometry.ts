@@ -280,7 +280,7 @@ export const getLineIntersection = (p1: Point, p2: Point, p3: Point, p4: Point):
     const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
     const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
 
-    if (ua > 0.001 && ua < 0.999 && ub > 0.001 && ub < 0.999) {
+    if (ua >= -0.001 && ua <= 1.001 && ub > 0.001 && ub < 0.999) {
         return {
             x: x1 + ua * (x2 - x1),
             y: y1 + ua * (y2 - y1)
