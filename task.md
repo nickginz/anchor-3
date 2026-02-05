@@ -58,6 +58,10 @@
     - [ ] **Smart Extension**: Auto-extend cables when segments are dragged away from devices.
     - [ ] **Length Tracking**: Real-time length calculation (with vertical drops/slack).
     - [ ] **BOM Integration**: Cable totals in export.
+### Dimension & Selection Debugging
+- [x] Fix dimension label dragging: ensure `lastDragPos` is set on start
+- [x] Fix dimension label dragging: ensure `dim-text` name is excluded from wall drag check
+- [x] Investigate and fix rectangle selection functionality
     - [ ] Generate `.dxf` file with proper layers (`WALLS`, `ANCHORS`).
     - [ ] Export Walls as LINES, Anchors as CIRCLES.
 - [x] **PDF Export**:
@@ -124,7 +128,11 @@ Add a dedicated modal for editing wall properties (thickness and material) and i
     - [x] Ensure `InteractionLayer` blindly hits DXF entities or specialized logic exists.
     - [x] Fix Selection/Transform for DXF imports.
 
-### Feature Enhancements
+### Drawing Improvements
+- [x] Implement orthogonal snapping for walls when Shift is held
+- [x] Implement wall crossing auto-split
+- [x] Update "Help & Info" documentation for new features
+- [x] Sync all Ribbon icons and detailed specs in Help & Info
 - [x] **Wall Splitting**:
     - [x] Update `geometry.ts` to return Edge Snaps.
     - [x] Implement `splitWall` in Store.

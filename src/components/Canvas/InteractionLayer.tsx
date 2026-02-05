@@ -6,7 +6,7 @@ import { Line, Circle, Rect } from 'react-konva';
 import { useProjectStore } from '../../store/useProjectStore';
 import type { ProjectState } from '../../store/useProjectStore';
 import type { Wall } from '../../types';
-import { applyOrthogonal, getSnapPoint, dist } from '../../utils/geometry';
+import { applyOrthogonal, getSnapPoint, dist, getOrthogonalIntersectionWithSegment } from '../../utils/geometry';
 import { getOrthogonalPath, calculateLength } from '../../utils/routing';
 import type { Point } from '../../utils/geometry';
 
@@ -839,7 +839,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 // The Anchor is a Konva Shape with name='anchor'. 
                 // e.target.name() is reliable.
 
-                if (e.target.name() !== 'anchor' && e.target.name() !== 'hub-bottom' && e.target.name() !== 'dimension-line' && e.target.name() !== 'dim-text-handle' && e.target.name() !== 'wall-handle') {
+                if (e.target.name() !== 'anchor' && e.target.name() !== 'hub-bottom' && e.target.name() !== 'dimension-line' && e.target.name() !== 'dim-text' && e.target.name() !== 'dim-text-handle' && e.target.name() !== 'wall-handle') {
                     dragWallId.current = hitWall.id;
                     lastDragPos.current = pos;
                     useProjectStore.temporal.getState().pause();
@@ -968,6 +968,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             // If Handle (implies selected) OR (Text AND Selected), start drag
             if (nameInternal === 'dim-text-handle' || (nameInternal === 'dim-text' && isSelected)) {
                 dragTextId.current = realId;
+                lastDragPos.current = pos; // FIX: Set it here so delta calculation works
                 useProjectStore.temporal.getState().pause();
                 return; // Consume event (no selection box)
             }
@@ -1164,8 +1165,26 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 }
 
                 if (isShiftDown && points.length > 0) {
-                    if (!snap) {
-                        finalPos = applyOrthogonal(points[points.length - 1], pos);
+                    const startPoint = points[points.length - 1];
+                    const snapThreshold = 20 / (stage?.scaleX() || 1);
+                    let orthoMatch: { point: Point, wallId: string } | null = null;
+
+                    for (const w of walls) {
+                        const v1 = { x: w.points[0], y: w.points[1] };
+                        const v2 = { x: w.points[2], y: w.points[3] };
+                        const inter = getOrthogonalIntersectionWithSegment(startPoint, pos, v1, v2);
+                        if (inter && dist(pos, inter) < snapThreshold * 2) {
+                            orthoMatch = { point: inter, wallId: w.id };
+                            break;
+                        }
+                    }
+
+                    if (orthoMatch) {
+                        finalPos = orthoMatch.point;
+                        // Trigger wall split at the intersection point
+                        state.splitWall(orthoMatch.wallId, orthoMatch.point);
+                    } else if (!snap) {
+                        finalPos = applyOrthogonal(startPoint, pos);
                     }
                 }
 
@@ -1571,6 +1590,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     const midY = (y1 + y2) / 2;
                     state.updateDimension(dim.id, { textOffset: { x: pos.x - midX, y: pos.y - midY } });
                 }
+                lastDragPos.current = pos; // Update here for delta if needed (though using absolute pos above)
                 return;
             }
 
@@ -1599,8 +1619,27 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         }
 
         if (activeTool === 'wall' || activeTool === 'wall_rect' || activeTool === 'wall_rect_edge' || activeTool === 'dimension') {
-            const snap = (state.layers.walls || state.layers.anchors) ? getSnapPoint(pos, walls, anchors, 20 / (stage?.scaleX() || 1)) : null;
-            if (snap) currentPos = snap.point;
+            const snapThreshold = 20 / (stage?.scaleX() || 1);
+            let snap = (state.layers.walls || state.layers.anchors) ? getSnapPoint(pos, walls, anchors, snapThreshold) : null;
+
+            // PRIORITY: Orthogonal Snapping Preview
+            if (activeTool === 'wall' && isShiftDown && points.length > 0) {
+                const startPoint = points[points.length - 1];
+                for (const w of walls) {
+                    const v1 = { x: w.points[0], y: w.points[1] };
+                    const v2 = { x: w.points[2], y: w.points[3] };
+                    const orthoInt = getOrthogonalIntersectionWithSegment(startPoint, pos, v1, v2);
+                    if (orthoInt && dist(pos, orthoInt) < snapThreshold * 2) {
+                        currentPos = orthoInt;
+                        snap = { point: orthoInt, type: 'edge', id: w.id };
+                        break;
+                    }
+                }
+            }
+
+            if (snap && currentPos === pos) {
+                currentPos = snap.point;
+            }
         }
 
         setCurrentMousePos(currentPos);
@@ -1933,9 +1972,10 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 const getIdsInRect = (rect: { minX: number, maxX: number, minY: number, maxY: number }, isCrossing: boolean): string[] => {
                     const foundIds: string[] = [];
                     const state = useProjectStore.getState();
-                    const { walls, anchors, hubs, dimensions } = state;
+                    const { walls, anchors, hubs, dimensions, cables } = state;
 
-                    if (state.layers.walls && !wallsLocked) {
+                    if (state.layers.walls) {
+                        // Allow selection of locked walls, just prevent movement elsewhere
                         walls.forEach(w => {
                             const wx1 = w.points[0]; const wy1 = w.points[1];
                             const wx2 = w.points[2]; const wy2 = w.points[3];
@@ -1947,6 +1987,25 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                             } else {
                                 if (wMaxX < rect.minX || wMinX > rect.maxX || wMaxY < rect.minY || wMinY > rect.maxY) return;
                                 foundIds.push(w.id);
+                            }
+                        });
+                    }
+
+                    if (state.layers.cables) {
+                        cables.forEach(c => {
+                            const cMinX = Math.min(...c.points.map(p => p.x));
+                            const cMaxX = Math.max(...c.points.map(p => p.x));
+                            const cMinY = Math.min(...c.points.map(p => p.y));
+                            const cMaxY = Math.max(...c.points.map(p => p.y));
+
+                            if (!isCrossing) {
+                                // All points must be inside
+                                const allInside = c.points.every(p => p.x >= rect.minX && p.x <= rect.maxX && p.y >= rect.minY && p.y <= rect.maxY);
+                                if (allInside) foundIds.push(c.id);
+                            } else {
+                                // Bounding box intersection
+                                if (cMaxX < rect.minX || cMinX > rect.maxX || cMaxY < rect.minY || cMinY > rect.maxY) return;
+                                foundIds.push(c.id);
                             }
                         });
                     }

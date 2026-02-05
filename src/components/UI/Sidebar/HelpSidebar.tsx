@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useProjectStore } from '../../../store/useProjectStore';
 import {
     X, ChevronRight, ChevronDown, Info,
-    MousePointer2, Undo2, Redo2, Upload,
+    MousePointer2, Undo2, Redo2, Upload, Download,
     PenTool, Lock, Square, BoxSelect,
     Wifi, Wand2, Router, Spline, Cable, Settings,
-    FileUp, BookTemplate, Calculator, Ruler, Scaling, FilePlus, MenuSquare
+    FileUp, BookTemplate, Calculator, Ruler, Scaling, FilePlus, MenuSquare,
+    Grid, Type, Signal, Activity, Share2
 } from 'lucide-react';
 
 const SIDEBAR_MIN_WIDTH = 300;
@@ -66,11 +67,21 @@ const DOCUMENTATION: HelpSection[] = [
                             </div>
                         </div>
                         <div className="flex items-start space-x-3">
-                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Upload size={14} /></div>
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><MenuSquare size={14} /></div>
                             <div>
                                 <p className="font-bold text-gray-200 text-xs">Layer Toggles</p>
-                                <p className="text-[10px] text-gray-400 text-pretty">Show/hide Walls, Cables, Floorplan. <strong>Signal Heatmap</strong> visualizes coverage strength.</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Control visibility of Walls, Cables, Hubs, Rooms, Labels, and Floorplan.</p>
                             </div>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 mt-1">
+                            <div className="flex flex-col items-center p-1 bg-gray-700/20 rounded"><Upload size={12} /><span className="text-[8px] mt-0.5">Floor</span></div>
+                            <div className="flex flex-col items-center p-1 bg-gray-700/20 rounded"><Square size={12} /><span className="text-[8px] mt-0.5">Walls</span></div>
+                            <div className="flex flex-col items-center p-1 bg-gray-700/20 rounded"><Ruler size={12} /><span className="text-[8px] mt-0.5">Dims</span></div>
+                            <div className="flex flex-col items-center p-1 bg-gray-700/20 rounded"><Activity size={12} /><span className="text-[8px] mt-0.5">Cables</span></div>
+                            <div className="flex flex-col items-center p-1 bg-gray-700/20 rounded"><Share2 size={12} /><span className="text-[8px] mt-0.5">Hubs</span></div>
+                            <div className="flex flex-col items-center p-1 bg-gray-700/20 rounded"><Grid size={12} /><span className="text-[8px] mt-0.5">Rooms</span></div>
+                            <div className="flex flex-col items-center p-1 bg-gray-700/20 rounded"><Type size={12} /><span className="text-[8px] mt-0.5">Labels</span></div>
+                            <div className="flex flex-col items-center p-1 bg-gray-700/20 rounded"><Wifi size={12} /><span className="text-[8px] mt-0.5">Anchors</span></div>
                         </div>
                     </div>
                 </div>
@@ -82,7 +93,7 @@ const DOCUMENTATION: HelpSection[] = [
                             <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><PenTool size={14} /></div>
                             <div>
                                 <p className="font-bold text-gray-200 text-xs">Wall (W)</p>
-                                <p className="text-[10px] text-gray-400 text-pretty">Draw linear walls. Adjust <strong>Width (m)</strong> and <strong>Material</strong> in settings. Esc to stop.</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Draw linear walls. Hold <strong>Shift</strong> for orthogonal snapping. Auto-splits on crossing.</p>
                             </div>
                         </div>
                         <div className="flex items-start space-x-3">
@@ -161,17 +172,13 @@ const DOCUMENTATION: HelpSection[] = [
                     <h4 className="text-sm font-bold text-gray-300 border-b panel-border pb-1 mb-2">Project & Manage</h4>
                     <div className="grid grid-cols-1 gap-3">
                         <div className="flex items-start space-x-3">
-                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><FileUp size={14} /></div>
-                            <div>
-                                <p className="font-bold text-gray-200 text-xs">Import / Export</p>
-                                <p className="text-[10px] text-gray-400 text-pretty">Import background images/DXF. Export finished plan as PDF or Image. <strong>Alt+Click</strong> to select.</p>
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0 flex space-x-1">
+                                <FileUp size={14} />
+                                <MenuSquare size={14} className="rotate-90" />
                             </div>
-                        </div>
-                        <div className="flex items-start space-x-3">
-                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><BookTemplate size={14} /></div>
                             <div>
-                                <p className="font-bold text-gray-200 text-xs">Save Slots</p>
-                                <p className="text-[10px] text-gray-400 text-pretty">Quickly save and load up to 5 different versions of your project.</p>
+                                <p className="font-bold text-gray-200 text-xs">Import & Layers</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Import background images/DXF. Use the DXF Layer Manager to toggle specific CAD layers.</p>
                             </div>
                         </div>
                         <div className="flex items-start space-x-3">
@@ -179,6 +186,13 @@ const DOCUMENTATION: HelpSection[] = [
                             <div>
                                 <p className="font-bold text-gray-200 text-xs">BOM</p>
                                 <p className="text-[10px] text-gray-400 text-pretty">View a summary of all used devices, cable lengths, and wall totals.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Signal size={14} /></div>
+                            <div>
+                                <p className="font-bold text-gray-200 text-xs">Heatmap</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Visualize signal quality across the plan. Toggle Low/High resolution for detail.</p>
                             </div>
                         </div>
                         <div className="flex items-center space-x-3 mt-2 border-t panel-border pt-2">
@@ -207,21 +221,24 @@ const DOCUMENTATION: HelpSection[] = [
                             <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><FilePlus size={14} /></div>
                             <div>
                                 <p className="font-bold text-gray-200 text-xs">New Project</p>
-                                <p className="text-[10px] text-gray-400 text-pretty">Clear canvas and start over.</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Clear canvas and start over. Warning will appear if changes are unsaved.</p>
                             </div>
                         </div>
                         <div className="flex items-start space-x-3">
-                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><MenuSquare size={14} /></div>
+                            <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0 flex space-x-1">
+                                <Upload size={14} />
+                                <Download size={14} />
+                            </div>
                             <div>
-                                <p className="font-bold text-gray-200 text-xs">Selected Walls Toolbar</p>
-                                <p className="text-[10px] text-gray-400 text-pretty">Select multiple walls to batch edit <strong>Thickness</strong> and <strong>Material</strong>.</p>
+                                <p className="font-bold text-gray-200 text-xs">Load / Save Project</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Save your project as a JSON file or load an existing one from disk.</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         ),
-        searchableText: "toolbar icons interface edit view select undo redo layers draw wall lock rect 3-pt devices network anchor auto-place hub route cable settings project manage import export slots bom measure scale new project"
+        searchableText: "toolbar icons interface edit view select undo redo layers toggles floorplan walls dimensions cables hubs rooms labels anchors heatmap signal resolution draw wall lock rect 3-pt devices network anchor auto-place hub route cable settings project manage import export slots bom measure scale new project dxf layer manager"
     },
     {
         id: 'shortcuts',
@@ -245,7 +262,8 @@ const DOCUMENTATION: HelpSection[] = [
                         <tr><td className="p-2 border-r panel-border font-mono text-accent">A</td><td className="p-2">Place Anchor</td></tr>
                         <tr><td className="p-2 border-r panel-border font-mono text-accent">H</td><td className="p-2">Place Hub</td></tr>
                         <tr><td className="p-2 border-r panel-border font-mono text-accent">V / Esc</td><td className="p-2">Select Mode</td></tr>
-                        <tr><td className="p-2 border-r panel-border font-mono text-accent">Alt + Click</td><td className="p-2">Select Import</td></tr>
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">W + Shift</td><td className="p-2">Orthogonal Drawing</td></tr>
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">V + Shift</td><td className="p-2">Add to Selection</td></tr>
                         <tr><td className="p-2 border-r panel-border font-mono text-accent">Ctrl + Z</td><td className="p-2">Undo</td></tr>
                     </tbody>
                 </table>
@@ -273,6 +291,34 @@ const DOCUMENTATION: HelpSection[] = [
                             <li><strong className="text-gray-300">Placement Area</strong>: Use the <span className="text-orange-400">Define Area</span> tool to restrict auto-placement to specific polygons.</li>
                             <li><strong className="text-gray-300">Smart Reduction</strong>: Quickly reduce anchor density by percentage (-5% to -20%) to optimize signal-to-cost ratio.</li>
                             <li><strong className="text-gray-300">Median Signal</strong>: Real-time statistics showing the estimated signal quality across your rooms.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div className="border-t border-[#444] pt-3">
+                    <h4 className="text-sm font-bold text-gray-300 flex items-center gap-2">
+                        <PenTool size={14} className="text-accent" />
+                        Wall Behavior
+                    </h4>
+                    <div className="text-xs text-gray-400 mt-1 space-y-2">
+                        <ul className="list-disc pl-4 space-y-1">
+                            <li><strong className="text-gray-300">Auto-Split</strong>: Crossing walls automatically split at the intersection to maintain topological connections.</li>
+                            <li><strong className="text-gray-300">Ortho Snap</strong>: Holding Shift while snapping to an edge aligns the vertex perfectly horizontal or vertical.</li>
+                            <li><strong className="text-gray-300">Dimension Labels</strong>: Click and drag the text on a measurement to move it along the dimension line.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div className="border-t border-[#444] pt-3">
+                    <h4 className="text-sm font-bold text-gray-300 flex items-center gap-2">
+                        <MousePointer2 size={14} className="text-accent" />
+                        Advanced Selection
+                    </h4>
+                    <div className="text-xs text-gray-400 mt-1 space-y-2">
+                        <p>Drag the selection box from <strong>Left-to-Right</strong> to select fully enclosed items.</p>
+                        <p>Drag from <strong>Right-to-Left</strong> (Dashed Box) for "Crossing Selection" (selects anything touched).</p>
+                        <ul className="list-disc pl-4 space-y-1 mt-1">
+                            <li><strong className="text-gray-300">Locked Items</strong>: You can select locked walls or cables to view settings, but they cannot be moved.</li>
                         </ul>
                     </div>
                 </div>
@@ -408,3 +454,5 @@ export const HelpSidebar: React.FC = () => {
         </div>
     );
 };
+
+export default HelpSidebar;

@@ -222,3 +222,70 @@ export const getBBoxCenter = (bbox: { minX: number, maxX: number, minY: number, 
         y: (Number(bbox.minY) + Number(bbox.maxY)) / 2
     };
 };
+
+export const getOrthogonalIntersectionWithSegment = (start: Point, cursor: Point, v1: Point, v2: Point): Point | null => {
+    const dx = cursor.x - start.x;
+    const dy = cursor.y - start.y;
+
+    // Decide whether we want a horizontal or vertical line from 'start'
+    const isHorizontal = Math.abs(dx) > Math.abs(dy);
+
+    if (isHorizontal) {
+        // Line equation: y = start.y
+        const dy_seg = v2.y - v1.y;
+        if (Math.abs(dy_seg) < 1e-6) {
+            // Segment is horizontal. If start.y is near v1.y, we can intersect.
+            if (Math.abs(start.y - v1.y) < 1) {
+                const minX = Math.min(v1.x, v2.x);
+                const maxX = Math.max(v1.x, v2.x);
+                return { x: Math.max(minX, Math.min(maxX, cursor.x)), y: start.y };
+            }
+            return null;
+        }
+        const t = (start.y - v1.y) / dy_seg;
+        if (t >= 0 && t <= 1) {
+            const x = v1.x + t * (v2.x - v1.x);
+            return { x, y: start.y };
+        }
+    } else {
+        // Line equation: x = start.x
+        const dx_seg = v2.x - v1.x;
+        if (Math.abs(dx_seg) < 1e-6) {
+            // Segment is vertical.
+            if (Math.abs(start.x - v1.x) < 1) {
+                const minY = Math.min(v1.y, v2.y);
+                const maxY = Math.max(v1.y, v2.y);
+                return { x: start.x, y: Math.max(minY, Math.min(maxY, cursor.y)) };
+            }
+            return null;
+        }
+        const t = (start.x - v1.x) / dx_seg;
+        if (t >= 0 && t <= 1) {
+            const y = v1.y + t * (v2.y - v1.y);
+            return { x: start.x, y };
+        }
+    }
+    return null;
+};
+
+export const getLineIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Point | null => {
+    const x1 = p1.x, y1 = p1.y;
+    const x2 = p2.x, y2 = p2.y;
+    const x3 = p3.x, y3 = p3.y;
+    const x4 = p4.x, y4 = p4.y;
+
+    const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+    if (Math.abs(denom) < 1e-6) return null; // Parallel
+
+    const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
+    const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
+
+    if (ua > 0.001 && ua < 0.999 && ub > 0.001 && ub < 0.999) {
+        return {
+            x: x1 + ua * (x2 - x1),
+            y: y1 + ua * (y2 - y1)
+        };
+    }
+
+    return null;
+};

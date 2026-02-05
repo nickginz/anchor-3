@@ -3,6 +3,7 @@ import { temporal } from 'zundo';
 import { v4 as uuidv4 } from 'uuid';
 import type { Wall, Anchor, Dimension, ProjectLayers, ToolType, ImportedObject, ImageObject, DXFObject, Point, Hub, Cable } from '../types';
 import { getOrthogonalPath, calculateLength, generateDaisyChain, getHubColor, distance, getHubPortCoordinates } from '../utils/routing';
+import { getLineIntersection } from '../utils/geometry';
 import { reduceAnchors } from '../utils/optimizer-reduction';
 import equals from 'fast-deep-equal';
 
@@ -97,11 +98,11 @@ export interface ProjectState {
     setIsExportSidebarOpen: (v: boolean) => void;
     showExportBOM: boolean;
     setShowExportBOM: (v: boolean) => void;
-    showExportScaleBar: boolean;
-    setShowExportScaleBar: (v: boolean) => void;
     exportBOMPosition: { x: number; y: number } | null;
     setExportBOMPosition: (pos: { x: number; y: number } | null) => void;
 
+    showExportScaleBar: boolean;
+    setShowExportScaleBar: (v: boolean) => void;
     exportScalePosition: { x: number; y: number } | null;
     setExportScalePosition: (pos: { x: number; y: number } | null) => void;
 
@@ -441,7 +442,7 @@ export const useProjectStore = create<ProjectState>()(
             setExportBOMPosition: (pos) => set({ exportBOMPosition: pos }),
 
             showExportScaleBar: true,
-            setShowExportScaleBar: (v) => set({ showExportScaleBar: v }),
+            setShowExportScaleBar: (v: boolean) => set({ showExportScaleBar: v }),
             exportScalePosition: null,
             setExportScalePosition: (pos) => set({ exportScalePosition: pos }),
 
@@ -489,54 +490,108 @@ export const useProjectStore = create<ProjectState>()(
             }),
 
             addWall: (wall) => set((state) => {
-                // Check for duplicates
-                const isDuplicate = state.walls.some(existing => {
+                const { walls } = state;
+                const newWallId = uuidv4();
+                let wallSegments: Wall[] = [{ ...wall, id: newWallId }];
+
+                // Check for duplicates (on the original segment)
+                const isDuplicate = walls.some(existing => {
                     const p1 = [existing.points[0], existing.points[1]];
                     const p2 = [existing.points[2], existing.points[3]];
                     const newP1 = [wall.points[0], wall.points[1]];
                     const newP2 = [wall.points[2], wall.points[3]];
-
-                    const tol = 0.01; // 1cm tolerance
+                    const tol = 0.01;
                     const matchDirect = (Math.abs(p1[0] - newP1[0]) < tol && Math.abs(p1[1] - newP1[1]) < tol &&
                         Math.abs(p2[0] - newP2[0]) < tol && Math.abs(p2[1] - newP2[1]) < tol);
                     const matchReverse = (Math.abs(p1[0] - newP2[0]) < tol && Math.abs(p1[1] - newP2[1]) < tol &&
                         Math.abs(p2[0] - newP1[0]) < tol && Math.abs(p2[1] - newP1[1]) < tol);
                     return matchDirect || matchReverse;
                 });
-
                 if (isDuplicate) return state;
 
+                let currentExistingWalls = [...walls];
+                let finalNewSegments: Wall[] = [];
+
+                const processSegment = (seg: Wall) => {
+                    let splitFound = false;
+                    for (let i = 0; i < currentExistingWalls.length; i++) {
+                        const existing = currentExistingWalls[i];
+                        const inter = getLineIntersection(
+                            { x: seg.points[0], y: seg.points[1] },
+                            { x: seg.points[2], y: seg.points[3] },
+                            { x: existing.points[0], y: existing.points[1] },
+                            { x: existing.points[2], y: existing.points[3] }
+                        );
+
+                        if (inter) {
+                            // Split existing wall
+                            const e1: Wall = { ...existing, id: uuidv4(), points: [existing.points[0], existing.points[1], inter.x, inter.y] };
+                            const e2: Wall = { ...existing, id: uuidv4(), points: [inter.x, inter.y, existing.points[2], existing.points[3]] };
+                            currentExistingWalls.splice(i, 1, e1, e2);
+
+                            // Split new segment and recurse
+                            const s1: Wall = { ...seg, id: uuidv4(), points: [seg.points[0], seg.points[1], inter.x, inter.y] };
+                            const s2: Wall = { ...seg, id: uuidv4(), points: [inter.x, inter.y, seg.points[2], seg.points[3]] };
+
+                            processSegment(s1);
+                            processSegment(s2);
+                            splitFound = true;
+                            break;
+                        }
+                    }
+                    if (!splitFound) {
+                        finalNewSegments.push(seg);
+                    }
+                };
+
+                processSegment(wallSegments[0]);
+
                 return {
-                    walls: [...state.walls, { ...wall, id: uuidv4() }]
+                    walls: [...currentExistingWalls, ...finalNewSegments]
                 };
             }),
 
             addWalls: (newWalls) => set((state) => {
-                const uniqueNewWalls = newWalls.filter(newWall => {
-                    const isDuplicate = state.walls.some(existing => {
-                        const p1 = [existing.points[0], existing.points[1]];
-                        const p2 = [existing.points[2], existing.points[3]];
-                        const newP1 = [newWall.points[0], newWall.points[1]];
-                        const newP2 = [newWall.points[2], newWall.points[3]];
+                let currentWalls = [...state.walls];
+                const addedSegments: Wall[] = [];
 
-                        const tol = 0.01;
-                        const matchDirect = (Math.abs(p1[0] - newP1[0]) < tol && Math.abs(p1[1] - newP1[1]) < tol &&
-                            Math.abs(p2[0] - newP2[0]) < tol && Math.abs(p2[1] - newP2[1]) < tol);
-                        const matchReverse = (Math.abs(p1[0] - newP2[0]) < tol && Math.abs(p1[1] - newP2[1]) < tol &&
-                            Math.abs(p2[0] - newP1[0]) < tol && Math.abs(p2[1] - newP1[1]) < tol);
-                        return matchDirect || matchReverse;
-                    });
+                newWalls.forEach(nw => {
+                    const wallWithId = { ...nw, id: uuidv4() };
 
-                    // Also check against other new walls in this batch (simple O(N^2) for batch is fine usually)
-                    // But usually newWalls come from detection which shouldn't have self-duplicates. 
-                    // Let's just solve the "add to existing" case mostly.
-                    return !isDuplicate;
+                    const processSegment = (seg: Wall) => {
+                        let splitFound = false;
+                        for (let i = 0; i < currentWalls.length; i++) {
+                            const existing = currentWalls[i];
+                            const inter = getLineIntersection(
+                                { x: seg.points[0], y: seg.points[1] },
+                                { x: seg.points[2], y: seg.points[3] },
+                                { x: existing.points[0], y: existing.points[1] },
+                                { x: existing.points[2], y: existing.points[3] }
+                            );
+
+                            if (inter) {
+                                const e1: Wall = { ...existing, id: uuidv4(), points: [existing.points[0], existing.points[1], inter.x, inter.y] };
+                                const e2: Wall = { ...existing, id: uuidv4(), points: [inter.x, inter.y, existing.points[2], existing.points[3]] };
+                                currentWalls.splice(i, 1, e1, e2);
+
+                                const s1: Wall = { ...seg, id: uuidv4(), points: [seg.points[0], seg.points[1], inter.x, inter.y] };
+                                const s2: Wall = { ...seg, id: uuidv4(), points: [inter.x, inter.y, seg.points[2], seg.points[3]] };
+
+                                processSegment(s1);
+                                processSegment(s2);
+                                splitFound = true;
+                                break;
+                            }
+                        }
+                        if (!splitFound) {
+                            addedSegments.push(seg);
+                        }
+                    };
+                    processSegment(wallWithId);
                 });
 
-                if (uniqueNewWalls.length === 0) return state;
-
                 return {
-                    walls: [...state.walls, ...uniqueNewWalls.map(w => ({ ...w, id: uuidv4() }))]
+                    walls: [...currentWalls, ...addedSegments]
                 };
             }),
 
@@ -675,7 +730,7 @@ export const useProjectStore = create<ProjectState>()(
                     .filter(n => !isNaN(n));
 
                 const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
-                const newId = `${prefix}${nextNum}`;
+                const newId = `${prefix}${nextNum} `;
 
                 return {
                     anchors: [...state.anchors, { ...anchor, id: newId }]
@@ -694,7 +749,7 @@ export const useProjectStore = create<ProjectState>()(
 
                 const anchorsToAdd = newAnchors.map(a => ({
                     ...a,
-                    id: `${prefix}${nextNum++}`
+                    id: `${prefix}${nextNum++} `
                 }));
 
                 return {
@@ -1305,7 +1360,7 @@ export const useProjectStore = create<ProjectState>()(
                 );
 
                 if (removedCount > 0) {
-                    console.log(`[Optimization] Removed ${removedCount} anchors. Scope: ${scope}`);
+                    console.log(`[Optimization] Removed ${removedCount} anchors.Scope: ${scope} `);
                 }
 
                 return { anchors };
@@ -1355,7 +1410,7 @@ export const useProjectStore = create<ProjectState>()(
                     // Let's use uuidv4() for pasted anchors to ensure robustness, or just random suffix.
                     return {
                         ...a,
-                        id: `${prefix}${uuidv4().slice(0, 4)}`, // Short unique suffix
+                        id: `${prefix}${uuidv4().slice(0, 4)} `, // Short unique suffix
                         x: a.x + offsetPx,
                         y: a.y + offsetPx
                     };
