@@ -5,7 +5,7 @@ import {
     MousePointer2, Undo2, Redo2, Upload, Download,
     PenTool, Lock, Square, BoxSelect,
     Wifi, Wand2, Router, Spline, Cable, Settings,
-    FileUp, BookTemplate, Calculator, Ruler, Scaling, FilePlus, MenuSquare,
+    FileUp, Calculator, Ruler, Scaling, FilePlus, MenuSquare,
     Grid, Type, Signal, Activity, Share2
 } from 'lucide-react';
 
