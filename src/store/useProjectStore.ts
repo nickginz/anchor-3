@@ -513,7 +513,7 @@ export const useProjectStore = create<ProjectState>()(
                 let finalNewSegments: Wall[] = [];
 
                 const processSegment = (seg: Wall) => {
-                    let splitFound = false;
+                    let wasSplit = false;
                     for (let i = 0; i < currentExistingWalls.length; i++) {
                         const existing = currentExistingWalls[i];
                         const inter = getLineIntersection(
@@ -538,7 +538,7 @@ export const useProjectStore = create<ProjectState>()(
                                 const e1: Wall = { ...existing, id: uuidv4(), points: [existing.points[0], existing.points[1], inter.x, inter.y] };
                                 const e2: Wall = { ...existing, id: uuidv4(), points: [inter.x, inter.y, existing.points[2], existing.points[3]] };
                                 currentExistingWalls.splice(i, 1, e1, e2);
-                                splitFound = true;
+                                // Note: we continue checking THIS segment against other walls (including the new ones)
                             }
 
                             if (dNew1 > MIN_SEG && dNew2 > MIN_SEG) {
@@ -547,21 +547,26 @@ export const useProjectStore = create<ProjectState>()(
                                 const s2: Wall = { ...seg, id: uuidv4(), points: [inter.x, inter.y, seg.points[2], seg.points[3]] };
                                 processSegment(s1);
                                 processSegment(s2);
-                                splitFound = true;
+                                wasSplit = true;
+                                break;
                             }
-
-                            if (splitFound) break;
                         }
                     }
-                    if (!splitFound) {
+                    if (!wasSplit) {
                         finalNewSegments.push(seg);
                     }
                 };
 
                 processSegment(wallSegments[0]);
 
+                const scaleRatio = state.scaleRatio || 50;
+                const filterTiny = (w: Wall) => {
+                    const len = Math.hypot(w.points[2] - w.points[0], w.points[3] - w.points[1]) / scaleRatio;
+                    return len > 0.05;
+                };
+
                 return {
-                    walls: [...currentExistingWalls, ...finalNewSegments]
+                    walls: [...currentExistingWalls, ...finalNewSegments.filter(filterTiny)]
                 };
             }),
 
@@ -573,7 +578,7 @@ export const useProjectStore = create<ProjectState>()(
                     const wallWithId = { ...nw, id: uuidv4() };
 
                     const processSegment = (seg: Wall) => {
-                        let splitFound = false;
+                        let wasSplit = false;
                         for (let i = 0; i < currentWalls.length; i++) {
                             const existing = currentWalls[i];
                             const inter = getLineIntersection(
@@ -596,7 +601,6 @@ export const useProjectStore = create<ProjectState>()(
                                     const e1: Wall = { ...existing, id: uuidv4(), points: [existing.points[0], existing.points[1], inter.x, inter.y] };
                                     const e2: Wall = { ...existing, id: uuidv4(), points: [inter.x, inter.y, existing.points[2], existing.points[3]] };
                                     currentWalls.splice(i, 1, e1, e2);
-                                    splitFound = true;
                                 }
 
                                 if (dNew1 > MIN_SEG && dNew2 > MIN_SEG) {
@@ -604,21 +608,26 @@ export const useProjectStore = create<ProjectState>()(
                                     const s2: Wall = { ...seg, id: uuidv4(), points: [inter.x, inter.y, seg.points[2], seg.points[3]] };
                                     processSegment(s1);
                                     processSegment(s2);
-                                    splitFound = true;
+                                    wasSplit = true;
+                                    break;
                                 }
-
-                                if (splitFound) break;
                             }
                         }
-                        if (!splitFound) {
+                        if (!wasSplit) {
                             addedSegments.push(seg);
                         }
                     };
                     processSegment(wallWithId);
                 });
 
+                const scaleRatio = state.scaleRatio || 50;
+                const filterTiny = (w: Wall) => {
+                    const len = Math.hypot(w.points[2] - w.points[0], w.points[3] - w.points[1]) / scaleRatio;
+                    return len > 0.05;
+                };
+
                 return {
-                    walls: [...currentWalls, ...addedSegments]
+                    walls: [...currentWalls.filter(filterTiny), ...addedSegments.filter(filterTiny)]
                 };
             }),
 

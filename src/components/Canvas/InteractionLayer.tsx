@@ -1164,11 +1164,6 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
                 if (snap) {
                     finalPos = snap.point;
-
-                    // Auto-Split Logic
-                    if (snap.type === 'edge' && snap.id) {
-                        state.splitWall(snap.id, snap.point);
-                    }
                 }
 
                 if (isShiftDown && points.length > 0) {
@@ -1188,8 +1183,6 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
                     if (orthoMatch) {
                         finalPos = orthoMatch.point;
-                        // Trigger wall split at the intersection point
-                        state.splitWall(orthoMatch.wallId, orthoMatch.point);
                     } else if (!snap) {
                         finalPos = applyOrthogonal(startPoint, pos);
                     }
