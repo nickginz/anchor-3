@@ -144,6 +144,7 @@ Add a dedicated modal for editing wall properties (thickness and material) and i
     - [x] Implement robust corner/intersection geometry generation.
     - [x] Ensure styling (fill/stroke) looks unified.
     - [x] **T-Junction Fix**: Corrected auto-splitting and visual gaps at T-junctions by updating intersection logic and grid-based joining extensions.
+    - [x] **Stray Wall Fix**: Added UI-level (>10cm) and Store-level (>5cm) guardrails and double-click termination to prevent tiny wall fragments, especially during orthogonal snapping.
     - [x] **Regression Fix**: Resolved wall disappearance bug (zero-length segments/robust fallback).
     - [x] **Visual Fix**: Eliminated "Spike" artifacts by restricting filler wedges to outer convex corners.
 

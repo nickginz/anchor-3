@@ -482,16 +482,23 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     }, [stage, fitScreen, lastLoaded]);
 
     const handleDblClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-        if (useProjectStore.getState().activeTool === 'cable_edit') {
+        const state = useProjectStore.getState();
+        if (state.activeTool === 'wall') {
+            setPoints([]);
+            setChainStart(null);
+            return;
+        }
+
+        if (state.activeTool === 'cable_edit') {
             const pos = getStagePoint();
             if (pos) {
-                const cables = useProjectStore.getState().cables;
+                const cables = state.cables;
                 for (const cable of cables) {
                     const hit = isPointNearCable(pos, cable.points, 10 / (stage?.scaleX() || 1));
                     if (hit && hit.type === 'segment') {
                         const newPoints = [...cable.points];
                         newPoints.splice(hit.index + 1, 0, pos);
-                        useProjectStore.getState().updateCable(cable.id, { points: newPoints });
+                        state.updateCable(cable.id, { points: newPoints });
                         return;
                     }
                 }
@@ -1195,14 +1202,18 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 } else {
                     const start = points[0];
                     const end = finalPos;
-                    if (start.x !== end.x || start.y !== end.y) {
+                    const scaleRatio = state.scaleRatio || 50;
+                    const distMeters = Math.hypot(end.x - start.x, end.y - start.y) / scaleRatio;
+
+                    // Only add wall if distance is significant (e.g. > 10cm)
+                    if (distMeters > 0.1) {
                         addWall({
                             points: [start.x, start.y, end.x, end.y],
                             ...getWallParams(standardWallThickness, wallMaterial) as any
                         });
+                        // Continue chain
+                        setPoints([end]);
                     }
-                    // Continue chain
-                    setPoints([end]);
                 }
             }
 

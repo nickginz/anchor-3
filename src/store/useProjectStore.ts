@@ -524,19 +524,33 @@ export const useProjectStore = create<ProjectState>()(
                         );
 
                         if (inter) {
-                            // Split existing wall
-                            const e1: Wall = { ...existing, id: uuidv4(), points: [existing.points[0], existing.points[1], inter.x, inter.y] };
-                            const e2: Wall = { ...existing, id: uuidv4(), points: [inter.x, inter.y, existing.points[2], existing.points[3]] };
-                            currentExistingWalls.splice(i, 1, e1, e2);
+                            const scaleRatio = state.scaleRatio || 50;
+                            const d1 = Math.hypot(existing.points[0] - inter.x, existing.points[1] - inter.y) / scaleRatio;
+                            const d2 = Math.hypot(existing.points[2] - inter.x, existing.points[3] - inter.y) / scaleRatio;
+                            const dNew1 = Math.hypot(seg.points[0] - inter.x, seg.points[1] - inter.y) / scaleRatio;
+                            const dNew2 = Math.hypot(seg.points[2] - inter.x, seg.points[3] - inter.y) / scaleRatio;
 
-                            // Split new segment and recurse
-                            const s1: Wall = { ...seg, id: uuidv4(), points: [seg.points[0], seg.points[1], inter.x, inter.y] };
-                            const s2: Wall = { ...seg, id: uuidv4(), points: [inter.x, inter.y, seg.points[2], seg.points[3]] };
+                            // Protection: Only split if the point is not too close to any endpoint (> 5cm)
+                            const MIN_SEG = 0.05;
 
-                            processSegment(s1);
-                            processSegment(s2);
-                            splitFound = true;
-                            break;
+                            if (d1 > MIN_SEG && d2 > MIN_SEG) {
+                                // Split existing wall
+                                const e1: Wall = { ...existing, id: uuidv4(), points: [existing.points[0], existing.points[1], inter.x, inter.y] };
+                                const e2: Wall = { ...existing, id: uuidv4(), points: [inter.x, inter.y, existing.points[2], existing.points[3]] };
+                                currentExistingWalls.splice(i, 1, e1, e2);
+                                splitFound = true;
+                            }
+
+                            if (dNew1 > MIN_SEG && dNew2 > MIN_SEG) {
+                                // Split new segment and recurse
+                                const s1: Wall = { ...seg, id: uuidv4(), points: [seg.points[0], seg.points[1], inter.x, inter.y] };
+                                const s2: Wall = { ...seg, id: uuidv4(), points: [inter.x, inter.y, seg.points[2], seg.points[3]] };
+                                processSegment(s1);
+                                processSegment(s2);
+                                splitFound = true;
+                            }
+
+                            if (splitFound) break;
                         }
                     }
                     if (!splitFound) {
@@ -570,17 +584,30 @@ export const useProjectStore = create<ProjectState>()(
                             );
 
                             if (inter) {
-                                const e1: Wall = { ...existing, id: uuidv4(), points: [existing.points[0], existing.points[1], inter.x, inter.y] };
-                                const e2: Wall = { ...existing, id: uuidv4(), points: [inter.x, inter.y, existing.points[2], existing.points[3]] };
-                                currentWalls.splice(i, 1, e1, e2);
+                                const scaleRatio = state.scaleRatio || 50;
+                                const d1 = Math.hypot(existing.points[0] - inter.x, existing.points[1] - inter.y) / scaleRatio;
+                                const d2 = Math.hypot(existing.points[2] - inter.x, existing.points[3] - inter.y) / scaleRatio;
+                                const dNew1 = Math.hypot(seg.points[0] - inter.x, seg.points[1] - inter.y) / scaleRatio;
+                                const dNew2 = Math.hypot(seg.points[2] - inter.x, seg.points[3] - inter.y) / scaleRatio;
 
-                                const s1: Wall = { ...seg, id: uuidv4(), points: [seg.points[0], seg.points[1], inter.x, inter.y] };
-                                const s2: Wall = { ...seg, id: uuidv4(), points: [inter.x, inter.y, seg.points[2], seg.points[3]] };
+                                const MIN_SEG = 0.05;
 
-                                processSegment(s1);
-                                processSegment(s2);
-                                splitFound = true;
-                                break;
+                                if (d1 > MIN_SEG && d2 > MIN_SEG) {
+                                    const e1: Wall = { ...existing, id: uuidv4(), points: [existing.points[0], existing.points[1], inter.x, inter.y] };
+                                    const e2: Wall = { ...existing, id: uuidv4(), points: [inter.x, inter.y, existing.points[2], existing.points[3]] };
+                                    currentWalls.splice(i, 1, e1, e2);
+                                    splitFound = true;
+                                }
+
+                                if (dNew1 > MIN_SEG && dNew2 > MIN_SEG) {
+                                    const s1: Wall = { ...seg, id: uuidv4(), points: [seg.points[0], seg.points[1], inter.x, inter.y] };
+                                    const s2: Wall = { ...seg, id: uuidv4(), points: [inter.x, inter.y, seg.points[2], seg.points[3]] };
+                                    processSegment(s1);
+                                    processSegment(s2);
+                                    splitFound = true;
+                                }
+
+                                if (splitFound) break;
                             }
                         }
                         if (!splitFound) {
@@ -697,6 +724,13 @@ export const useProjectStore = create<ProjectState>()(
             splitWall: (id, point) => set((state) => {
                 const wall = state.walls.find(w => w.id === id);
                 if (!wall) return state;
+
+                const scaleRatio = state.scaleRatio || 50;
+                const d1 = Math.hypot(wall.points[0] - point.x, wall.points[1] - point.y) / scaleRatio;
+                const d2 = Math.hypot(wall.points[2] - point.x, wall.points[3] - point.y) / scaleRatio;
+
+                // Threshold: 5cm
+                if (d1 < 0.05 || d2 < 0.05) return state;
 
                 // Create two new walls
                 const w1: Wall = {
