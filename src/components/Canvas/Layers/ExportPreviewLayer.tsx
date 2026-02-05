@@ -129,68 +129,91 @@ export const ExportPreviewLayer: React.FC<{ stage: any }> = ({ stage }) => {
             </Group>
 
             {/* 2. BOM Overlay */}
-            {showExportBOM && !isTooSmall && (
-                <Group
-                    name="export-bom-group"
-                    x={bomPos.x}
-                    y={bomPos.y}
-                    draggable
-                    onDragStart={(e) => {
-                        e.cancelBubble = true;
-                    }}
-                    onDragEnd={(e) => {
-                        useProjectStore.getState().setExportBOMPosition({ x: e.target.x(), y: e.target.y() });
-                    }}
-                    dragBoundFunc={(pos) => {
-                        // Transform Absolute (pos) to Local
-                        const scale = stage.scaleX();
-                        const stageX = stage.x();
-                        const stageY = stage.y();
+            {showExportBOM && !isTooSmall && (() => {
+                const bomTitle = "Bill of Materials";
+                const bomLines = [
+                    `• Walls: ${walls.length}`,
+                    `• Anchors: ${anchors.length}`,
+                    `• Hubs: ${hubs.length}`,
+                    `• Cables: ${cables.length} (${totalCableMeters}m)`
+                ];
 
-                        const localX = (pos.x - stageX) / scale;
-                        const localY = (pos.y - stageY) / scale;
+                // Estimate widths (roughly 5.5px per char for 12px text, 6.2px for 14px bold title)
+                const titleWidth = bomTitle.length * 6.2;
+                const maxLineLength = Math.max(...bomLines.map(l => l.length));
+                const maxLineWidth = maxLineLength * 5.5;
 
-                        // Clamp in Local Space
-                        const clampedLocalX = Math.max(bounds.x, Math.min(localX, bounds.x + bounds.width - 200));
-                        const clampedLocalY = Math.max(bounds.y, Math.min(localY, bounds.y + bounds.height - 120));
+                const padding = 20; // 10px each side
+                const dynamicWidth = Math.max(100, Math.max(titleWidth, maxLineWidth) + padding);
+                const dynamicHeight = 115; // Increased for better bottom padding
 
-                        // Transform back to Absolute
-                        return {
-                            x: clampedLocalX * scale + stageX,
-                            y: clampedLocalY * scale + stageY
-                        };
-                    }}
-                >
-                    <Rect
-                        width={200}
-                        height={120}
-                        fill={isDark ? "rgba(30,30,30,0.9)" : "rgba(255,255,255,0.9)"}
-                        stroke={textColor}
-                        strokeWidth={1}
-                        shadowBlur={5}
-                        cornerRadius={4}
-                    />
-                    <Text
-                        x={10} y={10}
-                        text="Bill of Materials"
-                        fontSize={14}
-                        fontStyle="bold"
-                        fill={textColor}
-                        listening={false}
-                    />
-                    <Line points={[10, 30, 190, 30]} stroke={textColor} strokeWidth={1} listening={false} />
-                    <Text
-                        x={10} y={40}
-                        text={`• Walls: ${walls.length}\n• Anchors: ${anchors.length}\n• Hubs: ${hubs.length}\n• Cables: ${cables.length} (${totalCableMeters}m)`}
-                        fontSize={12}
-                        fill={textColor}
-                        lineHeight={1.5}
-                        listening={false}
-                    />
-                    {/* Move Handle Hint */}
-                    <Rect width={200} height={120} fill="transparent" stroke="transparent" />
-                </Group>
-            )}
+                return (
+                    <Group
+                        name="export-bom-group"
+                        x={bomPos.x}
+                        y={bomPos.y}
+                        draggable
+                        onDragStart={(e) => {
+                            e.cancelBubble = true;
+                        }}
+                        onDragEnd={(e) => {
+                            // Ensure we persist the position relative to the stage/bounds
+                            useProjectStore.getState().setExportBOMPosition({ x: e.target.x(), y: e.target.y() });
+                        }}
+                        dragBoundFunc={(pos) => {
+                            const scale = stage.scaleX();
+                            const stageX = stage.x();
+                            const stageY = stage.y();
+
+                            const localX = (pos.x - stageX) / scale;
+                            const localY = (pos.y - stageY) / scale;
+
+                            const clampedLocalX = Math.max(bounds.x, Math.min(localX, bounds.x + bounds.width - dynamicWidth));
+                            const clampedLocalY = Math.max(bounds.y, Math.min(localY, bounds.y + bounds.height - dynamicHeight));
+
+                            return {
+                                x: clampedLocalX * scale + stageX,
+                                y: clampedLocalY * scale + stageY
+                            };
+                        }}
+                    >
+                        <Rect
+                            width={dynamicWidth}
+                            height={dynamicHeight}
+                            fill={isDark ? "rgba(30,30,30,0.9)" : "rgba(255,255,255,0.9)"}
+                            stroke={textColor}
+                            strokeWidth={1}
+                            shadowBlur={5}
+                            cornerRadius={4}
+                        />
+                        <Text
+                            x={10} y={10}
+                            text={bomTitle}
+                            fontSize={14}
+                            fontStyle="bold"
+                            fill={textColor}
+                            listening={false}
+                        />
+                        <Line
+                            points={[10, 30, dynamicWidth - 10, 30]}
+                            stroke={textColor}
+                            strokeWidth={1}
+                            listening={false}
+                            opacity={0.3}
+                        />
+                        <Text
+                            x={10} y={40}
+                            text={bomLines.join('\n')}
+                            fontSize={12}
+                            fill={textColor}
+                            lineHeight={1.4}
+                            listening={false}
+                        />
+                        {/* Hidden Rect for better drag interaction surface */}
+                        <Rect width={dynamicWidth} height={dynamicHeight} fill="transparent" />
+                    </Group>
+                );
+            })()}
 
             {/* 3. Scale Bar Overlay */}
             {showExportScaleBar && !isTooSmall && (

@@ -118,6 +118,19 @@ export const generateHtmlContent = (state: ProjectState, projectName: string = "
                     <span>Scale Bar</span>
                 </label>
             </div>
+            
+            <div class="sidebar-header" style="margin-top: 10px; border-top: 1px solid #e2e8f0;">
+                <h2>Scaling</h2>
+            </div>
+            <div class="layer-list">
+                <div class="layer-item" style="flex-direction: column; align-items: flex-start;">
+                    <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:4px;">
+                        <span style="font-size: 11px;">BOM Scale</span>
+                        <span id="bom-scale-val" style="font-size: 11px; font-weight:bold;">1.0x</span>
+                    </div>
+                    <input type="range" min="0.5" max="3" step="0.1" value="1" oninput="updateBomScale(this.value)" style="width: 100%;">
+                </div>
+            </div>
         </div>
 
         <div id="tools-container" style="flex-shrink: 0; border-top: 1px solid #e2e8f0; background: #fff;">
@@ -193,7 +206,8 @@ export const generateHtmlContent = (state: ProjectState, projectName: string = "
         </svg>
 
         <!-- Draggable BOM -->
-        <div id="layer-bom" class="draggable-panel" style="top: 20px; right: 20px; width: 180px;">
+        <!-- Draggable BOM -->
+        <div id="layer-bom" class="draggable-panel" style="top: 20px; right: 20px; width: fit-content; min-width: 120px;">
             <div class="panel-content">
                 ${bomHtml}
             </div>
@@ -491,7 +505,7 @@ const generateBomHtml = (state: ProjectState) => {
     return `
         <div class="bom-project-name" onmousedown="startDrag(event, 'layer-bom')">
             <label>Project:</label>
-            <input type="text" id="project-name-input" placeholder="Project Name" />
+            <input type="text" id="project-name-input" placeholder="Project Name" style="width: 50px; min-width: 50px;" />
         </div>
         <table class="bom-table">
             <thead>
@@ -566,16 +580,16 @@ const getViewerStyles = () => `
     svg { width: 100%; height: 100%; display: block; }
 
     /* Draggable Panel (BOM) */
-    .draggable-panel { position: absolute; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); min-width: 170px; z-index: 100; resize: both; overflow: hidden; max-height: 80vh; display: flex; flex-direction: column; }
+    .draggable-panel { position: absolute; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); min-width: 100px; z-index: 100; resize: both; overflow: hidden; max-height: 80vh; display: flex; flex-direction: column; transform-origin: top right; }
     .panel-header { padding: 12px 16px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; cursor: move; font-weight: 600; font-size: 14px; color: #1e293b; user-select: none; }
-    .panel-content { padding: 0; }
+    .panel-content { padding: 0; padding-bottom: 12px; }
     
     /* Draggable BOM */
-    .bom-project-name { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 8px; background: #f8fafc; cursor: move; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+    .bom-project-name { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 8px; background: #f8fafc; cursor: move; border-top-left-radius: 8px; border-top-right-radius: 8px; }
     .bom-project-name label { font-size: 0.85em; font-weight: 600; color: #64748b; }
-    .bom-project-name input { border: 1px dashed transparent; padding: 4px; font-size: 1em; font-weight: 600; color: #1e293b; flex: 1; outline: none; background: transparent; transition: all 0.2s; }
-    .bom-project-name input:hover { border-color: #cbd5e1; }
-    .bom-project-name input:focus { background: #f8fafc; border-color: #3b82f6; border-radius: 4px; }
+    .bom-project-name input { border: 1px dashed transparent; padding: 4px; font-size: 1.1em; font-weight: 700; color: #0f172a; flex: 1; outline: none; background: transparent; transition: all 0.2s; min-width: 100px; }
+    .bom-project-name input:hover { border-color: #cbd5e1; background: rgba(0,0,0,0.02); }
+    .bom-project-name input:focus { background: #ffffff; border-color: #3b82f6; border-radius: 4px; border-style: solid; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); }
     
     /* Custom Text Panel */
     #layer-custom-text { top: 20px; left: 20px; width: 300px; padding: 10px; font-size: 14px; line-height: 1.5; color: #333; }
@@ -711,6 +725,21 @@ function updateViewBox() {
         
         updateViewBox();
     });
+    
+    // BOM Scale
+    window.updateBomScale = (val) => {
+        document.getElementById('bom-scale-val').innerText = val + 'x';
+        const el = document.getElementById('layer-bom');
+        if (el) {
+            el.style.transform = 'scale(' + val + ')';
+        }
+    };
+
+    // Prevent dragging when interacting with project name input
+    const nameInput = document.getElementById('project-name-input');
+    if (nameInput) {
+        nameInput.addEventListener('mousedown', (e) => e.stopPropagation());
+    }
 
     // Layer Toggling
     window.toggleLayer = (id) => {

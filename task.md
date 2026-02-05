@@ -58,6 +58,8 @@
     - [ ] **Smart Extension**: Auto-extend cables when segments are dragged away from devices.
     - [ ] **Length Tracking**: Real-time length calculation (with vertical drops/slack).
     - [ ] **BOM Integration**: Cable totals in export.
+- [x] **Dynamic BOM Overlay Width**: Auto-adjust width to fit text length in exports.
+- [x] **HTML Export Enhancements**: Add overlay scaling and interactive project name editing.
 ### Dimension & Selection Debugging
 - [x] Fix dimension label dragging: ensure `lastDragPos` is set on start
 - [x] Fix dimension label dragging: ensure `dim-text` name is excluded from wall drag check
