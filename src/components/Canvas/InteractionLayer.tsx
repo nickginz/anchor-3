@@ -1229,7 +1229,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     finalPos = snap.point;
                     // Auto-Split Logic for Start Point
                     if (!rectStart && snap.type === 'edge' && snap.id) {
+                        useProjectStore.temporal.getState().pause();
                         state.splitWall(snap.id, snap.point);
+                        useProjectStore.temporal.getState().resume();
                     }
                 }
 
@@ -1245,11 +1247,12 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     const y2 = finalPos.y;
 
                     if (Math.abs(x1 - x2) > 0.1 || Math.abs(y1 - y2) > 0.1) { // Changed AND to OR for validity check
+                        useProjectStore.temporal.getState().pause();
+
                         // Auto-Split for End Point
                         if (snap && snap.type === 'edge' && snap.id) {
                             state.splitWall(snap.id, snap.point);
                         }
-
                         // Check Implicit Points (p3, p4) for Splitting
                         const p3 = { x: x2, y: y1 };
                         const p4 = { x: x1, y: y2 };
@@ -1268,6 +1271,11 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                             { points: [x2, y2, x1, y2], ...params as any },
                             { points: [x1, y2, x1, y1], ...params as any }
                         ]);
+
+                        useProjectStore.temporal.getState().resume();
+                        // Force commit
+                        const lastWall = useProjectStore.getState().walls.slice(-1)[0];
+                        if (lastWall) state.updateWall(lastWall.id, { points: [...lastWall.points] });
                     }
                     setRectStart(null);
                     setCurrentMousePos(null);
@@ -1285,7 +1293,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     finalPos = snap.point;
                     // Auto-Split Logic for Start Point
                     if (!rectEdgeStart && snap.type === 'edge' && snap.id) {
+                        useProjectStore.temporal.getState().pause();
                         state.splitWall(snap.id, snap.point);
+                        useProjectStore.temporal.getState().resume();
                     }
                 }
 
@@ -1298,7 +1308,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     // Phase 2: Base End Point
                     if (dist(rectEdgeStart, finalPos) > 0.001) {
                         if (snap && snap.type === 'edge' && snap.id) {
+                            useProjectStore.temporal.getState().pause();
                             state.splitWall(snap.id, snap.point);
+                            useProjectStore.temporal.getState().resume();
                         }
                         setRectEdgeBaseEnd(finalPos);
                     }
@@ -1336,6 +1348,8 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     const p3 = { x: p3x, y: p3y };
                     const p4 = { x: p4x, y: p4y };
 
+                    useProjectStore.temporal.getState().pause();
+
                     const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, anchors, 20 / (stage?.scaleX() || 1)) : null;
                     if (snapP3 && snapP3.type === 'edge' && snapP3.id) state.splitWall(snapP3.id, snapP3.point);
 
@@ -1350,6 +1364,11 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                         { points: [p3x, p3y, p4x, p4y], ...params as any },     // Top
                         { points: [p4x, p4y, p1.x, p1.y], ...params as any }    // Side B
                     ]);
+
+                    useProjectStore.temporal.getState().resume();
+                    // Force commit
+                    const lastWall = useProjectStore.getState().walls.slice(-1)[0];
+                    if (lastWall) state.updateWall(lastWall.id, { points: [...lastWall.points] });
 
                     setRectEdgeStart(null);
                     setRectEdgeBaseEnd(null);
@@ -1775,22 +1794,36 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
                 // FORCE COMMIT: Trigger a state update to save the "End" position in history
                 if (hasDragged.current) {
+                    const state = useProjectStore.getState();
+
                     if (dragAnchorId.current) {
-                        const state = useProjectStore.getState();
                         const updates = state.anchors
                             .filter(a => state.selectedIds.includes(a.id))
                             .map(a => ({ id: a.id, updates: { x: a.x, y: a.y } }));
                         updateAnchors(updates);
                     }
 
+                    if (dragHubId.current) {
+                        const isSelected = state.selectedIds.includes(dragHubId.current);
+                        const targets = isSelected ? state.hubs.filter(h => state.selectedIds.includes(h.id)) : state.hubs.filter(h => h.id === dragHubId.current);
+                        targets.forEach(t => {
+                            state.updateHub(t.id, { x: t.x, y: t.y });
+                        });
+                    }
+
+                    if (dragWallId.current) {
+                        const wall = state.walls.find(w => w.id === dragWallId.current);
+                        if (wall) state.updateWall(wall.id, { points: [...wall.points] });
+                    }
+
                     if (dragDimLineId.current) {
-                        const d = useProjectStore.getState().dimensions.find(x => x.id === dragDimLineId.current);
-                        if (d) useProjectStore.getState().updateDimension(d.id, { points: [...d.points] });
+                        const d = state.dimensions.find(x => x.id === dragDimLineId.current);
+                        if (d) state.updateDimension(d.id, { points: [...d.points] });
                     }
 
                     if (dragTextId.current) {
-                        const d = useProjectStore.getState().dimensions.find(x => x.id === dragTextId.current);
-                        if (d) useProjectStore.getState().updateDimension(d.id, { textOffset: { x: d.textOffset?.x || 0, y: d.textOffset?.y || 0 } });
+                        const d = state.dimensions.find(x => x.id === dragTextId.current);
+                        if (d) state.updateDimension(d.id, { textOffset: { x: d.textOffset?.x || 0, y: d.textOffset?.y || 0 } });
                     }
                 }
             }
