@@ -178,7 +178,7 @@ const DOCUMENTATION: HelpSection[] = [
                             </div>
                             <div>
                                 <p className="font-bold text-gray-200 text-xs">Import & Layers</p>
-                                <p className="text-[10px] text-gray-400 text-pretty">Import background images/DXF. Use the DXF Layer Manager to toggle specific CAD layers.</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Import background images/DXF. <strong>Alt+Click</strong> the drawing to select it. Use the DXF Layer Manager to toggle specific CAD layers.</p>
                             </div>
                         </div>
                         <div className="flex items-start space-x-3">
@@ -264,12 +264,14 @@ const DOCUMENTATION: HelpSection[] = [
                         <tr><td className="p-2 border-r panel-border font-mono text-accent">V / Esc</td><td className="p-2">Select Mode</td></tr>
                         <tr><td className="p-2 border-r panel-border font-mono text-accent">W + Shift</td><td className="p-2">Orthogonal Drawing</td></tr>
                         <tr><td className="p-2 border-r panel-border font-mono text-accent">V + Shift</td><td className="p-2">Add to Selection</td></tr>
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">Alt + LMB</td><td className="p-2">Select Imported Floorplan</td></tr>
+                        <tr><td className="p-2 border-r panel-border font-mono text-accent">Shift + Drag</td><td className="p-2">Move selection orthogonally</td></tr>
                         <tr><td className="p-2 border-r panel-border font-mono text-accent">Ctrl + Z</td><td className="p-2">Undo</td></tr>
                     </tbody>
                 </table>
             </div>
         ),
-        searchableText: "keyboard shortcuts key action w draw wall shift+w lock unlock walls r cycle rect 3-pt rect shift+a open auto-placement d measure s set scale a place anchor h place hub v esc select mode ctrl+z undo"
+        searchableText: "keyboard shortcuts key action w draw wall shift+w lock unlock walls r cycle rect 3-pt rect shift+a open auto-placement d measure s set scale a place anchor h place hub v esc select mode ctrl+z undo shift drag move orthogonal"
     },
     {
         id: 'logic',
@@ -319,6 +321,8 @@ const DOCUMENTATION: HelpSection[] = [
                         <p>Drag from <strong>Right-to-Left</strong> (Dashed Box) for "Crossing Selection" (selects anything touched).</p>
                         <ul className="list-disc pl-4 space-y-1 mt-1">
                             <li><strong className="text-gray-300">Locked Items</strong>: You can select locked walls or cables to view settings, but they cannot be moved.</li>
+                            <li><strong className="text-gray-300">Floorplans</strong>: Use <strong className="text-accent">Alt + LMB</strong> to select the imported drawing/floorplan layer when in Select Mode.</li>
+                            <li><strong className="text-gray-300">Orthogonal Move</strong>: Hold <strong className="text-accent">Shift</strong> while dragging selected objects (walls, anchors, hubs, or dimensions) to restrict movement to the vertical or horizontal axis.</li>
                         </ul>
                     </div>
                 </div>

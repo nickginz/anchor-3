@@ -217,6 +217,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
     const dragHubId = useRef<string | null>(null);
     const draggedWallNodeMap = useRef<{ wallId: string, pointIndex: number }[]>([]);
 
+    // Drag Constraint State
+    const dragStartPos = useRef<Point | null>(null);
+
 
 
 
@@ -804,6 +807,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         if (hitHub) {
             if (activeTool === 'select' || activeTool === 'hub') {
                 dragHubId.current = hitHub.id;
+                dragStartPos.current = pos;
                 lastDragPos.current = pos;
                 useProjectStore.temporal.getState().pause();
 
@@ -848,6 +852,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
                 if (e.target.name() !== 'anchor' && e.target.name() !== 'hub-bottom' && e.target.name() !== 'dimension-line' && e.target.name() !== 'dim-text' && e.target.name() !== 'dim-text-handle' && e.target.name() !== 'wall-handle') {
                     dragWallId.current = hitWall.id;
+                    dragStartPos.current = pos;
                     lastDragPos.current = pos;
                     useProjectStore.temporal.getState().pause();
 
@@ -909,6 +914,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
                 if (anchor && !anchor.locked) {
                     dragAnchorId.current = anchorId;
+                    dragStartPos.current = pos;
                     lastDragPos.current = pos;
                     useProjectStore.temporal.getState().pause(); // Pause Undo History
                 }
@@ -934,6 +940,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             }
 
             dragDimLineId.current = targetId;
+            dragStartPos.current = pos;
             lastDragPos.current = pos;
             useProjectStore.temporal.getState().pause();
             return;
@@ -975,6 +982,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             // If Handle (implies selected) OR (Text AND Selected), start drag
             if (nameInternal === 'dim-text-handle' || (nameInternal === 'dim-text' && isSelected)) {
                 dragTextId.current = realId;
+                dragStartPos.current = pos;
                 lastDragPos.current = pos; // FIX: Set it here so delta calculation works
                 useProjectStore.temporal.getState().pause();
                 return; // Consume event (no selection box)
@@ -1437,6 +1445,11 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         const state = useProjectStore.getState();
         const currentActiveTool = state.activeTool;
 
+        let effectivePos = pos;
+        if (isShiftDown && dragStartPos.current) {
+            effectivePos = applyOrthogonal(dragStartPos.current, pos);
+        }
+
         if (points.length > 0) {
             // console.log(`[InteractionLayer] MouseMove | Points: ${points.length} | Tool: ${currentActiveTool}`);
         }
@@ -1451,8 +1464,8 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             if (isMouseDown.current && dragCableHandle && dragCableHandle.handle.type === 'segment') {
                 const cable = cables.find(c => c.id === dragCableHandle.id);
                 if (cable) {
-                    const deltaX = pos.x - lastDragPos.current!.x;
-                    const deltaY = pos.y - lastDragPos.current!.y;
+                    const deltaX = effectivePos.x - lastDragPos.current!.x;
+                    const deltaY = effectivePos.y - lastDragPos.current!.y;
 
                     const p1 = cable.points[dragCableHandle.handle.index];
                     const p2 = cable.points[dragCableHandle.handle.index + 1];
@@ -1469,7 +1482,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     newPoints[dragCableHandle.handle.index + 1] = { x: p2.x + moveX, y: p2.y + moveY };
 
                     state.updateCable(dragCableHandle.id, { points: newPoints, locked: true });
-                    lastDragPos.current = pos;
+                    lastDragPos.current = effectivePos;
                     return;
                 }
             }
@@ -1509,9 +1522,10 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         }
 
         // 2. Multi-move Walls logic
-        if (dragWallId.current && lastDragPos.current && !wallsLocked) {
-            const dx = pos.x - lastDragPos.current.x;
-            const dy = pos.y - lastDragPos.current.y;
+        const currentLastDragPos = lastDragPos.current;
+        if (dragWallId.current && currentLastDragPos && !wallsLocked) {
+            const dx = effectivePos.x - currentLastDragPos.x;
+            const dy = effectivePos.y - currentLastDragPos.y;
             if (Math.abs(dx) > 0 || Math.abs(dy) > 0) hasDragged.current = true;
 
             const isDragSelected = state.selectedIds.includes(dragWallId.current);
@@ -1538,15 +1552,15 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 state.updateWallPoint(p.x, p.y, p.x + dx, p.y + dy);
             });
 
-            lastDragPos.current = pos;
+            lastDragPos.current = effectivePos;
             return;
         }
 
         // 3. Simple Dragging Logic for hubs, anchors, dimensions
-        if (isMouseDown.current && lastDragPos.current) {
+        if (isMouseDown.current && currentLastDragPos) {
             hasDragged.current = true;
-            const dx = pos.x - lastDragPos.current.x;
-            const dy = pos.y - lastDragPos.current.y;
+            const dx = effectivePos.x - currentLastDragPos.x;
+            const dy = effectivePos.y - currentLastDragPos.y;
 
             if (dragHubId.current) {
                 const isSelected = state.selectedIds.includes(dragHubId.current);
@@ -1554,7 +1568,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 targets.forEach(t => {
                     state.updateHub(t.id, { x: t.x + dx, y: t.y + dy });
                 });
-                lastDragPos.current = pos;
+                lastDragPos.current = effectivePos;
                 return;
             }
 
@@ -1564,7 +1578,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 targets.forEach(t => {
                     state.updateAnchor(t.id, { x: t.x + dx, y: t.y + dy });
                 });
-                lastDragPos.current = pos;
+                lastDragPos.current = effectivePos;
                 return;
             }
 
@@ -1582,7 +1596,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                         });
                     }
                 }
-                lastDragPos.current = pos;
+                lastDragPos.current = effectivePos;
                 return;
             }
 
@@ -1592,9 +1606,9 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     const [x1, y1, x2, y2] = dim.points;
                     const midX = (x1 + x2) / 2;
                     const midY = (y1 + y2) / 2;
-                    state.updateDimension(dim.id, { textOffset: { x: pos.x - midX, y: pos.y - midY } });
+                    state.updateDimension(dim.id, { textOffset: { x: effectivePos.x - midX, y: effectivePos.y - midY } });
                 }
-                lastDragPos.current = pos; // Update here for delta if needed (though using absolute pos above)
+                lastDragPos.current = effectivePos; // Update here for delta if needed (though using absolute pos above)
                 return;
             }
 
@@ -1602,8 +1616,8 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 const wall = walls.find(w => w.id === draggingDoorId);
                 if (wall && wall.door) {
                     const length = Math.hypot(wall.points[2] - wall.points[0], wall.points[3] - wall.points[1]);
-                    const vmx = pos.x - wall.points[0];
-                    const vmy = pos.y - wall.points[1];
+                    const vmx = effectivePos.x - wall.points[0];
+                    const vmy = effectivePos.y - wall.points[1];
                     const wx = wall.points[2] - wall.points[0];
                     const wy = wall.points[3] - wall.points[1];
                     const dot = (vmx * wx + vmy * wy) / (length * length);
@@ -1611,7 +1625,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     const newOffset = Math.max(halfWidthPct, Math.min(1 - halfWidthPct, dot));
                     state.updateWall(wall.id, { door: { ...wall.door, offset: newOffset } });
                 }
-                lastDragPos.current = pos;
+                lastDragPos.current = effectivePos;
                 return;
             }
         }
