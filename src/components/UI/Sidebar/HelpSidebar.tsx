@@ -35,11 +35,11 @@ const DOCUMENTATION: HelpSection[] = [
         title: 'Introduction',
         content: (
             <div className="space-y-2">
-                <p className="font-semibold text-accent">AnchorCAD Planner 3.0</p>
-                <p>A professional web-based CAD tool for planning wireless anchor deployments, designing floor plans, and optimizing signal coverage with automated wall detection and cable routing.</p>
+                <p className="font-semibold text-accent">AnchorCAD Planner 3.0 by Nikolay Ginzburg</p>
+                <p>A professional web-based CAD tool for planning anchor deployments, designing floor plans, and optimizing signal coverage with automated wall detection and cable routing.</p>
             </div>
         ),
-        searchableText: "introduction anchorcad planner 3.0 professional web-based cad tool planning wireless anchor deployments designing floor plans optimizing signal coverage automated wall detection cable routing"
+        searchableText: "introduction anchorcad planner 3.0 professional web-based cad tool planning anchor deployments designing floor plans optimizing signal coverage automated wall detection cable routing"
     },
     {
         id: 'interface',
@@ -127,7 +127,7 @@ const DOCUMENTATION: HelpSection[] = [
                             <div className="p-1.5 bg-gray-700/50 rounded text-gray-200 shrink-0"><Wifi size={14} /></div>
                             <div>
                                 <p className="font-bold text-gray-200 text-xs">Anchor (A)</p>
-                                <p className="text-[10px] text-gray-400 text-pretty">Place a wireless anchor or access point. Shows coverage radius.</p>
+                                <p className="text-[10px] text-gray-400 text-pretty">Place an anchor or access point. Shows coverage radius.</p>
                             </div>
                         </div>
                         <div className="flex items-start space-x-3">
@@ -453,7 +453,7 @@ export const HelpSidebar: React.FC = () => {
 
             {/* Footer */}
             <div className="p-3 border-t panel-border text-[10px] text-center text-gray-500 dark:text-gray-600 bg-gray-100 dark:bg-[#222] shrink-0">
-                AnchorCAD Planner v3.0 Documentation
+                AnchorCAD Planner v3.0 Documentation by Nikolay Ginzburg
             </div>
         </div>
     );

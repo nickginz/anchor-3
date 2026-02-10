@@ -5,7 +5,7 @@ import { useProjectStore } from '../../../store/useProjectStore';
 import type { ProjectState } from '../../../store/useProjectStore';
 import { generateJoinedWalls, generateUnionBoundary } from '../../../utils/wall-joining';
 import type { Wall } from '../../../types';
-import { getWallPattern } from '../../../utils/wall-patterns';
+
 
 export const WallsLayer: React.FC = () => {
     const { walls, scaleRatio, layers, selectedIds, theme } = useProjectStore(
@@ -58,10 +58,8 @@ export const WallsLayer: React.FC = () => {
                 let patternImage: HTMLCanvasElement | null = null;
                 let opacity = 1;
 
-                const pattern = getWallPattern(material, theme as 'light' | 'dark');
-                if (pattern) {
-                    patternImage = pattern;
-                }
+                // Pattern logic removed (cleanup) - falling back to solid colors
+
 
                 if (theme === 'light') {
                     // Light Theme Colors

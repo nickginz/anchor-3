@@ -7,7 +7,7 @@ import { DXFLayer } from './Layers/DXFLayer';
 import { HeatmapLayer } from './Layers/HeatmapLayer';
 import { RoomsLayer } from './Layers/RoomsLayer';
 import { PlacementAreaLayer } from './Layers/PlacementAreaLayer';
-import { ValidationLayer } from './Layers/ValidationLayer';
+
 import InteractionLayer from './InteractionLayer';
 import { DimensionsLayer } from './Layers/DimensionsLayer';
 import { AnchorsLayer } from './Layers/AnchorsLayer';
@@ -337,7 +337,7 @@ export const MainStage: React.FC = () => {
                                 dash={skeletonMode === 'simplified' ? [] : [10, 5]} // Solid for simplified
                             />
                         ))}
-                        <ValidationLayer stage={stage} />
+
                     </Layer>
 
                     {/* Layer 3: Overlay, Interaction, Anchors (Must be Top) */}
