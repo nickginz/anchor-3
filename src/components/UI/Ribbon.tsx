@@ -104,8 +104,7 @@ export const Ribbon: React.FC = () => {
     const { addWalls, activeImportId, importedObjects } = useProjectStore();
     const activeImport = activeImportId ? importedObjects.find(o => o.id === activeImportId) : null;
 
-    // DEBUG: Log render and config state
-    console.log('[Ribbon] Rendered. isConfigOpen:', isConfigOpen, 'ToolbarSize:', toolbarSize);
+
 
     // Local Escape Handler (Lower priority logic via checks)
     React.useEffect(() => {
@@ -761,12 +760,12 @@ export const Ribbon: React.FC = () => {
                             const file = e.target.files?.[0];
                             if (!file) return;
 
-                            console.log("Loading file:", file.name);
+
                             const reader = new FileReader();
                             reader.onload = (ev) => {
                                 try {
                                     const content = ev.target?.result as string;
-                                    console.log("File content length:", content.length);
+
                                     const json = JSON.parse(content);
 
                                     // Basic validation
@@ -775,7 +774,7 @@ export const Ribbon: React.FC = () => {
                                     }
 
                                     useProjectStore.getState().loadProject(json);
-                                    console.log("Project loaded successfully");
+
 
                                     // Reset file input so same file can be selected again
                                     if (fileInputRef.current) fileInputRef.current.value = '';

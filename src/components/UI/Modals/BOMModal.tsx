@@ -18,8 +18,8 @@ export const BOMModal: React.FC = () => {
     if (!isOpen || !data) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px]">
-            <div className="bg-[#1e1e1e] border border-[var(--border-color)] rounded-lg shadow-2xl w-[500px] flex flex-col text-sm text-[var(--text-primary)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-overlay">
+            <div className="bg-[#1e1e1e] border border-[var(--border-color)] rounded-xl shadow-2xl w-[500px] flex flex-col text-sm text-[var(--text-primary)] animate-scale-in">
                 {/* Header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] bg-[#252525] rounded-t-lg">
                     <div className="flex items-center gap-2">

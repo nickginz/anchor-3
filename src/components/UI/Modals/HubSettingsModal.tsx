@@ -16,8 +16,8 @@ export const HubSettingsModal: React.FC = () => {
     };
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in active:outline-none focus:outline-none" onKeyDown={(e) => e.stopPropagation()}>
-            <div className="bg-[#1e1e1e] border border-[#333] rounded-lg shadow-2xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-overlay" onKeyDown={(e) => e.stopPropagation()}>
+            <div className="bg-[#1e1e1e] border border-[#333] rounded-xl shadow-2xl w-80 overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
                 {/* Header */}
                 <div className="flex items-center justify-between p-3 border-b border-[#333] bg-[#252525]">
                     <div className="flex items-center space-x-2 text-gray-200">
@@ -58,8 +58,8 @@ export const HubSettingsModal: React.FC = () => {
                                     type="button"
                                     onClick={() => updateHub(hub.id, { capacity: cap as any })}
                                     className={`px-2 py-1.5 text-xs font-bold rounded border transition-colors ${hub.capacity === cap
-                                            ? 'bg-blue-600 border-blue-500 text-white'
-                                            : 'bg-[#2a2a2a] border-[#333] text-gray-400 hover:bg-[#333]'
+                                        ? 'bg-blue-600 border-blue-500 text-white'
+                                        : 'bg-[#2a2a2a] border-[#333] text-gray-400 hover:bg-[#333]'
                                         }`}
                                 >
                                     {cap}

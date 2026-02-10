@@ -91,7 +91,7 @@ export const ExportSidebar: React.FC = () => {
                 alert("Generated HTML is empty. Export aborted.");
                 return;
             }
-            console.log("Generated HTML length:", htmlContent.length);
+
 
             let writeSuccess = false;
 

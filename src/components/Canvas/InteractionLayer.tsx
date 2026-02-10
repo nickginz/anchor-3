@@ -250,7 +250,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             if (e.key === 'Shift') setIsShiftDown(true);
 
             // Shortcuts
-            console.log("Key Debug:", e.code, e.key, "Shift:", e.shiftKey, "Ctrl:", e.ctrlKey); // DEBUG
+
             const code = e.code;
             const state = useProjectStore.getState();
             const wallsLocked = state.wallsLocked;
@@ -639,17 +639,11 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         }
     }, [stage, openAnchorMenu, activeTool, points, chainStart, wallPreset, standardWallThickness, thickWallThickness, wideWallThickness, addWall, setPoints, setChainStart, setTool, onOpenMenu]);
 
-    useEffect(() => {
-        const handler = (e: MouseEvent) => {
-            console.log('[Global Debug] Window Click Target:', e.target);
-        };
-        window.addEventListener('mousedown', handler, true); // Capture phase
-        return () => window.removeEventListener('mousedown', handler, true);
-    }, []);
+
 
     // --- State Reset on Tool Change ---
     useEffect(() => {
-        console.log(`[InteractionLayer] Tool changed to: ${activeTool}. Resetting state.`);
+
         setPoints([]);
         setChainStart(null);
         setRectStart(null);
@@ -678,7 +672,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         const pos = getStagePoint();
         if (!pos) return;
 
-        console.log(`[InteractionLayer] MouseDown | Tool: ${activeTool} | Button: ${e.evt.button} | Target: ${e.target.name()} | Locked: ${wallsLocked} | Pts: ${points.length}`);
+
 
         isMouseDown.current = true;
         hasDragged.current = false;
@@ -1135,7 +1129,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             }
             // Wall Tool
         } else if (activeTool === 'wall') {
-            console.log(`[InteractionLayer] Wall Tool Click | Locked: ${wallsLocked} | Button: ${e.evt.button}`);
+
             if (wallsLocked) {
                 console.warn("[InteractionLayer] Wall placement blocked: wallsLocked is true");
                 return; // Prevent drawing if locked
@@ -1173,7 +1167,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 }
 
                 if (points.length === 0) {
-                    console.log(`[InteractionLayer] Wall Start. Pos: ${JSON.stringify(finalPos)}`);
+
                     setPoints([finalPos]);
                     setChainStart(finalPos);
                 } else {
@@ -1210,7 +1204,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 }
 
                 if (!rectStart) {
-                    console.log(`[InteractionLayer] Rect Start. Pos: ${JSON.stringify(finalPos)}`);
+
                     setRectStart(finalPos);
                     setCurrentMousePos(finalPos);
                     lastDragPos.current = finalPos; // Track for Drag

@@ -84,3 +84,67 @@
     color: var(--accent);
   }
 }
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* Focus Ring Utility */
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* Panel Shadow */
+.panel-shadow {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+
+/* Smooth Transitions */
+.transition-smooth {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Modal Backdrop */
+.backdrop-overlay {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* Scale-in Animation */
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.15s ease-out forwards;
+}
+
+/* Accent Left Bar for Section Headers */
+.section-accent {
+  border-left: 3px solid var(--accent);
+  padding-left: 8px;
+}

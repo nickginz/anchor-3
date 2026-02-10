@@ -22,8 +22,8 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-[#1f2937] border border-gray-700 rounded-lg shadow-xl w-full max-w-sm p-6 transform scale-100 animate-in zoom-in-95 duration-200 text-white">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-overlay">
+            <div className="bg-[#1f2937] border border-gray-700 rounded-xl shadow-2xl w-full max-w-sm p-6 animate-scale-in text-white">
                 <h3 className="text-lg font-bold mb-2 text-white">{title}</h3>
                 <p className="text-sm text-gray-300 mb-6">{message}</p>
 

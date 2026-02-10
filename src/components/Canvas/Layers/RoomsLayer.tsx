@@ -38,7 +38,7 @@ export const RoomsLayer: React.FC = () => {
                 const c = getPolygonCentroid(poly);
                 const cx = c.x;
                 const cy = c.y;
-                console.log(`[RoomsLayer] Room ${i} (Poly): Center: ${cx}, ${cy}`);
+
 
                 const areaSqMeters = areaPx / (scaleRatio * scaleRatio);
                 const label = `${areaSqMeters.toFixed(1)} m²`;

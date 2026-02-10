@@ -237,7 +237,7 @@ export const MainStage: React.FC = () => {
             // scaleRatio = pixels / meters
             const newScaleRatio = scalePixelDistance / meters;
             setScaleRatio(newScaleRatio);
-            console.log(`Calibrated: ${newScaleRatio} px/m`);
+
             setIsScaleModalOpen(false);
         } else {
             alert("Invalid Distance");
