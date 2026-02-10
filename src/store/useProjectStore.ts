@@ -638,32 +638,40 @@ export const useProjectStore = create<ProjectState>()(
                 (api as any).temporal.getState().pause();
             },
 
-            updateWall: (id, updates) => set((state) => ({
-                walls: state.walls.map((w) => (w.id === id ? { ...w, ...updates } : w)),
-            })),
+            updateWall: (id, updates) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({
+                    walls: state.walls.map((w) => (w.id === id ? { ...w, ...updates } : w)),
+                }));
+                (api as any).temporal.getState().pause();
+            },
 
-            updateWallPoint: (oldX, oldY, newX, newY) => set((state) => ({
-                walls: state.walls.map(w => {
-                    const tol = 0.001; // 1mm tolerance
-                    const p = [...w.points] as [number, number, number, number];
-                    let changed = false;
+            updateWallPoint: (oldX, oldY, newX, newY) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({
+                    walls: state.walls.map(w => {
+                        const tol = 0.001; // 1mm tolerance
+                        const p = [...w.points] as [number, number, number, number];
+                        let changed = false;
 
-                    // Check Start Point
-                    if (Math.abs(p[0] - oldX) < tol && Math.abs(p[1] - oldY) < tol) {
-                        p[0] = newX;
-                        p[1] = newY;
-                        changed = true;
-                    }
-                    // Check End Point
-                    if (Math.abs(p[2] - oldX) < tol && Math.abs(p[3] - oldY) < tol) {
-                        p[2] = newX;
-                        p[3] = newY;
-                        changed = true;
-                    }
+                        // Check Start Point
+                        if (Math.abs(p[0] - oldX) < tol && Math.abs(p[1] - oldY) < tol) {
+                            p[0] = newX;
+                            p[1] = newY;
+                            changed = true;
+                        }
+                        // Check End Point
+                        if (Math.abs(p[2] - oldX) < tol && Math.abs(p[3] - oldY) < tol) {
+                            p[2] = newX;
+                            p[3] = newY;
+                            changed = true;
+                        }
 
-                    return changed ? { ...w, points: p } : w;
-                })
-            })),
+                        return changed ? { ...w, points: p } : w;
+                    })
+                }));
+                (api as any).temporal.getState().pause();
+            },
 
             removeWall: (id) => {
                 (api as any).temporal.getState().resume();
