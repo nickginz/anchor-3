@@ -180,6 +180,7 @@ export interface ProjectState {
     updateWallPoint: (oldX: number, oldY: number, newX: number, newY: number) => void;
     removeWall: (id: string) => void;
     splitWall: (id: string, point: { x: number, y: number }) => void;
+    addRectangleWalls: (rectWalls: Partial<Wall>[], splitPoints: { id: string, point: Point }[]) => void;
     addAnchor: (anchor: Omit<Anchor, 'id'>) => void;
     updateAnchor: (id: string, updates: Partial<Anchor>) => void;
     updateAnchors: (updates: { id: string; updates: Partial<Anchor> }[]) => void;
@@ -233,6 +234,7 @@ export interface ProjectState {
 
     allowOutsideConnections: boolean;
     setAllowOutsideConnections: (allow: boolean) => void;
+    removeObjects: (ids: string[]) => void;
 }
 
 export interface ProjectData {
@@ -271,7 +273,7 @@ export interface ProjectData {
 
 export const useProjectStore = create<ProjectState>()(
     temporal(
-        (set) => ({
+        (set, _get, api) => ({
             scaleRatio: 50, // Default 50px = 1m
             walls: [],
             wallsLocked: false, // Default unlocked
@@ -458,129 +460,63 @@ export const useProjectStore = create<ProjectState>()(
             exportRegion: null,
             setExportRegion: (region) => set({ exportRegion: region }),
 
-            alignAnchors: (type) => set((state) => {
-                const selectedAnchors = state.anchors.filter(a => state.selectedIds.includes(a.id));
-                if (selectedAnchors.length < 2) return state;
+            alignAnchors: (type) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const selectedAnchors = state.anchors.filter(a => state.selectedIds.includes(a.id));
+                    if (selectedAnchors.length < 2) return state;
 
-                // We need to map updates to specific IDs. 
-                // Easier to map over all anchors and update matches.
+                    let targetVal = 0;
+                    if (type === 'horizontal') {
+                        const leftMost = selectedAnchors.reduce((prev, curr) => (curr.x < prev.x ? curr : prev));
+                        targetVal = leftMost.y;
+                    } else {
+                        const topMost = selectedAnchors.reduce((prev, curr) => (curr.y < prev.y ? curr : prev));
+                        targetVal = topMost.x;
+                    }
 
-                let targetVal = 0;
-                if (type === 'horizontal') {
-                    // Align Vertically to share the same Y.
-                    // Reference: Left-most anchor (Smallest X).
-                    const leftMost = selectedAnchors.reduce((prev, curr) => (curr.x < prev.x ? curr : prev));
-                    targetVal = leftMost.y;
-                } else {
-                    // Align Horizontally to share the same X.
-                    // Reference: Top-most anchor (Smallest Y).
-                    const topMost = selectedAnchors.reduce((prev, curr) => (curr.y < prev.y ? curr : prev));
-                    targetVal = topMost.x;
-                }
-
-                return {
-                    anchors: state.anchors.map(a => {
-                        if (state.selectedIds.includes(a.id)) {
-                            if (type === 'horizontal') return { ...a, y: targetVal };
-                            if (type === 'vertical') return { ...a, x: targetVal };
-                        }
-                        return a;
-                    })
-                };
-            }),
-
-            addWall: (wall) => set((state) => {
-                const { walls } = state;
-                const newWallId = uuidv4();
-                let wallSegments: Wall[] = [{ ...wall, id: newWallId }];
-
-                // Check for duplicates (on the original segment)
-                const isDuplicate = walls.some(existing => {
-                    const p1 = [existing.points[0], existing.points[1]];
-                    const p2 = [existing.points[2], existing.points[3]];
-                    const newP1 = [wall.points[0], wall.points[1]];
-                    const newP2 = [wall.points[2], wall.points[3]];
-                    const tol = 0.01;
-                    const matchDirect = (Math.abs(p1[0] - newP1[0]) < tol && Math.abs(p1[1] - newP1[1]) < tol &&
-                        Math.abs(p2[0] - newP2[0]) < tol && Math.abs(p2[1] - newP2[1]) < tol);
-                    const matchReverse = (Math.abs(p1[0] - newP2[0]) < tol && Math.abs(p1[1] - newP2[1]) < tol &&
-                        Math.abs(p2[0] - newP1[0]) < tol && Math.abs(p2[1] - newP1[1]) < tol);
-                    return matchDirect || matchReverse;
+                    return {
+                        anchors: state.anchors.map(a => {
+                            if (state.selectedIds.includes(a.id)) {
+                                if (type === 'horizontal') return { ...a, y: targetVal };
+                                if (type === 'vertical') return { ...a, x: targetVal };
+                            }
+                            return a;
+                        })
+                    };
                 });
-                if (isDuplicate) return state;
+                (api as any).temporal.getState().pause();
+            },
 
-                let currentExistingWalls = [...walls];
-                let finalNewSegments: Wall[] = [];
+            addWall: (wall) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const { walls } = state;
+                    const newWallId = uuidv4();
+                    let wallSegments: Wall[] = [{ ...wall, id: newWallId }];
 
-                const processSegment = (seg: Wall) => {
-                    let wasSplit = false;
-                    for (let i = 0; i < currentExistingWalls.length; i++) {
-                        const existing = currentExistingWalls[i];
-                        const inter = getLineIntersection(
-                            { x: seg.points[0], y: seg.points[1] },
-                            { x: seg.points[2], y: seg.points[3] },
-                            { x: existing.points[0], y: existing.points[1] },
-                            { x: existing.points[2], y: existing.points[3] }
-                        );
+                    // Check for duplicates (on the original segment)
+                    const isDuplicate = walls.some(existing => {
+                        const p1 = [existing.points[0], existing.points[1]];
+                        const p2 = [existing.points[2], existing.points[3]];
+                        const newP1 = [wall.points[0], wall.points[1]];
+                        const newP2 = [wall.points[2], wall.points[3]];
+                        const tol = 0.01;
+                        const matchDirect = (Math.abs(p1[0] - newP1[0]) < tol && Math.abs(p1[1] - newP1[1]) < tol &&
+                            Math.abs(p2[0] - newP2[0]) < tol && Math.abs(p2[1] - newP2[1]) < tol);
+                        const matchReverse = (Math.abs(p1[0] - newP2[0]) < tol && Math.abs(p1[1] - newP2[1]) < tol &&
+                            Math.abs(p2[0] - newP1[0]) < tol && Math.abs(p2[1] - newP1[1]) < tol);
+                        return matchDirect || matchReverse;
+                    });
+                    if (isDuplicate) return state;
 
-                        if (inter) {
-                            const scaleRatio = state.scaleRatio || 50;
-                            const d1 = Math.hypot(existing.points[0] - inter.x, existing.points[1] - inter.y) / scaleRatio;
-                            const d2 = Math.hypot(existing.points[2] - inter.x, existing.points[3] - inter.y) / scaleRatio;
-                            const dNew1 = Math.hypot(seg.points[0] - inter.x, seg.points[1] - inter.y) / scaleRatio;
-                            const dNew2 = Math.hypot(seg.points[2] - inter.x, seg.points[3] - inter.y) / scaleRatio;
-
-                            // Protection: Only split if the point is not too close to any endpoint (> 5cm)
-                            const MIN_SEG = 0.05;
-
-                            if (d1 > MIN_SEG && d2 > MIN_SEG) {
-                                // Split existing wall
-                                const e1: Wall = { ...existing, id: uuidv4(), points: [existing.points[0], existing.points[1], inter.x, inter.y] };
-                                const e2: Wall = { ...existing, id: uuidv4(), points: [inter.x, inter.y, existing.points[2], existing.points[3]] };
-                                currentExistingWalls.splice(i, 1, e1, e2);
-                                // Note: we continue checking THIS segment against other walls (including the new ones)
-                            }
-
-                            if (dNew1 > MIN_SEG && dNew2 > MIN_SEG) {
-                                // Split new segment and recurse
-                                const s1: Wall = { ...seg, id: uuidv4(), points: [seg.points[0], seg.points[1], inter.x, inter.y] };
-                                const s2: Wall = { ...seg, id: uuidv4(), points: [inter.x, inter.y, seg.points[2], seg.points[3]] };
-                                processSegment(s1);
-                                processSegment(s2);
-                                wasSplit = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (!wasSplit) {
-                        finalNewSegments.push(seg);
-                    }
-                };
-
-                processSegment(wallSegments[0]);
-
-                const scaleRatio = state.scaleRatio || 50;
-                const filterTiny = (w: Wall) => {
-                    const len = Math.hypot(w.points[2] - w.points[0], w.points[3] - w.points[1]) / scaleRatio;
-                    return len > 0.05;
-                };
-
-                return {
-                    walls: [...currentExistingWalls, ...finalNewSegments.filter(filterTiny)]
-                };
-            }),
-
-            addWalls: (newWalls) => set((state) => {
-                let currentWalls = [...state.walls];
-                const addedSegments: Wall[] = [];
-
-                newWalls.forEach(nw => {
-                    const wallWithId = { ...nw, id: uuidv4() };
+                    let currentExistingWalls = [...walls];
+                    let finalNewSegments: Wall[] = [];
 
                     const processSegment = (seg: Wall) => {
                         let wasSplit = false;
-                        for (let i = 0; i < currentWalls.length; i++) {
-                            const existing = currentWalls[i];
+                        for (let i = 0; i < currentExistingWalls.length; i++) {
+                            const existing = currentExistingWalls[i];
                             const inter = getLineIntersection(
                                 { x: seg.points[0], y: seg.points[1] },
                                 { x: seg.points[2], y: seg.points[3] },
@@ -595,15 +531,19 @@ export const useProjectStore = create<ProjectState>()(
                                 const dNew1 = Math.hypot(seg.points[0] - inter.x, seg.points[1] - inter.y) / scaleRatio;
                                 const dNew2 = Math.hypot(seg.points[2] - inter.x, seg.points[3] - inter.y) / scaleRatio;
 
+                                // Protection: Only split if the point is not too close to any endpoint (> 5cm)
                                 const MIN_SEG = 0.05;
 
                                 if (d1 > MIN_SEG && d2 > MIN_SEG) {
+                                    // Split existing wall
                                     const e1: Wall = { ...existing, id: uuidv4(), points: [existing.points[0], existing.points[1], inter.x, inter.y] };
                                     const e2: Wall = { ...existing, id: uuidv4(), points: [inter.x, inter.y, existing.points[2], existing.points[3]] };
-                                    currentWalls.splice(i, 1, e1, e2);
+                                    currentExistingWalls.splice(i, 1, e1, e2);
+                                    // Note: we continue checking THIS segment against other walls (including the new ones)
                                 }
 
                                 if (dNew1 > MIN_SEG && dNew2 > MIN_SEG) {
+                                    // Split new segment and recurse
                                     const s1: Wall = { ...seg, id: uuidv4(), points: [seg.points[0], seg.points[1], inter.x, inter.y] };
                                     const s2: Wall = { ...seg, id: uuidv4(), points: [inter.x, inter.y, seg.points[2], seg.points[3]] };
                                     processSegment(s1);
@@ -614,22 +554,89 @@ export const useProjectStore = create<ProjectState>()(
                             }
                         }
                         if (!wasSplit) {
-                            addedSegments.push(seg);
+                            finalNewSegments.push(seg);
                         }
                     };
-                    processSegment(wallWithId);
+
+                    processSegment(wallSegments[0]);
+
+                    const scaleRatio = state.scaleRatio || 50;
+                    const filterTiny = (w: Wall) => {
+                        const len = Math.hypot(w.points[2] - w.points[0], w.points[3] - w.points[1]) / scaleRatio;
+                        return len > 0.05;
+                    };
+
+                    return {
+                        walls: [...currentExistingWalls, ...finalNewSegments.filter(filterTiny)]
+                    };
                 });
+                (api as any).temporal.getState().pause();
+            },
 
-                const scaleRatio = state.scaleRatio || 50;
-                const filterTiny = (w: Wall) => {
-                    const len = Math.hypot(w.points[2] - w.points[0], w.points[3] - w.points[1]) / scaleRatio;
-                    return len > 0.05;
-                };
+            addWalls: (newWalls) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    let currentWalls = [...state.walls];
+                    const addedSegments: Wall[] = [];
 
-                return {
-                    walls: [...currentWalls.filter(filterTiny), ...addedSegments.filter(filterTiny)]
-                };
-            }),
+                    newWalls.forEach(nw => {
+                        const wallWithId = { ...nw, id: uuidv4() };
+
+                        const processSegment = (seg: Wall) => {
+                            let wasSplit = false;
+                            for (let i = 0; i < currentWalls.length; i++) {
+                                const existing = currentWalls[i];
+                                const inter = getLineIntersection(
+                                    { x: seg.points[0], y: seg.points[1] },
+                                    { x: seg.points[2], y: seg.points[3] },
+                                    { x: existing.points[0], y: existing.points[1] },
+                                    { x: existing.points[2], y: existing.points[3] }
+                                );
+
+                                if (inter) {
+                                    const scaleRatio = state.scaleRatio || 50;
+                                    const d1 = Math.hypot(existing.points[0] - inter.x, existing.points[1] - inter.y) / scaleRatio;
+                                    const d2 = Math.hypot(existing.points[2] - inter.x, existing.points[3] - inter.y) / scaleRatio;
+                                    const dNew1 = Math.hypot(seg.points[0] - inter.x, seg.points[1] - inter.y) / scaleRatio;
+                                    const dNew2 = Math.hypot(seg.points[2] - inter.x, seg.points[3] - inter.y) / scaleRatio;
+
+                                    const MIN_SEG = 0.05;
+
+                                    if (d1 > MIN_SEG && d2 > MIN_SEG) {
+                                        const e1: Wall = { ...existing, id: uuidv4(), points: [existing.points[0], existing.points[1], inter.x, inter.y] };
+                                        const e2: Wall = { ...existing, id: uuidv4(), points: [inter.x, inter.y, existing.points[2], existing.points[3]] };
+                                        currentWalls.splice(i, 1, e1, e2);
+                                    }
+
+                                    if (dNew1 > MIN_SEG && dNew2 > MIN_SEG) {
+                                        const s1: Wall = { ...seg, id: uuidv4(), points: [seg.points[0], seg.points[1], inter.x, inter.y] };
+                                        const s2: Wall = { ...seg, id: uuidv4(), points: [inter.x, inter.y, seg.points[2], seg.points[3]] };
+                                        processSegment(s1);
+                                        processSegment(s2);
+                                        wasSplit = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!wasSplit) {
+                                addedSegments.push(seg);
+                            }
+                        };
+                        processSegment(wallWithId);
+                    });
+
+                    const scaleRatio = state.scaleRatio || 50;
+                    const filterTiny = (w: Wall) => {
+                        const len = Math.hypot(w.points[2] - w.points[0], w.points[3] - w.points[1]) / scaleRatio;
+                        return len > 0.05;
+                    };
+
+                    return {
+                        walls: [...currentWalls.filter(filterTiny), ...addedSegments.filter(filterTiny)]
+                    };
+                });
+                (api as any).temporal.getState().pause();
+            },
 
             updateWall: (id, updates) => set((state) => ({
                 walls: state.walls.map((w) => (w.id === id ? { ...w, ...updates } : w)),
@@ -658,685 +665,645 @@ export const useProjectStore = create<ProjectState>()(
                 })
             })),
 
-            removeWall: (id) => set((state) => {
-                const wallToRemove = state.walls.find(w => w.id === id);
-                if (!wallToRemove) return state;
+            removeWall: (id) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const wallToRemove = state.walls.find(w => w.id === id);
+                    if (!wallToRemove) return state;
 
-                let currentWalls = state.walls.filter((w) => w.id !== id);
+                    let currentWalls = state.walls.filter((w) => w.id !== id);
 
-                // Helper to get connected walls at a point
-                const getConnectedWalls = (walls: Wall[], p: { x: number, y: number }) => {
-                    return walls.filter(w => {
-                        const dist1 = Math.hypot(w.points[0] - p.x, w.points[1] - p.y);
-                        const dist2 = Math.hypot(w.points[2] - p.x, w.points[3] - p.y);
-                        return dist1 < 0.001 || dist2 < 0.001;
-                    });
-                };
+                    // Helper to get connected walls at a point
+                    const getConnectedWalls = (walls: Wall[], p: { x: number, y: number }) => {
+                        return walls.filter(w => {
+                            const dist1 = Math.hypot(w.points[0] - p.x, w.points[1] - p.y);
+                            const dist2 = Math.hypot(w.points[2] - p.x, w.points[3] - p.y);
+                            return dist1 < 0.001 || dist2 < 0.001;
+                        });
+                    };
 
-                // Helper to check collinearity (slope check)
-                const areCollinear = (w1: Wall, w2: Wall) => {
-                    const angle1 = Math.atan2(w1.points[3] - w1.points[1], w1.points[2] - w1.points[0]);
-                    const angle2 = Math.atan2(w2.points[3] - w2.points[1], w2.points[2] - w2.points[0]);
+                    // Helper to check collinearity (slope check)
+                    const areCollinear = (w1: Wall, w2: Wall) => {
+                        const angle1 = Math.atan2(w1.points[3] - w1.points[1], w1.points[2] - w1.points[0]);
+                        const angle2 = Math.atan2(w2.points[3] - w2.points[1], w2.points[2] - w2.points[0]);
 
-                    // Normalize angles 0-PI (since wall direction doesn't matter for collinearity)
-                    const a1 = angle1 < 0 ? angle1 + Math.PI : angle1;
-                    const a2 = angle2 < 0 ? angle2 + Math.PI : angle2;
+                        // Normalize angles 0-PI (since wall direction doesn't matter for collinearity)
+                        const a1 = angle1 < 0 ? angle1 + Math.PI : angle1;
+                        const a2 = angle2 < 0 ? angle2 + Math.PI : angle2;
 
-                    // Check if close (or close to PI diff which is same line) - handled by normalization? 
-                    // Actually atan2 returns -PI to PI. wall direction (p1->p2) vs (p2->p1) flips angle by PI.
-                    // We just care if they lie on same line. 
-                    const diff = Math.abs(a1 - a2);
-                    return diff < 0.01 || Math.abs(diff - Math.PI) < 0.01;
-                };
+                        // Check if close (or close to PI diff which is same line) - handled by normalization? 
+                        // Actually atan2 returns -PI to PI. wall direction (p1->p2) vs (p2->p1) flips angle by PI.
+                        // We just care if they lie on same line. 
+                        const diff = Math.abs(a1 - a2);
+                        return diff < 0.01 || Math.abs(diff - Math.PI) < 0.01;
+                    };
 
-                // Check endpoints of removed wall for healing opportunities
-                const checkPoints = [
-                    { x: wallToRemove.points[0], y: wallToRemove.points[1] },
-                    { x: wallToRemove.points[2], y: wallToRemove.points[3] }
-                ];
+                    // Check endpoints of removed wall for healing opportunities
+                    const checkPoints = [
+                        { x: wallToRemove.points[0], y: wallToRemove.points[1] },
+                        { x: wallToRemove.points[2], y: wallToRemove.points[3] }
+                    ];
 
-                checkPoints.forEach(p => {
-                    const connected = getConnectedWalls(currentWalls, p);
+                    checkPoints.forEach(p => {
+                        const connected = getConnectedWalls(currentWalls, p);
 
-                    if (connected.length === 2) {
-                        const w1 = connected[0];
-                        const w2 = connected[1];
+                        if (connected.length === 2) {
+                            const w1 = connected[0];
+                            const w2 = connected[1];
 
-                        if (areCollinear(w1, w2) && w1.thickness === w2.thickness && w1.material === w2.material) {
-                            // Merge w1 and w2
-                            // Find the extreme points (far ends)
-                            // The shared point is 'p'.
-                            // Get far point of w1
-                            let start = { x: w1.points[0], y: w1.points[1] };
-                            if (Math.hypot(start.x - p.x, start.y - p.y) < 0.001) start = { x: w1.points[2], y: w1.points[3] };
+                            if (areCollinear(w1, w2) && w1.thickness === w2.thickness && w1.material === w2.material) {
+                                // Merge w1 and w2
+                                // Find the extreme points (far ends)
+                                // The shared point is 'p'.
+                                // Get far point of w1
+                                let start = { x: w1.points[0], y: w1.points[1] };
+                                if (Math.hypot(start.x - p.x, start.y - p.y) < 0.001) start = { x: w1.points[2], y: w1.points[3] };
 
-                            // Get far point of w2
-                            let end = { x: w2.points[0], y: w2.points[1] };
-                            if (Math.hypot(end.x - p.x, end.y - p.y) < 0.001) end = { x: w2.points[2], y: w2.points[3] };
+                                // Get far point of w2
+                                let end = { x: w2.points[0], y: w2.points[1] };
+                                if (Math.hypot(end.x - p.x, end.y - p.y) < 0.001) end = { x: w2.points[2], y: w2.points[3] };
 
-                            const newWall: Wall = {
-                                ...w1,
-                                id: uuidv4(),
-                                points: [start.x, start.y, end.x, end.y]
-                            };
+                                const newWall: Wall = {
+                                    ...w1,
+                                    id: uuidv4(),
+                                    points: [start.x, start.y, end.x, end.y]
+                                };
 
-                            // Remove w1, w2 and add newWall
-                            currentWalls = currentWalls.filter(w => w.id !== w1.id && w.id !== w2.id);
-                            currentWalls.push(newWall);
+                                // Remove w1, w2 and add newWall
+                                currentWalls = currentWalls.filter(w => w.id !== w1.id && w.id !== w2.id);
+                                currentWalls.push(newWall);
+                            }
                         }
-                    }
+                    });
+
+                    return { walls: currentWalls };
                 });
+                (api as any).temporal.getState().pause();
+            },
 
-                return { walls: currentWalls };
-            }),
+            splitWall: (id, point) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const wall = state.walls.find(w => w.id === id);
+                    if (!wall) return state;
 
-            splitWall: (id, point) => set((state) => {
-                const wall = state.walls.find(w => w.id === id);
-                if (!wall) return state;
+                    const scaleRatio = state.scaleRatio || 50;
+                    const d1 = Math.hypot(wall.points[0] - point.x, wall.points[1] - point.y) / scaleRatio;
+                    const d2 = Math.hypot(wall.points[2] - point.x, wall.points[3] - point.y) / scaleRatio;
 
-                const scaleRatio = state.scaleRatio || 50;
-                const d1 = Math.hypot(wall.points[0] - point.x, wall.points[1] - point.y) / scaleRatio;
-                const d2 = Math.hypot(wall.points[2] - point.x, wall.points[3] - point.y) / scaleRatio;
+                    // Threshold: 5cm
+                    if (d1 < 0.05 || d2 < 0.05) return state;
 
-                // Threshold: 5cm
-                if (d1 < 0.05 || d2 < 0.05) return state;
+                    // Create two new walls
+                    const w1: Wall = {
+                        ...wall,
+                        id: uuidv4(),
+                        points: [wall.points[0], wall.points[1], point.x, point.y]
+                    };
 
-                // Create two new walls
-                const w1: Wall = {
-                    ...wall,
-                    id: uuidv4(),
-                    points: [wall.points[0], wall.points[1], point.x, point.y]
-                };
+                    const w2: Wall = {
+                        ...wall,
+                        id: uuidv4(),
+                        points: [point.x, point.y, wall.points[2], wall.points[3]]
+                    };
 
-                const w2: Wall = {
-                    ...wall,
-                    id: uuidv4(),
-                    points: [point.x, point.y, wall.points[2], wall.points[3]]
-                };
+                    return {
+                        walls: [...state.walls.filter(w => w.id !== id), w1, w2]
+                    };
+                });
+                (api as any).temporal.getState().pause();
+            },
 
-                return {
-                    walls: [...state.walls.filter(w => w.id !== id), w1, w2]
-                };
-            }),
+            addAnchor: (anchor) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const prefix = state.anchorMode === 'manual' ? 'M' : 'A';
+                    const existingIds = state.anchors
+                        .filter(a => a.id.startsWith(prefix))
+                        .map(a => parseInt(a.id.substring(1)))
+                        .filter(n => !isNaN(n));
 
-            addAnchor: (anchor) => set((state) => {
-                // Determine prefix based on anchorMode or passed type (logic currently relies on global anchorMode or just checking context)
-                // Let's assume we use state.anchorMode as default, or we can check the ID if provided (but here we generate it).
-                // Actually, the UI usually switches anchorMode when selecting tool.
+                    const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+                    const newId = `${prefix}${nextNum}`;
 
-                const prefix = state.anchorMode === 'manual' ? 'M' : 'A';
+                    return {
+                        anchors: [...state.anchors, { ...anchor, id: newId }]
+                    };
+                });
+                (api as any).temporal.getState().pause();
+            },
 
-                // Find next number
-                const existingIds = state.anchors
-                    .filter(a => a.id.startsWith(prefix))
-                    .map(a => parseInt(a.id.substring(1)))
-                    .filter(n => !isNaN(n));
+            addAnchors: (newAnchors: Omit<Anchor, 'id'>[]) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const prefix = state.anchorMode === 'manual' ? 'M' : 'A';
+                    const existingIds = state.anchors
+                        .filter(a => a.id.startsWith(prefix))
+                        .map(a => parseInt(a.id.substring(1)))
+                        .filter(n => !isNaN(n));
 
-                const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
-                const newId = `${prefix}${nextNum} `;
+                    let nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
 
-                return {
-                    anchors: [...state.anchors, { ...anchor, id: newId }]
-                };
-            }),
+                    const anchorsToAdd = newAnchors.map(a => ({
+                        ...a,
+                        id: `${prefix}${nextNum++} `
+                    }));
 
-            addAnchors: (newAnchors: Omit<Anchor, 'id'>[]) => set((state) => {
-                const prefix = state.anchorMode === 'manual' ? 'M' : 'A';
-                // Find highest current ID to continue sequence
-                const existingIds = state.anchors
-                    .filter(a => a.id.startsWith(prefix))
-                    .map(a => parseInt(a.id.substring(1)))
-                    .filter(n => !isNaN(n));
+                    return {
+                        anchors: [...state.anchors, ...anchorsToAdd]
+                    };
+                });
+                (api as any).temporal.getState().pause();
+            },
 
-                let nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+            setAnchors: (anchors) => {
+                (api as any).temporal.getState().resume();
+                set({ anchors });
+                (api as any).temporal.getState().pause();
+            },
 
-                const anchorsToAdd = newAnchors.map(a => ({
-                    ...a,
-                    id: `${prefix}${nextNum++} `
-                }));
+            updateAnchor: (id, updates) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const updatedAnchors = state.anchors.map((a) => (a.id === id ? { ...a, ...updates } : a));
+                    const anchor = updatedAnchors.find(a => a.id === id);
+                    let updatedCables = state.cables;
 
-                return {
-                    anchors: [...state.anchors, ...anchorsToAdd]
-                };
-            }),
+                    if (anchor && (updates.x !== undefined || updates.y !== undefined)) {
+                        updatedCables = state.cables.map(c => {
+                            if (c.toId === id || c.fromId === id) {
+                                let start: Point | undefined;
+                                let end: Point | undefined;
 
-            setAnchors: (anchors) => set({ anchors }),
-
-            updateAnchor: (id, updates) => set((state) => {
-                // 1. Update the Anchor
-                const updatedAnchors = state.anchors.map((a) => (a.id === id ? { ...a, ...updates } : a));
-                const anchor = updatedAnchors.find(a => a.id === id);
-
-                // 2. Re-route connected cables (Fix Drag Connectivity)
-                // If position changed, we must re-calculate paths for connected cables
-                let updatedCables = state.cables;
-
-                if (anchor && (updates.x !== undefined || updates.y !== undefined)) {
-                    // Start of Drag/Move logic
-                    updatedCables = state.cables.map(c => {
-                        if (c.toId === id || c.fromId === id) {
-                            // Find the other end
-                            let start: Point | undefined;
-                            let end: Point | undefined;
-
-                            if (c.fromId === id) {
-                                start = { x: anchor.x, y: anchor.y };
-                                // Find target
-                                const targetAnchor = updatedAnchors.find(a => a.id === c.toId);
-                                const targetHub = state.hubs.find(h => h.id === c.toId);
-                                if (targetAnchor) end = { x: targetAnchor.x, y: targetAnchor.y };
-                                else if (targetHub) end = { x: targetHub.x, y: targetHub.y }; // Should be port?
-                            } else {
-                                end = { x: anchor.x, y: anchor.y };
-                                // Find Source
-                                const sourceAnchor = updatedAnchors.find(a => a.id === c.fromId);
-                                const sourceHub = state.hubs.find(h => h.id === c.fromId);
-                                if (sourceAnchor) start = { x: sourceAnchor.x, y: sourceAnchor.y };
-                                else if (sourceHub) {
-                                    // Complex: If connected to Hub, we need the specific Port.
-                                    // Re-calculating *best* port might be expensive or jumpy?
-                                    // For now, let's just use Hub Center -> getOrthogonalPath will snap or valid?
-                                    // Ideally we want to keep the SAME port.
-                                    // But we don't store Port Index in Cable.
-                                    // So we default to Hub Center -> getOrthogonalPath logic?
-                                    // Actually, getOrthogonalPath doesn't know about ports. 
-                                    // It takes start/end.
-                                    // If we use Hub Center, the cable visually connects to center.
-                                    // We need to re-run the "Find Best Port" logic if we want perfection.
-                                    // But "Find Best Port" is in regenerateCables or InteractionLayer manual logic.
-                                    // Let's use the Hub Position for now, similar to how removeAnchor did it?
-                                    // Wait, removeAnchor logic used Hub Center.
-                                    // Let's improve this: If dragging anchor connected to Hub, 
-                                    // re-evaluating the port IS desirable because the angle changes!
-                                    // So finding the NEW best port is actually correct for standard behavior.
-
-                                    // Re-use logic:
-                                    // const bestPort = getHubPortCoordinates(
-                                    //     { x: sourceHub.x, y: sourceHub.y },
-                                    //     sourceHub.capacity,
-                                    //     0 
-                                    // );
-                                    // Actually, let's copy the port selection logic inline or make a helper?
-                                    // Too much code duplication. 
-                                    // Let's do a simplified approach: 
-                                    // Use getOrthogonalPath from Hub Center, then unshift the first point to be the port?
-                                    // No, pathfinding needs to know obstacle avoidance from the start.
-
-                                    // For now, let's iterate ports to find closest to the NEW anchor position.
-                                    let bestPIdx = 0;
-                                    let minD = Infinity;
-                                    for (let i = 0; i < sourceHub.capacity; i++) {
-                                        const p = getHubPortCoordinates({ x: sourceHub.x, y: sourceHub.y }, sourceHub.capacity, i);
-                                        const d = Math.pow(p.x - anchor.x, 2) + Math.pow(p.y - anchor.y, 2);
-                                        if (d < minD) { minD = d; bestPIdx = i; }
+                                if (c.fromId === id) {
+                                    start = { x: anchor.x, y: anchor.y };
+                                    const targetAnchor = updatedAnchors.find(a => a.id === c.toId);
+                                    const targetHub = state.hubs.find(h => h.id === c.toId);
+                                    if (targetAnchor) end = { x: targetAnchor.x, y: targetAnchor.y };
+                                    else if (targetHub) end = { x: targetHub.x, y: targetHub.y };
+                                } else {
+                                    end = { x: anchor.x, y: anchor.y };
+                                    const sourceAnchor = updatedAnchors.find(a => a.id === c.fromId);
+                                    const sourceHub = state.hubs.find(h => h.id === c.fromId);
+                                    if (sourceAnchor) start = { x: sourceAnchor.x, y: sourceAnchor.y };
+                                    else if (sourceHub) {
+                                        let bestPIdx = 0;
+                                        let minD = Infinity;
+                                        for (let i = 0; i < sourceHub.capacity; i++) {
+                                            const p = getHubPortCoordinates({ x: sourceHub.x, y: sourceHub.y }, sourceHub.capacity, i);
+                                            const d = Math.pow(p.x - anchor.x, 2) + Math.pow(p.y - anchor.y, 2);
+                                            if (d < minD) { minD = d; bestPIdx = i; }
+                                        }
+                                        start = getHubPortCoordinates({ x: sourceHub.x, y: sourceHub.y }, sourceHub.capacity, bestPIdx);
                                     }
-                                    start = getHubPortCoordinates({ x: sourceHub.x, y: sourceHub.y }, sourceHub.capacity, bestPIdx);
                                 }
-                            }
 
-                            // Simplified Drag Logic: Stretch the segment (Diagonal is OK)
-                            // "Move With" Logic: If cable has >2 points, move the neighbor point too.
-                            // This translates the entire segment bonded to the anchor.
-
-                            const accPoints = [...c.points]; // Shallow copy points array
-
-                            if (start) {
-                                // Logic for Start (Index 0)
-                                if (accPoints.length > 2) {
-                                    // Calculate Delta: Target - Current
-                                    const dx = start.x - accPoints[0].x;
-                                    const dy = start.y - accPoints[0].y;
-                                    // Move Neighbor
-                                    accPoints[1] = { x: accPoints[1].x + dx, y: accPoints[1].y + dy };
+                                const accPoints = [...c.points];
+                                if (start) {
+                                    if (accPoints.length > 2) {
+                                        const dx = start.x - accPoints[0].x;
+                                        const dy = start.y - accPoints[0].y;
+                                        accPoints[1] = { x: accPoints[1].x + dx, y: accPoints[1].y + dy };
+                                    }
+                                    accPoints[0] = { x: start.x, y: start.y };
                                 }
-                                // Update Start Point
-                                accPoints[0] = { x: start.x, y: start.y };
-                            }
-
-                            if (end) {
-                                // Logic for End (Index Last)
-                                if (accPoints.length > 2) {
-                                    const lastIdx = accPoints.length - 1;
-                                    const neighborIdx = accPoints.length - 2;
-                                    // Calculate Delta: Target - Current
-                                    const dx = end.x - accPoints[lastIdx].x;
-                                    const dy = end.y - accPoints[lastIdx].y;
-                                    // Move Neighbor
-                                    accPoints[neighborIdx] = { x: accPoints[neighborIdx].x + dx, y: accPoints[neighborIdx].y + dy };
+                                if (end) {
+                                    if (accPoints.length > 2) {
+                                        const lastIdx = accPoints.length - 1;
+                                        const neighborIdx = accPoints.length - 2;
+                                        const dx = end.x - accPoints[lastIdx].x;
+                                        const dy = end.y - accPoints[lastIdx].y;
+                                        accPoints[neighborIdx] = { x: accPoints[neighborIdx].x + dx, y: accPoints[neighborIdx].y + dy };
+                                    }
+                                    accPoints[accPoints.length - 1] = { x: end.x, y: end.y };
                                 }
-                                // Update End Point
-                                accPoints[accPoints.length - 1] = { x: end.x, y: end.y };
+
+                                const newLength = calculateLength(accPoints, state.scaleRatio, state.cableSettings);
+                                return { ...c, points: accPoints, length: newLength };
                             }
-
-                            // Re-calculate length (Euclidean sum of segments)
-                            const newLength = calculateLength(accPoints, state.scaleRatio, state.cableSettings);
-                            return { ...c, points: accPoints, length: newLength };
-                        }
-                        return c;
-                    });
-                }
-
-                return {
-                    anchors: updatedAnchors,
-                    cables: updatedCables
-                };
-            }),
-
-            updateAnchors: (updatesBatch) => set((state) => {
-                const updateMap = new Map(updatesBatch.map(u => [u.id, u.updates]));
-                return {
-                    anchors: state.anchors.map(a => {
-                        const updates = updateMap.get(a.id);
-                        return updates ? { ...a, ...updates } : a;
-                    })
-                };
-            }),
-
-            removeAnchor: (id) => set((state) => {
-                // 1. Find connected cables
-                const incomingCables = state.cables.filter(c => c.toId === id);
-                const outgoingCables = state.cables.filter(c => c.fromId === id);
-
-                // 2. Prepare new cables (healing)
-                const newCables: Cable[] = [];
-
-                incomingCables.forEach(inc => {
-                    outgoingCables.forEach(outc => {
-                        // Create connection from inc.fromId to outc.toId
-                        let startPos: Point | undefined;
-                        const fromHub = state.hubs.find(h => h.id === inc.fromId);
-                        const fromAnchor = state.anchors.find(a => a.id === inc.fromId);
-                        if (fromHub) startPos = { x: fromHub.x, y: fromHub.y };
-                        else if (fromAnchor) startPos = { x: fromAnchor.x, y: fromAnchor.y };
-
-                        const toAnchor = state.anchors.find(a => a.id === outc.toId);
-                        let endPos: Point | undefined;
-                        if (toAnchor) endPos = { x: toAnchor.x, y: toAnchor.y };
-
-                        if (startPos && endPos) {
-                            // If allowed outside connections, pass empty walls to simulate no obstacles
-                            const routingWalls = state.allowOutsideConnections ? [] : state.walls;
-                            const points = getOrthogonalPath(startPos, endPos, routingWalls);
-                            const length = calculateLength(points, state.scaleRatio);
-
-                            newCables.push({
-                                id: uuidv4(),
-                                fromId: inc.fromId,
-                                toId: outc.toId,
-                                points,
-                                length
-                            });
-                        }
-                    });
-                });
-
-                // 3. Remove old cables and add new ones
-                const remainingCables = state.cables.filter(c => c.toId !== id && c.fromId !== id);
-
-                return {
-                    anchors: state.anchors.filter((a) => a.id !== id),
-                    cables: [...remainingCables, ...newCables]
-                };
-            }),
-
-            addHub: (hub) => set((state) => ({
-                hubs: [...state.hubs, hub]
-            })),
-
-            updateHub: (id, updates) => set((state) => ({
-                hubs: state.hubs.map(h => h.id === id ? { ...h, ...updates } : h)
-            })),
-
-            removeHub: (id) => set((state) => ({
-                hubs: state.hubs.filter(h => h.id !== id),
-                // Remove connecting cables? Yes, conceptually.
-                cables: state.cables.filter(c => c.fromId !== id && c.toId !== id)
-            })),
-
-            setCables: (cables) => set({ cables }),
-
-            addCable: (cable: Cable) => set((state) => ({
-                cables: [...(state.cables || []), cable]
-            })),
-            updateCable: (id: string, updates: Partial<Cable>) => set((state) => ({
-                cables: (state.cables || []).map((c) => c.id === id ? { ...c, ...updates } : c)
-            })),
-            updateCables: (updatesBatch: { id: string; updates: Partial<Cable> }[]) => set((state) => {
-                const updateMap = new Map(updatesBatch.map(u => [u.id, u.updates]));
-                return {
-                    cables: (state.cables || []).map(c => {
-                        const updates = updateMap.get(c.id);
-                        return updates ? { ...c, ...updates } : c;
-                    })
-                };
-            }),
-            removeCable: (id: string) => set((state) => ({
-                cables: (state.cables || []).filter((c) => c.id !== id)
-            })),
-
-            regenerateCables: () => set((state) => {
-                const { hubs, anchors, walls, cableSettings, scaleRatio } = state;
-                if (!hubs.length || !anchors.length) return state;
-
-                // Filter out Locked Cables - they should NOT be regenerated
-                const lockedCables = (state.cables || []).filter(c => c.locked);
-                const newCables: Cable[] = [...lockedCables];
-
-                const updatedHubs = [...hubs];
-
-                // 1. Assign Anchors to Nearest Hub
-                // EXCLUDE anchors that are already covered by locked cables?
-                // Yes, if an anchor has a locked cable, it shouldn't get a NEW cable.
-                const lockedAnchorIds = new Set<string>();
-                lockedCables.forEach(c => {
-                    lockedAnchorIds.add(c.toId);
-                    lockedAnchorIds.add(c.fromId);
-                });
-
-                // Filter anchors that need cables
-                const freeAnchors = anchors.filter(a => !lockedAnchorIds.has(a.id));
-                // Note: If an anchor has one locked cable but needs redundancy? 
-                // Current logic is 1 cable per anchor usually. 
-                // So skipping 'locked' anchors is correct for auto-gen.
-
-                const hubGroups = new Map<string, Anchor[]>();
-                hubs.forEach(h => hubGroups.set(h.id, []));
-
-                freeAnchors.forEach(a => {
-                    let nearestHubId = hubs[0].id;
-                    let minD = Infinity;
-                    hubs.forEach(h => {
-                        const d = distance({ x: a.x, y: a.y }, { x: h.x, y: h.y });
-                        if (d < minD) {
-                            minD = d;
-                            nearestHubId = h.id;
-                        }
-                    });
-                    hubGroups.get(nearestHubId)?.push(a);
-                });
-
-                // 2. Generate Cables per Hub
-                updatedHubs.forEach((hub, index) => {
-                    const groupAnchors = hubGroups.get(hub.id) || [];
-                    if (groupAnchors.length === 0) return;
-
-                    // Assign Hub Color if not set
-                    if (!hub.color) {
-                        hub.color = getHubColor(index);
+                            return c;
+                        });
                     }
-                    const groupColor = hub.color!;
 
-                    if (cableSettings.topology === 'daisy') {
-                        // Daisy Chain
-                        const paths = generateDaisyChain(
-                            { x: hub.x, y: hub.y },
-                            groupAnchors.map(a => ({ x: a.x, y: a.y })),
-                            state.allowOutsideConnections ? [] : walls
-                        );
+                    return {
+                        anchors: updatedAnchors,
+                        cables: updatedCables
+                    };
+                });
+                (api as any).temporal.getState().pause();
+            },
 
-                        // Map paths back to IDs... This is tricky because generateDaisyChain returns points.
-                        // We need to know WHICH anchor corresponds to WHICH point to set IDs correctly.
-                        // Actually generateDaisyChain logic (Nearest Neighbor) sorts the points.
-                        // We need to re-match the sorted points to the anchors.
-                        // OR, better: `generateDaisyChain` should handle objects?
-                        // Let's assume for now we just create cables between the points and try to find the anchor at that point to get ID.
+            updateAnchors: (updatesBatch) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const updateMap = new Map(updatesBatch.map(u => [u.id, u.updates]));
+                    return {
+                        anchors: state.anchors.map(a => {
+                            const updates = updateMap.get(a.id);
+                            return updates ? { ...a, ...updates } : a;
+                        })
+                    };
+                });
+                (api as any).temporal.getState().pause();
+            },
 
-                        let prevId = hub.id;
-                        paths.forEach((pointsPath) => {
-                            // The end of this path is likely an anchor.
-                            const endPoint = pointsPath[pointsPath.length - 1];
-                            // Find anchor at endPoint
-                            const targetAnchor = groupAnchors.find(a => Math.abs(a.x - endPoint.x) < 1 && Math.abs(a.y - endPoint.y) < 1);
+            removeAnchor: (id) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const incomingCables = state.cables.filter(c => c.toId === id);
+                    const outgoingCables = state.cables.filter(c => c.fromId === id);
+                    const newCables: Cable[] = [];
 
-                            if (targetAnchor) {
-                                newCables.push({
-                                    id: uuidv4(),
-                                    fromId: prevId,
-                                    toId: targetAnchor.id,
-                                    points: pointsPath,
-                                    length: calculateLength(pointsPath, scaleRatio, cableSettings),
-                                    color: groupColor,
-                                    type: cableSettings.defaultCableType,
-                                    topology: 'daisy',
-                                    verticalDrop: cableSettings.ceilingHeight ? (cableSettings.ceilingHeight - 1.0) * 2 : 0,
-                                    serviceLoop: cableSettings.serviceLoop
-                                });
-                                prevId = targetAnchor.id;
-                            }
-                        });
+                    incomingCables.forEach(inc => {
+                        outgoingCables.forEach(outc => {
+                            let startPos: Point | undefined;
+                            const fromHub = state.hubs.find(h => h.id === inc.fromId);
+                            const fromAnchor = state.anchors.find(a => a.id === inc.fromId);
+                            if (fromHub) startPos = { x: fromHub.x, y: fromHub.y };
+                            else if (fromAnchor) startPos = { x: fromAnchor.x, y: fromAnchor.y };
 
+                            const toAnchor = state.anchors.find(a => a.id === outc.toId);
+                            let endPos: Point | undefined;
+                            if (toAnchor) endPos = { x: toAnchor.x, y: toAnchor.y };
 
-                    } else {
-                        // Star Topology
-                        // Star Topology - Smart Port Assignment
-
-                        // 1. Calculate angle for each anchor relative to Hub
-                        const anchorsWithAngles = groupAnchors.map(anchor => {
-                            const dx = anchor.x - hub.x;
-                            const dy = anchor.y - hub.y;
-                            const angle = Math.atan2(dy, dx); // -PI to PI
-                            return { anchor, angle };
-                        });
-
-                        // 2. Track available ports
-                        const availablePorts = Array.from({ length: hub.capacity }, (_, i) => i);
-
-                        // 3. Greedy Assignment: Find nearest port for each anchor
-                        // Optimization: Process anchors that have "obvious" choices first? 
-                        // Or just process arbitrary order? Let's process arbitrary for now.
-                        // Better: Sort anchors by angle? No, specific order doesn't guarantee global optimum without complexity.
-                        // Simple greedy is usually sufficient for visual clarity.
-
-                        anchorsWithAngles.forEach(({ anchor, angle }) => {
-                            if (availablePorts.length === 0) return; // Should not happen if capacity >= anchors
-
-                            let bestPortIdx = -1;
-                            let minDiff = Infinity;
-                            let bestIndexInAvailable = -1;
-
-                            availablePorts.forEach((pIdx, arrIdx) => {
-                                // Calculate Port Angle (matching getHubPortCoordinates logic)
-                                // deg = (i * 360) / cap
-                                // rad = (deg - 90) * PI/180
-                                const portAngleRad = ((pIdx * 360) / hub.capacity - 90) * (Math.PI / 180);
-
-                                // Angular difference (normalized to 0..PI)
-                                let diff = Math.abs(angle - portAngleRad);
-                                // Handle Wrap-around (e.g. PI vs -PI is distance 0)
-                                if (diff > Math.PI) diff = 2 * Math.PI - diff;
-
-                                if (diff < minDiff) {
-                                    minDiff = diff;
-                                    bestPortIdx = pIdx;
-                                    bestIndexInAvailable = arrIdx;
-                                }
-                            });
-
-                            // Assign best port
-                            if (bestIndexInAvailable !== -1) {
-                                availablePorts.splice(bestIndexInAvailable, 1);
-
-                                // Generate Cable
-                                const targetPort = getHubPortCoordinates(
-                                    { x: hub.x, y: hub.y },
-                                    hub.capacity,
-                                    bestPortIdx
-                                );
-
-                                const path = getOrthogonalPath(
-                                    targetPort, // START from Hub Port
-                                    { x: anchor.x, y: anchor.y },
-                                    state.allowOutsideConnections ? [] : walls
-                                );
+                            if (startPos && endPos) {
+                                const routingWalls = state.allowOutsideConnections ? [] : state.walls;
+                                const points = getOrthogonalPath(startPos, endPos, routingWalls);
+                                const length = calculateLength(points, state.scaleRatio, state.cableSettings);
 
                                 newCables.push({
                                     id: uuidv4(),
-                                    fromId: hub.id,
-                                    toId: anchor.id,
-                                    points: path,
-                                    length: calculateLength(path, scaleRatio, cableSettings),
-                                    color: groupColor,
-                                    type: cableSettings.defaultCableType,
-                                    topology: 'star',
-                                    verticalDrop: cableSettings.ceilingHeight ? (cableSettings.ceilingHeight - 1.0) * 2 : 0,
-                                    serviceLoop: cableSettings.serviceLoop
+                                    fromId: inc.fromId,
+                                    toId: outc.toId,
+                                    points,
+                                    length
                                 });
                             }
                         });
+                    });
 
-
-                    }
+                    const remainingCables = state.cables.filter(c => c.toId !== id && c.fromId !== id);
+                    return {
+                        anchors: state.anchors.filter((a) => a.id !== id),
+                        cables: [...remainingCables, ...newCables]
+                    };
                 });
+                (api as any).temporal.getState().pause();
+            },
 
-                return {
-                    hubs: updatedHubs,
-                    cables: newCables
-                };
-            }),
+            addHub: (hub) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({ hubs: [...state.hubs, hub] }));
+                (api as any).temporal.getState().pause();
+            },
+
+            updateHub: (id, updates) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({
+                    hubs: state.hubs.map(h => h.id === id ? { ...h, ...updates } : h)
+                }));
+                (api as any).temporal.getState().pause();
+            },
+
+            removeHub: (id) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({
+                    hubs: state.hubs.filter(h => h.id !== id),
+                    cables: state.cables.filter(c => c.fromId !== id && c.toId !== id)
+                }));
+                (api as any).temporal.getState().pause();
+            },
+
+            setCables: (cables) => {
+                (api as any).temporal.getState().resume();
+                set({ cables });
+                (api as any).temporal.getState().pause();
+            },
+
+            addCable: (cable: Cable) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({
+                    cables: [...(state.cables || []), cable]
+                }));
+                (api as any).temporal.getState().pause();
+            },
+
+            updateCable: (id, updates) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({
+                    cables: (state.cables || []).map((c) => c.id === id ? { ...c, ...updates } : c)
+                }));
+                (api as any).temporal.getState().pause();
+            },
+
+            updateCables: (updatesBatch) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const updateMap = new Map((updatesBatch || []).map(u => [u.id, u.updates]));
+                    return {
+                        cables: (state.cables || []).map(c => {
+                            const updates = updateMap.get(c.id);
+                            return updates ? { ...c, ...updates } : c;
+                        })
+                    };
+                });
+                (api as any).temporal.getState().pause();
+            },
+
+            removeCable: (id) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({ cables: state.cables.filter((c) => c.id !== id) }));
+                (api as any).temporal.getState().pause();
+            },
+
+            regenerateCables: () => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const { hubs, anchors, walls, cableSettings, scaleRatio } = state;
+                    if (!hubs.length || !anchors.length) return state;
+
+                    const lockedCables = (state.cables || []).filter(c => c.locked);
+                    const newCables: Cable[] = [...lockedCables];
+                    const updatedHubs = [...hubs];
+                    const lockedAnchorIds = new Set<string>();
+                    lockedCables.forEach(c => {
+                        lockedAnchorIds.add(c.toId);
+                        lockedAnchorIds.add(c.fromId);
+                    });
+
+                    const freeAnchors = anchors.filter(a => !lockedAnchorIds.has(a.id));
+                    const hubGroups = new Map<string, Anchor[]>();
+                    hubs.forEach(h => hubGroups.set(h.id, []));
+
+                    freeAnchors.forEach(a => {
+                        let nearestHubId = hubs[0].id;
+                        let minD = Infinity;
+                        hubs.forEach(h => {
+                            const d = distance({ x: a.x, y: a.y }, { x: h.x, y: h.y });
+                            if (d < minD) {
+                                minD = d;
+                                nearestHubId = h.id;
+                            }
+                        });
+                        hubGroups.get(nearestHubId)?.push(a);
+                    });
+
+                    updatedHubs.forEach((hub, index) => {
+                        const groupAnchors = hubGroups.get(hub.id) || [];
+                        if (groupAnchors.length === 0) return;
+
+                        if (!hub.color) {
+                            hub.color = getHubColor(index);
+                        }
+                        const groupColor = hub.color!;
+
+                        if (cableSettings.topology === 'daisy') {
+                            const paths = generateDaisyChain(
+                                { x: hub.x, y: hub.y },
+                                groupAnchors.map(a => ({ x: a.x, y: a.y })),
+                                state.allowOutsideConnections ? [] : walls
+                            );
+
+                            let prevId = hub.id;
+                            paths.forEach((pointsPath) => {
+                                const endPoint = pointsPath[pointsPath.length - 1];
+                                const targetAnchor = groupAnchors.find(a => Math.abs(a.x - endPoint.x) < 1 && Math.abs(a.y - endPoint.y) < 1);
+
+                                if (targetAnchor) {
+                                    newCables.push({
+                                        id: uuidv4(),
+                                        fromId: prevId,
+                                        toId: targetAnchor.id,
+                                        points: pointsPath,
+                                        length: calculateLength(pointsPath, scaleRatio, cableSettings),
+                                        color: groupColor,
+                                        type: cableSettings.defaultCableType,
+                                        topology: 'daisy',
+                                        verticalDrop: cableSettings.ceilingHeight ? (cableSettings.ceilingHeight - 1.0) * 2 : 0,
+                                        serviceLoop: cableSettings.serviceLoop
+                                    });
+                                    prevId = targetAnchor.id;
+                                }
+                            });
+                        } else {
+                            const anchorsWithAngles = groupAnchors.map(anchor => {
+                                const dx = anchor.x - hub.x;
+                                const dy = anchor.y - hub.y;
+                                const angle = Math.atan2(dy, dx);
+                                return { anchor, angle };
+                            });
+
+                            const availablePorts = Array.from({ length: hub.capacity }, (_, i) => i);
+                            anchorsWithAngles.forEach(({ anchor, angle }) => {
+                                if (availablePorts.length === 0) return;
+
+                                let bestPortIdx = -1;
+                                let minDiff = Infinity;
+                                let bestIndexInAvailable = -1;
+
+                                availablePorts.forEach((pIdx, arrIdx) => {
+                                    const portAngleRad = ((pIdx * 360) / hub.capacity - 90) * (Math.PI / 180);
+                                    let diff = Math.abs(angle - portAngleRad);
+                                    if (diff > Math.PI) diff = 2 * Math.PI - diff;
+
+                                    if (diff < minDiff) {
+                                        minDiff = diff;
+                                        bestPortIdx = pIdx;
+                                        bestIndexInAvailable = arrIdx;
+                                    }
+                                });
+
+                                if (bestIndexInAvailable !== -1) {
+                                    availablePorts.splice(bestIndexInAvailable, 1);
+                                    const targetPort = getHubPortCoordinates({ x: hub.x, y: hub.y }, hub.capacity, bestPortIdx);
+                                    const path = getOrthogonalPath(targetPort, { x: anchor.x, y: anchor.y }, state.allowOutsideConnections ? [] : walls);
+
+                                    newCables.push({
+                                        id: uuidv4(),
+                                        fromId: hub.id,
+                                        toId: anchor.id,
+                                        points: path,
+                                        length: calculateLength(path, scaleRatio, cableSettings),
+                                        color: groupColor,
+                                        type: cableSettings.defaultCableType,
+                                        topology: 'star',
+                                        verticalDrop: cableSettings.ceilingHeight ? (cableSettings.ceilingHeight - 1.0) * 2 : 0,
+                                        serviceLoop: cableSettings.serviceLoop
+                                    });
+                                }
+                            });
+                        }
+                    });
+
+                    return {
+                        hubs: updatedHubs,
+                        cables: newCables
+                    };
+                });
+                (api as any).temporal.getState().pause();
+            },
 
             toggleLayer: (layer) => set((state) => {
                 const newValue = !state.layers[layer];
                 const newLayers = { ...state.layers, [layer]: newValue };
-
-                // Unified Toggle: Walls controls Rooms & Labels
                 if (layer === 'walls') {
                     newLayers.rooms = newValue;
                     newLayers.roomLabels = newValue;
                 }
-
-                // Unified Toggle: Anchors controls Heatmap
                 if (layer === 'anchors') {
                     newLayers.heatmap = newValue;
                 }
-
                 return { layers: newLayers };
             }),
 
             activeImportId: null,
 
-            addImportedObject: (obj) => set((state) => {
-                const newId = uuidv4();
+            addImportedObject: (obj) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const newId = uuidv4();
+                    let newObjects = state.importedObjects;
+                    if (obj.type === 'dxf') {
+                        newObjects = newObjects.filter(o => o.type !== 'dxf');
+                    }
+                    return {
+                        importedObjects: [...newObjects, {
+                            ...obj,
+                            id: newId,
+                            x: 0,
+                            y: 0,
+                            scale: 1,
+                            rotation: 0,
+                            opacity: 0.5,
+                            visible: true,
+                            locked: false,
+                        } as unknown as ImportedObject]
+                    };
+                });
+                (api as any).temporal.getState().pause();
+            },
 
-                // SINGLE DXF POLICY: If adding a DXF, remove all existing DXFs first.
-                let newObjects = state.importedObjects;
-                if (obj.type === 'dxf') {
-                    newObjects = newObjects.filter(o => o.type !== 'dxf');
-                }
+            updateImportedObject: (id, updates) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({
+                    importedObjects: state.importedObjects.map((obj) =>
+                        obj.id === id ? { ...obj, ...updates } as ImportedObject : obj
+                    )
+                }));
+                (api as any).temporal.getState().pause();
+            },
 
-                return {
-                    importedObjects: [...newObjects, {
-                        ...obj,
-                        id: newId,
-                        x: 0,
-                        y: 0,
-                        scale: 1,
-                        rotation: 0,
-                        opacity: 0.5,
-                        visible: true,
-                        locked: false,
-                    } as unknown as ImportedObject],
-                    // Auto-select removed per user request (Step 756)
-                    // activeImportId: newId 
-                };
-            }),
-
-            updateImportedObject: (id, updates) => set((state) => ({
-                importedObjects: state.importedObjects.map((obj) =>
-                    obj.id === id ? { ...obj, ...updates } as ImportedObject : obj
-                )
-            })),
-
-            removeImportedObject: (id) => set((state) => ({
-                importedObjects: state.importedObjects.filter((obj) => obj.id !== id),
-                activeImportId: state.activeImportId === id ? null : state.activeImportId
-            })),
+            removeImportedObject: (id) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({
+                    importedObjects: state.importedObjects.filter((obj) => obj.id !== id),
+                    activeImportId: state.activeImportId === id ? null : state.activeImportId
+                }));
+                (api as any).temporal.getState().pause();
+            },
 
             setActiveImportId: (id) => set({ activeImportId: id }),
 
-            // DXF Helpers - Target Active Import ID if it's a DXF, or the single DXF if exists
-            setDxfLayerVisibility: (layerName, visible) => set((state) => ({
-                importedObjects: state.importedObjects.map(obj => {
-                    // Only update if it's the active one (or simply if it's a DXF, since we enforce single DXF now)
-                    if (obj.type === 'dxf') {
-                        // Check if this is the active one OR if we just want to update the single DXF
-                        // Given "Single DXF Policy", updating "all DXFs" is effectively updating "the DXF".
-                        return {
-                            ...obj,
-                            layers: { ...obj.layers, [layerName]: visible }
-                        };
-                    }
-                    return obj;
-                })
-            })),
+            setDxfLayerVisibility: (layerName, visible) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({
+                    importedObjects: state.importedObjects.map(obj => {
+                        if (obj.type === 'dxf') {
+                            return {
+                                ...obj,
+                                layers: { ...obj.layers, [layerName]: visible }
+                            };
+                        }
+                        return obj;
+                    })
+                }));
+                (api as any).temporal.getState().pause();
+            },
 
-            setAllDxfLayersVisibility: (visible) => set((state) => ({
-                importedObjects: state.importedObjects.map(obj => {
-                    if (obj.type === 'dxf') {
-                        const newLayers = { ...obj.layers };
-                        Object.keys(newLayers).forEach(k => newLayers[k] = visible);
-                        return { ...obj, layers: newLayers };
-                    }
-                    return obj;
-                })
-            })),
+            setAllDxfLayersVisibility: (visible) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({
+                    importedObjects: state.importedObjects.map(obj => {
+                        if (obj.type === 'dxf') {
+                            const newLayers = { ...obj.layers };
+                            Object.keys(newLayers).forEach(k => newLayers[k] = visible);
+                            return { ...obj, layers: newLayers };
+                        }
+                        return obj;
+                    })
+                }));
+                (api as any).temporal.getState().pause();
+            },
 
-            addDimension: (dim) => set((state) => ({
-                dimensions: [...state.dimensions, { ...dim, id: uuidv4() }]
-            })),
+            addDimension: (dim) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({
+                    dimensions: [...state.dimensions, { ...dim, id: uuidv4() }]
+                }));
+                (api as any).temporal.getState().pause();
+            },
 
-            updateDimension: (id, updates) => set((state) => ({
-                dimensions: state.dimensions.map((d) => (d.id === id ? { ...d, ...updates } : d)),
-            })),
+            updateDimension: (id, updates) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({
+                    dimensions: state.dimensions.map((d) => (d.id === id ? { ...d, ...updates } : d)),
+                }));
+                (api as any).temporal.getState().pause();
+            },
 
-            removeDimension: (id) => set((state) => ({
-                dimensions: state.dimensions.filter((d) => d.id !== id)
-            })),
+            removeDimension: (id) => {
+                (api as any).temporal.getState().resume();
+                set((state) => ({
+                    dimensions: state.dimensions.filter((d) => d.id !== id)
+                }));
+                (api as any).temporal.getState().pause();
+            },
 
-            // Grouping Actions
-            groupAnchors: (ids) => set((state) => {
-                const validAnchors = state.anchors.filter(a => ids.includes(a.id));
-                if (validAnchors.length < 2) return state; // Need at least 2 to group
-
-                const newGroupId = uuidv4();
-                return {
-                    anchors: state.anchors.map(a =>
-                        ids.includes(a.id) ? { ...a, groupId: newGroupId } : a
-                    )
-                };
-            }),
-
-            ungroupAnchors: (ids) => set((state) => {
-                // Find groupIds of selected anchors
-                const targetGroupIds = new Set<string>();
-                state.anchors.forEach(a => {
-                    if (ids.includes(a.id) && a.groupId) {
-                        targetGroupIds.add(a.groupId);
-                    }
+            groupAnchors: (ids) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const validAnchors = state.anchors.filter(a => ids.includes(a.id));
+                    if (validAnchors.length < 2) return state;
+                    const newGroupId = uuidv4();
+                    return {
+                        anchors: state.anchors.map(a =>
+                            ids.includes(a.id) ? { ...a, groupId: newGroupId } : a
+                        )
+                    };
                 });
+                (api as any).temporal.getState().pause();
+            },
 
-                if (targetGroupIds.size === 0) return state;
-
-                return {
-                    anchors: state.anchors.map(a =>
-                        (a.groupId && targetGroupIds.has(a.groupId))
-                            ? { ...a, groupId: undefined }
-                            : a
-                    )
-                };
-            }),
+            ungroupAnchors: (ids) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const targetGroupIds = new Set<string>();
+                    state.anchors.forEach(a => {
+                        if (ids.includes(a.id) && a.groupId) {
+                            targetGroupIds.add(a.groupId);
+                        }
+                    });
+                    if (targetGroupIds.size === 0) return state;
+                    return {
+                        anchors: state.anchors.map(a =>
+                            (a.groupId && targetGroupIds.has(a.groupId))
+                                ? { ...a, groupId: undefined }
+                                : a
+                        )
+                    };
+                });
+                (api as any).temporal.getState().pause();
+            },
 
             loadProject: (data) => set((state) => {
-                // Basic validation could happen here
                 if (!data || !data.walls) {
                     console.error("Invalid project data");
                     return state;
                 }
-
                 return {
                     version: data.version,
                     lastLoaded: data.timestamp,
                     scaleRatio: data.scaleRatio,
-                    // Migration: Normalize materials (lowercase, valid check)
                     walls: data.walls.map(w => {
                         const mat = (w.material || 'concrete').toLowerCase();
                         const validMaterials = ['concrete', 'brick', 'drywall', 'glass', 'wood', 'metal'];
@@ -1352,11 +1319,9 @@ export const useProjectStore = create<ProjectState>()(
                     layers: { ...state.layers, ...(data.layers || {}) },
                     wallPreset: data.wallPreset,
                     anchorMode: data.anchorMode,
-                    // Restore Settings
                     anchorRadius: data.anchorsSettings?.radius ?? state.anchorRadius,
                     anchorShape: data.anchorsSettings?.shape ?? state.anchorShape,
                     showAnchorRadius: data.anchorsSettings?.showRadius ?? state.showAnchorRadius,
-
                     showHeatmap: data.heatmapSettings?.show ?? state.showHeatmap,
                     heatmapResolution: data.heatmapSettings?.resolution ?? state.heatmapResolution,
                     heatmapThresholds: data.heatmapSettings?.thresholds || { red: -65, orange: -70, yellow: -75, green: -80, blue: -85 },
@@ -1366,107 +1331,183 @@ export const useProjectStore = create<ProjectState>()(
                         minSignalStrength: -80,
                         targetScope: 'all',
                     },
-
-                    isScaleSet: true, // Assume loaded project has scale set
+                    isScaleSet: true,
                     allowOutsideConnections: data.allowOutsideConnections ?? state.allowOutsideConnections,
-                    importedObjects: data.importedObjects || [], // Restore imported images/DXFs
+                    importedObjects: data.importedObjects || [],
                 };
             }),
 
-            newProject: () => set(() => ({
-                walls: [],
-                anchors: [],
-                hubs: [],
-                cables: [],
-                dimensions: [],
-                importedObjects: [],
-                selectedIds: [],
-                scaleRatio: 50,
-                isScaleSet: false,
-                activeTool: 'select',
-                lastLoaded: 0,
-                placementArea: null,
-                activeImportId: null,
-                // Keep settings/theme
-            })),
+            newProject: () => {
+                const temporal = (api as any).temporal.getState();
+                temporal.clear(); // Clear history on new project
+                set(() => ({
+                    walls: [],
+                    anchors: [],
+                    hubs: [],
+                    cables: [],
+                    dimensions: [],
+                    importedObjects: [],
+                    selectedIds: [],
+                    scaleRatio: 50,
+                    isScaleSet: false,
+                    activeTool: 'select',
+                    lastLoaded: 0,
+                    placementArea: null,
+                    activeImportId: null,
+                }));
+                (api as any).temporal.getState().pause(); // Ensure it stays paused
+            },
 
             // Clipboard Implementation
             clipboard: null,
 
-            optimizeAnchorCount: (percentage, scope = 'all') => set((state) => {
-                const { anchors, removedCount } = reduceAnchors(
-                    state.anchors,
-                    state.walls,
-                    percentage,
-                    state.scaleRatio,
-                    scope
-                );
+            optimizeAnchorCount: (percentage, scope = 'all') => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const { anchors, removedCount } = reduceAnchors(
+                        state.anchors,
+                        state.walls,
+                        percentage,
+                        state.scaleRatio,
+                        scope
+                    );
 
-                if (removedCount > 0) {
-                    console.log(`[Optimization] Removed ${removedCount} anchors.Scope: ${scope} `);
-                }
+                    if (removedCount > 0) {
+                        console.log(`[Optimization] Removed ${removedCount} anchors. Scope: ${scope}`);
+                    }
 
-                return { anchors };
-            }),
+                    return { anchors };
+                });
+                (api as any).temporal.getState().pause();
+            },
 
-            copySelection: () => set((state) => {
-                const walls = state.walls.filter(w => state.selectedIds.includes(w.id));
-                const anchors = state.anchors.filter(a => state.selectedIds.includes(a.id));
+            copySelection: () => {
+                // Clipboard usually doesn't need to be in history, but we wrap it just in case state change is detected.
+                // Actually copySelection only sets 'clipboard' state, which is partialize-excluded.
+                // But for consistency let's just set it directly.
+                set((state) => {
+                    const walls = state.walls.filter(w => state.selectedIds.includes(w.id));
+                    const anchors = state.anchors.filter(a => state.selectedIds.includes(a.id));
 
-                if (walls.length === 0 && anchors.length === 0) return state;
+                    if (walls.length === 0 && anchors.length === 0) return state;
 
-                return {
-                    clipboard: { walls, anchors }
-                };
-            }),
-
-            pasteClipboard: () => set((state) => {
-                if (!state.clipboard) return state;
-
-                const { walls, anchors } = state.clipboard;
-                const offsetPx = 50; // 1 meter offset (assuming 50px/m default, but visual offset is key)
-
-                // Regenerate Wall IDs
-                const newWalls = walls.map(w => ({
-                    ...w,
-                    id: uuidv4(),
-                    points: [
-                        w.points[0] + offsetPx,
-                        w.points[1] + offsetPx,
-                        w.points[2] + offsetPx,
-                        w.points[3] + offsetPx
-                    ] as [number, number, number, number]
-                }));
-
-                // Regenerate Anchor IDs
-                const newAnchors = anchors.map(a => {
-                    // Try to preserve prefix "A" or "M" but with new number
-                    const prefix = a.id.startsWith('M') ? 'M' : 'A';
-                    // We need unique IDs. Let's just use UUID for uniqueness or simple random suffix if we want to keep short names?
-                    // User prefers sortable names usually. 
-                    // Let's use simple logic: Just append "-copy" or generate new sequence?
-                    // Safe bet: Generate proper new sequence ID logic or UUID.
-                    // Given our `addAnchor` logic does auto-increment, let's try to reuse that logic or just use UUID if ID is string.
-                    // Actually `addAnchor` handles ID gen. But we are doing bulk add.
-                    // Let's just append random suffix for now to avoid collision, or re-calc entire sequence?
-                    // Re-calcing sequence for 10 pasted anchors is tricky in reducer.
-                    // Let's use uuidv4() for pasted anchors to ensure robustness, or just random suffix.
                     return {
-                        ...a,
-                        id: `${prefix}${uuidv4().slice(0, 4)} `, // Short unique suffix
-                        x: a.x + offsetPx,
-                        y: a.y + offsetPx
+                        clipboard: { walls, anchors }
                     };
                 });
+            },
 
-                const newSelectedIds = [...newWalls.map(w => w.id), ...newAnchors.map(a => a.id)];
+            pasteClipboard: () => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    if (!state.clipboard) return state;
 
-                return {
-                    walls: [...state.walls, ...newWalls],
-                    anchors: [...state.anchors, ...newAnchors],
-                    selectedIds: newSelectedIds // Select the pasted items
-                };
-            }),
+                    const { walls, anchors } = state.clipboard;
+                    const offsetPx = 50; // 1 meter offset (assuming 50px/m default, but visual offset is key)
+
+                    // Regenerate Wall IDs
+                    const newWalls = walls.map(w => ({
+                        ...w,
+                        id: uuidv4(),
+                        points: [
+                            w.points[0] + offsetPx,
+                            w.points[1] + offsetPx,
+                            w.points[2] + offsetPx,
+                            w.points[3] + offsetPx
+                        ] as [number, number, number, number]
+                    }));
+
+                    // Regenerate Anchor IDs
+                    const newAnchors = anchors.map(a => {
+                        const prefix = a.id.startsWith('M') ? 'M' : 'A';
+                        return {
+                            ...a,
+                            id: `${prefix}${uuidv4().slice(0, 4)}`, // Short unique suffix
+                            x: a.x + offsetPx,
+                            y: a.y + offsetPx
+                        };
+                    });
+
+                    const newSelectedIds = [...newWalls.map(w => w.id), ...newAnchors.map(a => a.id)];
+
+                    return {
+                        walls: [...state.walls, ...newWalls],
+                        anchors: [...state.anchors, ...newAnchors],
+                        selectedIds: newSelectedIds // Select the pasted items
+                    };
+                });
+                (api as any).temporal.getState().pause();
+            },
+
+            addRectangleWalls: (rectWalls: Partial<Wall>[], splitPoints: { id: string, point: Point }[]) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    let currentWalls = [...state.walls];
+
+                    // 1. Perform Splits first
+                    splitPoints.forEach((sp: { id: string, point: Point }) => {
+                        const wallToSplit = currentWalls.find(w => w.id === sp.id);
+                        if (!wallToSplit) return;
+
+                        const p1 = { x: wallToSplit.points[0], y: wallToSplit.points[1] };
+                        const p2 = { x: wallToSplit.points[2], y: wallToSplit.points[3] };
+                        const inter = sp.point;
+
+                        const d1 = Math.hypot(p1.x - inter.x, p1.y - inter.y);
+                        const d2 = Math.hypot(p2.x - inter.x, p2.y - inter.y);
+
+                        if (d1 > 0.1 && d2 > 0.1) {
+                            const w1: Wall = { ...wallToSplit, id: uuidv4(), points: [p1.x, p1.y, inter.x, inter.y] as [number, number, number, number] };
+                            const w2: Wall = { ...wallToSplit, id: uuidv4(), points: [inter.x, inter.y, p2.x, p2.y] as [number, number, number, number] };
+                            currentWalls = currentWalls.filter(w => w.id !== wallToSplit.id);
+                            currentWalls.push(w1, w2);
+                        }
+                    });
+
+                    // 2. Add Rectangle Walls (using same logic as addWalls but simplified for internal use)
+                    const params = {
+                        thickness: rectWalls[0]?.thickness || 0.1,
+                        material: rectWalls[0]?.material || 'drywall'
+                    };
+
+                    const newIds: string[] = [];
+                    rectWalls.forEach((rw: Partial<Wall>) => {
+                        const id = uuidv4();
+                        newIds.push(id);
+                        if (rw.points && rw.points.length === 4) {
+                            const pts: [number, number, number, number] = [rw.points[0], rw.points[1], rw.points[2], rw.points[3]];
+                            currentWalls.push({
+                                ...rw,
+                                id,
+                                points: pts,
+                                thickness: rw.thickness || params.thickness,
+                                material: rw.material as any || params.material
+                            } as Wall);
+                        }
+                    });
+
+                    return { walls: currentWalls };
+                });
+                (api as any).temporal.getState().pause();
+            },
+
+            removeObjects: (ids) => {
+                (api as any).temporal.getState().resume();
+                set((state) => {
+                    const idsToRemove = new Set(ids);
+                    if (idsToRemove.size === 0) return state;
+
+                    return {
+                        walls: state.walls.filter(w => !idsToRemove.has(w.id)),
+                        anchors: state.anchors.filter(a => !idsToRemove.has(a.id)),
+                        hubs: state.hubs.filter(h => !idsToRemove.has(h.id)),
+                        cables: state.cables.filter(c => !idsToRemove.has(c.id) && !idsToRemove.has(c.fromId) && !idsToRemove.has(c.toId)),
+                        dimensions: state.dimensions.filter(d => !idsToRemove.has(d.id)),
+                        selectedIds: state.selectedIds.filter(id => !idsToRemove.has(id))
+                    };
+                });
+                (api as any).temporal.getState().pause();
+            },
         }),
         {
             limit: 50,
@@ -1491,3 +1532,6 @@ export const useProjectStore = create<ProjectState>()(
         }
     )
 );
+
+// Start with history paused. We will manually resume/pause to create save points.
+useProjectStore.temporal.getState().pause();

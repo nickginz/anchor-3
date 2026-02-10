@@ -135,11 +135,12 @@ const THEME_COLORS = {
 };
 
 export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpenMenu, onOpenScaleModal }) => {
-    const { activeTool, addWall, addWalls, addAnchor, addHub, activeHubCapacity, setTool, walls, anchors, hubs, cables, addCable, setSelection, wallPreset, wallMaterial, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, removeWall, removeAnchor, updateAnchors, removeDimension, dimensions, anchorRadius, theme, setExportRegion, exportRegion, wallsLocked, scaleRatio, lastLoaded } = useProjectStore(
+    const { activeTool, addWall, addWalls, addRectangleWalls, addAnchor, addHub, activeHubCapacity, setTool, walls, anchors, hubs, cables, addCable, setSelection, wallPreset, wallMaterial, standardWallThickness, thickWallThickness, wideWallThickness, setAnchorMode, updateAnchors, dimensions, anchorRadius, theme, setExportRegion, exportRegion, wallsLocked, scaleRatio, lastLoaded, removeObjects } = useProjectStore(
         useShallow((state: ProjectState) => ({
             activeTool: state.activeTool,
             addWall: state.addWall,
             addWalls: state.addWalls,
+            addRectangleWalls: state.addRectangleWalls,
             addAnchor: state.addAnchor,
             addHub: state.addHub,
             activeHubCapacity: state.activeHubCapacity,
@@ -156,10 +157,8 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             thickWallThickness: state.thickWallThickness,
             wideWallThickness: state.wideWallThickness,
             setAnchorMode: state.setAnchorMode,
-            removeWall: state.removeWall,
-            removeAnchor: state.removeAnchor,
             updateAnchors: state.updateAnchors,
-            removeDimension: state.removeDimension,
+            removeObjects: state.removeObjects,
             dimensions: state.dimensions,
             anchorRadius: state.anchorRadius,
             theme: state.theme,
@@ -252,7 +251,11 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
             // Shortcuts
             console.log("Key Debug:", e.code, e.key, "Shift:", e.shiftKey, "Ctrl:", e.ctrlKey); // DEBUG
-            if (e.code === 'Escape') {
+            const code = e.code;
+            const state = useProjectStore.getState();
+            const wallsLocked = state.wallsLocked;
+
+            if (code === 'Escape') {
                 setPoints([]);
                 setChainStart(null);
                 setRectStart(null);
@@ -267,35 +270,16 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
             }
 
             // Delete / Backspace
-            if ((e.code === 'Delete' || e.code === 'Backspace')) {
-                const currentSelectedIds = useProjectStore.getState().selectedIds;
-                const PLACEMENT_AREA_ID = 'placement_area_poly';
-
+            if (code === 'Delete' || code === 'Backspace') {
+                const currentSelectedIds = state.selectedIds;
                 if (currentSelectedIds.length > 0) {
-                    currentSelectedIds.forEach(id => {
-                        if (id === PLACEMENT_AREA_ID) {
-                            useProjectStore.getState().setPlacementArea(null);
-                        } else {
-                            const anchor = useProjectStore.getState().anchors.find(a => a.id === id);
-                            if (anchor && anchor.locked) return;
-
-                            removeWall(id);
-                            removeAnchor(id);
-                            removeDimension(id);
-                        }
-                    });
-
-                    // Cleanup selection
+                    removeObjects(currentSelectedIds);
                     setSelection([]);
                 }
             }
 
             // Tool Shortcuts
             if (activeTool !== 'scale') {
-                const code = e.code;
-                const state = useProjectStore.getState();
-                const wallsLocked = state.wallsLocked;
-
                 // Advanced Wall Tool Shortcut (Shift+R)
                 if (code === 'KeyR' && e.shiftKey) {
                     if (!wallsLocked) {
@@ -342,25 +326,17 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 if ((e.ctrlKey || e.metaKey) && code === 'KeyG') {
                     e.preventDefault();
                     if (e.shiftKey) {
-                        // Ungroup
                         const selectedIds = state.selectedIds;
                         state.ungroupAnchors(selectedIds);
                     } else {
-                        // Group
                         const selectedIds = state.selectedIds;
                         state.groupAnchors(selectedIds);
                     }
                     return;
                 }
 
-                // Delete / Backspace (Redundant check but kept for structure if needed or just remove?)
-                // The block above already handled delete. 
-                // But this block handles "Delete Active Import" too.
-                // Let's merge logic.
+                // Delete Active Import
                 if (code === 'Delete' || code === 'Backspace') {
-                    // Reuse logic?
-                    // The top block handled selection deletion.
-                    // This block handles activeImport deletion.
                     if (state.activeImportId) {
                         state.removeImportedObject(state.activeImportId);
                     }
@@ -1038,7 +1014,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                         { type: 'separator' },
                         ...typeOptions,
                         { type: 'separator' },
-                        { label: 'Delete', action: () => targetIds.forEach(id => state.removeWall(id)) }
+                        { label: 'Delete', action: () => removeObjects(targetIds) }
                     ]);
                     return; // Stop Panning
                 }
@@ -1229,9 +1205,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     finalPos = snap.point;
                     // Auto-Split Logic for Start Point
                     if (!rectStart && snap.type === 'edge' && snap.id) {
-                        useProjectStore.temporal.getState().pause();
                         state.splitWall(snap.id, snap.point);
-                        useProjectStore.temporal.getState().resume();
                     }
                 }
 
@@ -1246,36 +1220,24 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     const x2 = finalPos.x;
                     const y2 = finalPos.y;
 
-                    if (Math.abs(x1 - x2) > 0.1 || Math.abs(y1 - y2) > 0.1) { // Changed AND to OR for validity check
-                        useProjectStore.temporal.getState().pause();
+                    if (Math.abs(x1 - x2) > 0.1 || Math.abs(y1 - y2) > 0.1) {
+                        const splitPoints: { id: string, point: Point }[] = [];
+                        if (snap && snap.type === 'edge' && snap.id) splitPoints.push({ id: snap.id, point: snap.point });
 
-                        // Auto-Split for End Point
-                        if (snap && snap.type === 'edge' && snap.id) {
-                            state.splitWall(snap.id, snap.point);
-                        }
-                        // Check Implicit Points (p3, p4) for Splitting
                         const p3 = { x: x2, y: y1 };
                         const p4 = { x: x1, y: y2 };
-
                         const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, anchors, 20 / (stage?.scaleX() || 1)) : null;
-                        if (snapP3 && snapP3.type === 'edge' && snapP3.id) state.splitWall(snapP3.id, snapP3.point);
-
+                        if (snapP3 && snapP3.type === 'edge' && snapP3.id) splitPoints.push({ id: snapP3.id, point: snapP3.point });
                         const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, anchors, 20 / (stage?.scaleX() || 1)) : null;
-                        if (snapP4 && snapP4.type === 'edge' && snapP4.id) state.splitWall(snapP4.id, snapP4.point);
+                        if (snapP4 && snapP4.type === 'edge' && snapP4.id) splitPoints.push({ id: snapP4.id, point: snapP4.point });
 
                         const params = getWallParams(standardWallThickness, wallMaterial);
-
-                        addWalls([
+                        addRectangleWalls([
                             { points: [x1, y1, x2, y1], ...params as any },
                             { points: [x2, y1, x2, y2], ...params as any },
                             { points: [x2, y2, x1, y2], ...params as any },
                             { points: [x1, y2, x1, y1], ...params as any }
-                        ]);
-
-                        useProjectStore.temporal.getState().resume();
-                        // Force commit
-                        const lastWall = useProjectStore.getState().walls.slice(-1)[0];
-                        if (lastWall) state.updateWall(lastWall.id, { points: [...lastWall.points] });
+                        ], splitPoints);
                     }
                     setRectStart(null);
                     setCurrentMousePos(null);
@@ -1293,32 +1255,19 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     finalPos = snap.point;
                     // Auto-Split Logic for Start Point
                     if (!rectEdgeStart && snap.type === 'edge' && snap.id) {
-                        useProjectStore.temporal.getState().pause();
                         state.splitWall(snap.id, snap.point);
-                        useProjectStore.temporal.getState().resume();
                     }
                 }
 
                 if (!rectEdgeStart) {
-                    // Phase 1: Start Point
                     setRectEdgeStart(finalPos);
                     setCurrentMousePos(finalPos);
-                    lastDragPos.current = finalPos; // Track for Drag check
+                    lastDragPos.current = finalPos;
                 } else if (!rectEdgeBaseEnd) {
-                    // Phase 2: Base End Point
                     if (dist(rectEdgeStart, finalPos) > 0.001) {
-                        if (snap && snap.type === 'edge' && snap.id) {
-                            useProjectStore.temporal.getState().pause();
-                            state.splitWall(snap.id, snap.point);
-                            useProjectStore.temporal.getState().resume();
-                        }
                         setRectEdgeBaseEnd(finalPos);
                     }
                 } else {
-                    // Phase 3: Finish (Height)
-                    // Geometric calculation handled logic is conceptually:
-                    // P1 (Start), P2 (BaseEnd), M (Mouse)
-                    // Project M onto Normal of P1-P2
                     const p1 = rectEdgeStart;
                     if (!p1) return;
                     const p2 = rectEdgeBaseEnd;
@@ -1327,48 +1276,37 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     const dy = p2.y - p1.y;
                     const len = Math.hypot(dx, dy);
 
-                    // Normal Vector (Normalized)
                     const nx = -dy / len;
                     const ny = dx / len;
 
-                    // Vector from P1 to Mouse
                     const vmx = finalPos.x - p1.x;
                     const vmy = finalPos.y - p1.y;
-
-                    // Dot product with Normal gives height distance (signed)
                     const h = vmx * nx + vmy * ny;
 
-                    // Calculate P4 and P3
                     const p4x = p1.x + nx * h;
                     const p4y = p1.y + ny * h;
                     const p3x = p2.x + nx * h;
                     const p3y = p2.y + ny * h;
 
-                    // Check P3 and P4 for Splitting
+                    const splitPoints: { id: string, point: Point }[] = [];
+                    if (snap && snap.type === 'edge' && snap.id) splitPoints.push({ id: snap.id, point: snap.point });
+
                     const p3 = { x: p3x, y: p3y };
                     const p4 = { x: p4x, y: p4y };
-
-                    useProjectStore.temporal.getState().pause();
-
                     const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, anchors, 20 / (stage?.scaleX() || 1)) : null;
-                    if (snapP3 && snapP3.type === 'edge' && snapP3.id) state.splitWall(snapP3.id, snapP3.point);
+                    if (snapP3 && snapP3.type === 'edge' && snapP3.id) splitPoints.push({ id: snapP3.id, point: snapP3.point });
 
                     const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, anchors, 20 / (stage?.scaleX() || 1)) : null;
-                    if (snapP4 && snapP4.type === 'edge' && snapP4.id) state.splitWall(snapP4.id, snapP4.point);
+                    if (snapP4 && snapP4.type === 'edge' && snapP4.id) splitPoints.push({ id: snapP4.id, point: snapP4.point });
 
                     const params = getWallParams(standardWallThickness, wallMaterial);
 
-                    addWalls([
-                        { points: [p1.x, p1.y, p2.x, p2.y], ...params as any }, // Base
-                        { points: [p2.x, p2.y, p3x, p3y], ...params as any },   // Side A
-                        { points: [p3x, p3y, p4x, p4y], ...params as any },     // Top
-                        { points: [p4x, p4y, p1.x, p1.y], ...params as any }    // Side B
-                    ]);
-
-                    useProjectStore.temporal.getState().resume();
-                    // Force commit
-                    const lastWall = useProjectStore.getState().walls.slice(-1)[0];
-                    if (lastWall) state.updateWall(lastWall.id, { points: [...lastWall.points] });
+                    addRectangleWalls([
+                        { points: [p1.x, p1.y, p2.x, p2.y], ...params as any },
+                        { points: [p2.x, p2.y, p3x, p3y], ...params as any },
+                        { points: [p3x, p3y, p4x, p4y], ...params as any },
+                        { points: [p4x, p4y, p1.x, p1.y], ...params as any }
+                    ], splitPoints);
 
                     setRectEdgeStart(null);
                     setRectEdgeBaseEnd(null);
@@ -1708,7 +1646,6 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
         // Door Drag End
         if (draggingDoorId) {
             setDraggingDoorId(null);
-            useProjectStore.temporal.getState().resume();
             return;
         }
 
@@ -1794,38 +1731,25 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
 
                 // FORCE COMMIT: Trigger a state update to save the "End" position in history
                 if (hasDragged.current) {
-                    const state = useProjectStore.getState();
-
                     if (dragAnchorId.current) {
+                        const state = useProjectStore.getState();
                         const updates = state.anchors
                             .filter(a => state.selectedIds.includes(a.id))
                             .map(a => ({ id: a.id, updates: { x: a.x, y: a.y } }));
                         updateAnchors(updates);
                     }
 
-                    if (dragHubId.current) {
-                        const isSelected = state.selectedIds.includes(dragHubId.current);
-                        const targets = isSelected ? state.hubs.filter(h => state.selectedIds.includes(h.id)) : state.hubs.filter(h => h.id === dragHubId.current);
-                        targets.forEach(t => {
-                            state.updateHub(t.id, { x: t.x, y: t.y });
-                        });
-                    }
-
-                    if (dragWallId.current) {
-                        const wall = state.walls.find(w => w.id === dragWallId.current);
-                        if (wall) state.updateWall(wall.id, { points: [...wall.points] });
-                    }
-
                     if (dragDimLineId.current) {
-                        const d = state.dimensions.find(x => x.id === dragDimLineId.current);
-                        if (d) state.updateDimension(d.id, { points: [...d.points] });
+                        const d = useProjectStore.getState().dimensions.find(x => x.id === dragDimLineId.current);
+                        if (d) useProjectStore.getState().updateDimension(d.id, { points: [...d.points] });
                     }
 
                     if (dragTextId.current) {
-                        const d = state.dimensions.find(x => x.id === dragTextId.current);
-                        if (d) state.updateDimension(d.id, { textOffset: { x: d.textOffset?.x || 0, y: d.textOffset?.y || 0 } });
+                        const d = useProjectStore.getState().dimensions.find(x => x.id === dragTextId.current);
+                        if (d) useProjectStore.getState().updateDimension(d.id, { textOffset: { x: d.textOffset?.x || 0, y: d.textOffset?.y || 0 } });
                     }
                 }
+                useProjectStore.temporal.getState().pause();
             }
 
             dragTextId.current = null;
@@ -1936,25 +1860,25 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                             const y2 = finalPos.y;
 
                             if (Math.abs(x1 - x2) > 0.1 || Math.abs(y1 - y2) > 0.1) {
-                                if (snap && snap.type === 'edge' && snap.id) {
-                                    state.splitWall(snap.id, snap.point);
-                                }
+                                const splitPoints: { id: string, point: Point }[] = [];
+                                if (snap && snap.type === 'edge' && snap.id) splitPoints.push({ id: snap.id, point: snap.point });
+
                                 const p3 = { x: x2, y: y1 };
                                 const p4 = { x: x1, y: y2 };
 
                                 const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, anchors, 20 / ((stage?.scaleX() || 1))) : null;
-                                if (snapP3 && snapP3.type === 'edge' && snapP3.id) state.splitWall(snapP3.id, snapP3.point);
+                                if (snapP3 && snapP3.type === 'edge' && snapP3.id) splitPoints.push({ id: snapP3.id, point: snapP3.point });
 
                                 const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, anchors, 20 / ((stage?.scaleX() || 1))) : null;
-                                if (snapP4 && snapP4.type === 'edge' && snapP4.id) state.splitWall(snapP4.id, snapP4.point);
+                                if (snapP4 && snapP4.type === 'edge' && snapP4.id) splitPoints.push({ id: snapP4.id, point: snapP4.point });
 
                                 const params = getWallParams(standardWallThickness, wallMaterial);
-                                addWalls([
+                                addRectangleWalls([
                                     { points: [x1, y1, x2, y1], ...params as any },
                                     { points: [x2, y1, x2, y2], ...params as any },
                                     { points: [x2, y2, x1, y2], ...params as any },
                                     { points: [x1, y2, x1, y1], ...params as any }
-                                ]);
+                                ], splitPoints);
                             }
                             setRectStart(null);
                             setCurrentMousePos(null);
@@ -1983,23 +1907,24 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                             const p3x = p2.x + nx * h;
                             const p3y = p2.y + ny * h;
 
-                            if (snap && snap.type === 'edge' && snap.id) state.splitWall(snap.id, snap.point);
+                            const splitPoints: { id: string, point: Point }[] = [];
+                            if (snap && snap.type === 'edge' && snap.id) splitPoints.push({ id: snap.id, point: snap.point });
 
                             const p3 = { x: p3x, y: p3y };
                             const p4 = { x: p4x, y: p4y };
                             const snapP3 = state.layers.walls ? getSnapPoint(p3, walls, anchors, 20 / ((stage?.scaleX() || 1))) : null;
-                            if (snapP3 && snapP3.type === 'edge' && snapP3.id) state.splitWall(snapP3.id, snapP3.point);
+                            if (snapP3 && snapP3.type === 'edge' && snapP3.id) splitPoints.push({ id: snapP3.id, point: snapP3.point });
                             const snapP4 = state.layers.walls ? getSnapPoint(p4, walls, anchors, 20 / ((stage?.scaleX() || 1))) : null;
-                            if (snapP4 && snapP4.type === 'edge' && snapP4.id) state.splitWall(snapP4.id, snapP4.point);
+                            if (snapP4 && snapP4.type === 'edge' && snapP4.id) splitPoints.push({ id: snapP4.id, point: snapP4.point });
 
                             const params = getWallParams(standardWallThickness, wallMaterial);
 
-                            addWalls([
+                            addRectangleWalls([
                                 { points: [p1.x, p1.y, p2.x, p2.y], ...params as any },
                                 { points: [p2.x, p2.y, p3x, p3y], ...params as any },
                                 { points: [p3x, p3y, p4x, p4y], ...params as any },
                                 { points: [p4x, p4y, p1.x, p1.y], ...params as any }
-                            ]);
+                            ], splitPoints);
 
                             setRectEdgeStart(null);
                             setRectEdgeBaseEnd(null);
@@ -2254,7 +2179,10 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                 dragAnchorId.current = null;
             }
 
-            // Delete / Backspace
+            // Delete / Backspace - DISABLED: Duplicate handler exists at line ~273
+            // This duplicate loops through IDs and calls remove functions individually,
+            // creating separate history entries. The handler at line 273 correctly calls removeObjects.
+            /*
             if ((e.code === 'Delete' || e.code === 'Backspace')) {
                 const currentSelectedIds = state.selectedIds;
                 const PLACEMENT_AREA_ID = 'placement_area_poly';
@@ -2283,6 +2211,8 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     state.removeImportedObject(state.activeImportId);
                 }
             }
+            */
+
 
             // Tool Shortcuts
             if (activeTool !== 'scale') {
@@ -2298,20 +2228,14 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     }
                 }
 
-                // Undo / Redo (Ctrl+Z / Ctrl+Y)
+                // Undo / Redo (Ctrl+Z / Ctrl+Y) - DISABLED: Duplicate handler exists at line ~294
+                // Keeping the one at line 294 because it has special logic for wall tool chain
+                /* 
                 if ((e.ctrlKey || e.metaKey) && code === 'KeyZ') {
                     e.preventDefault();
                     if (e.shiftKey) {
                         useProjectStore.temporal.getState().redo();
                     } else {
-                        // Custom Undo for Wall Tool Chain relies on 'points' state... which is local.
-                        // We can't easily access 'points' from here if we want zero deps?
-                        // Actually, 'points' is in the closure of this render if we define handleKeyDown inside render?
-                        // No, we are inside useEffect with [] deps. 'points' will be stale (initial []).
-                        // To fix this, we MUST include 'points' in deps if we want to access it.
-                        // OR we make 'points' a ref.
-                        // For now, let's just trigger standard undo, and if 'points' is needed, we handle it elsewhere or accept limitation.
-                        // Actually simpler: Let's rely on standard undo for now to keep listener stable.
                         useProjectStore.temporal.getState().undo();
                     }
                     return;
@@ -2321,6 +2245,8 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                     useProjectStore.temporal.getState().redo();
                     return;
                 }
+                */
+
 
                 // Group / Ungroup Anchors
                 if ((e.ctrlKey || e.metaKey) && code === 'KeyG') {
@@ -2672,7 +2598,6 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                                 onDragEnd={(e) => {
                                     e.cancelBubble = true;
                                     draggedWallNodeMap.current = [];
-                                    useProjectStore.temporal.getState().resume();
                                 }}
                                 onDragMove={(e) => {
                                     e.cancelBubble = true;
@@ -2743,7 +2668,6 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                                 onDragEnd={(e) => {
                                     e.cancelBubble = true;
                                     draggedWallNodeMap.current = [];
-                                    useProjectStore.temporal.getState().resume();
                                 }}
                                 onDragMove={(e) => {
                                     e.cancelBubble = true;
@@ -2815,7 +2739,6 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                             }}
                             onDragEnd={(e) => {
                                 e.cancelBubble = true;
-                                useProjectStore.temporal.getState().resume();
                             }}
                             onDragMove={(e) => {
                                 e.cancelBubble = true;
@@ -2856,7 +2779,6 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ stage, onOpe
                             }}
                             onDragEnd={(e) => {
                                 e.cancelBubble = true;
-                                useProjectStore.temporal.getState().resume();
                             }}
                             onDragMove={(e) => {
                                 e.cancelBubble = true;
