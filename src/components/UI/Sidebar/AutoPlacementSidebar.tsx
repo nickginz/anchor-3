@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { generateAutoAnchors } from '../../../utils/auto-placement';
-import { Activity, GitCommit, Sliders, CheckSquare, Wand2, Eye, EyeOff } from 'lucide-react';
+import { Activity, GitCommit, Sliders, CheckSquare, Wand2, Eye, EyeOff, Settings } from 'lucide-react';
 import { detectRooms, calculatePolygonArea } from '../../../utils/room-detection';
 import { getPolygonCentroid } from '../../../utils/geometry';
 import { calculateObstacleLoss, calculateFreeSpaceRSSI } from '../../../utils/signal-physics';
@@ -160,7 +160,8 @@ export const AutoPlacementSidebar: React.FC = () => {
         showOverlapCounts, setShowOverlapCounts,
         centroids, setCentroids,
         theme,
-        placementAreaEnabled, setPlacementAreaEnabled // Added destructuring
+        placementAreaEnabled, setPlacementAreaEnabled,
+        anchorRadius, setAnchorRadius, // Added anchorRadius
     } = useProjectStore();
 
     // const [placementAreaEnabled, setPlacementAreaEnabled] = React.useState(false); // Removed local state
@@ -228,9 +229,47 @@ export const AutoPlacementSidebar: React.FC = () => {
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
 
-                {/* 1. Tools & Debug */}
+                {/* 1. Global Parameters (User Request: High Visibility) */}
+                <div className={`p-3 rounded border ${isDark ? 'bg-[#252526] border-[#333]' : 'bg-gray-50 border-gray-200'} space-y-3`}>
+                    <h4 className={`text-[10px] font-bold uppercase ${textHeader} mb-1 flex items-center gap-1.5`}>
+                        <Settings size={12} className="text-blue-500" />
+                        <span>Global Parameters</span>
+                    </h4>
+
+                    <div className="space-y-2.5">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-secondary font-medium">Anchor Radius</span>
+                            <div className="flex items-center gap-1.5">
+                                <input
+                                    type="number"
+                                    step="0.5"
+                                    value={anchorRadius}
+                                    onChange={(e) => setAnchorRadius(Number(e.target.value))}
+                                    className={`w-14 ${inputBg} rounded px-1.5 py-0.5 text-[11px] focus:border-blue-500 outline-none h-6 text-right`}
+                                />
+                                <span className="text-[9px] text-gray-500 w-3">m</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-secondary font-medium">Offset Step</span>
+                            <div className="flex items-center gap-1.5">
+                                <input
+                                    type="number"
+                                    step="1"
+                                    min="1"
+                                    value={offsetStep}
+                                    onChange={(e) => setOffsetStep(Number(e.target.value))}
+                                    className={`w-14 ${inputBg} rounded px-1.5 py-0.5 text-[11px] focus:border-blue-500 outline-none h-6 text-right`}
+                                />
+                                <span className="text-[9px] text-gray-500 w-3">m</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 2. Tools & Debug */}
                 <div>
                     <h4 className={`text-[10px] font-bold uppercase ${textHeader} mb-2 flex items-center justify-between`}>
                         <span>Tools & Debug</span>
@@ -326,23 +365,6 @@ export const AutoPlacementSidebar: React.FC = () => {
                             </button>
                         </div>
 
-                        {/* Offset Step (Compact inline) */}
-                        {showOffsets && (
-                            <>
-                                <div className={`w-px h-5 ${isDark ? 'bg-[#444]' : 'bg-gray-300'} mx-1`}></div>
-                                <div className={`flex items-center gap-1 ${isDark ? 'bg-[#2d2d2d]' : 'bg-gray-100'} px-1.5 py-1 rounded h-full ml-auto`}>
-                                    <span className="text-[9px] text-gray-500">Step</span>
-                                    <input
-                                        type="number"
-                                        value={offsetStep}
-                                        onChange={(e) => setOffsetStep(Number(e.target.value))}
-                                        className={`w-8 ${inputBg} rounded px-1 text-[10px] text-right h-5 focus:border-blue-500 outline-none`}
-                                        step={1}
-                                        min={1}
-                                    />
-                                </div>
-                            </>
-                        )}
                     </div>
                 </div>
 
@@ -440,6 +462,5 @@ export const AutoPlacementSidebar: React.FC = () => {
 
             </div>
         </div>
-
     );
 };

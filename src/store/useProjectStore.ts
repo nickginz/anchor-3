@@ -1362,6 +1362,8 @@ export const useProjectStore = create<ProjectState>()(
                     lastLoaded: 0,
                     placementArea: null,
                     activeImportId: null,
+                    anchorRadius: 5,
+                    offsetStep: 5,
                 }));
                 (api as any).temporal.getState().pause(); // Ensure it stays paused
             },
